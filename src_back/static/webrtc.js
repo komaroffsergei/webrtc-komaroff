@@ -11,9 +11,25 @@
     return pc;
   }
 
+  async function waitForIceGatheringComplete(pc, timeoutMs = 3000){
+    if (pc.iceGatheringState === 'complete') return;
+    await new Promise((resolve) => {
+      let done = false;
+      const finish = () => { if (!done){ done = true; resolve(); } };
+      const timer = setTimeout(finish, timeoutMs);
+      pc.addEventListener('icegatheringstatechange', () => {
+        if (pc.iceGatheringState === 'complete'){
+          clearTimeout(timer);
+          finish();
+        }
+      });
+    });
+  }
+
   async function negotiate(pc, config){
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
+    await waitForIceGatheringComplete(pc, 3000);
     const resp = await fetch(config.signaling.offerEndpoint, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sdp: pc.localDescription.sdp, type: pc.localDescription.type })
