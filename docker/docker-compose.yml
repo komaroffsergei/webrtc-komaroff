@@ -3,18 +3,6 @@ services:
     image: ${REGISTRY_HOST}/webrtc-server-komaroff-back/${CI_COMMIT_BRANCH}
     build:
       context: ../src_back
-#      additional_contexts:
-#        docker: ../docker
       dockerfile: ../docker/python/Dockerfile
     ports:
       - "8000:8000"
-
-#  webrtc-server-front:
-#    image: ${REGISTRY_HOST}/webrtc-server-front/${CI_COMMIT_BRANCH}
-#    build:
-#      context: ../src_front
-##      additional_contexts:
-##        docker: ../docker
-#      dockerfile: ../docker/ruby/Dockerfile
-#    ports:
-#      - "7000:7000"
