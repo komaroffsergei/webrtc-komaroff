@@ -1,0 +1,6 @@
+aiohttp~=3.9
+aiortc~=1.7
+av~=12.3
+numpy~=1.26
+scipy~=1.11
+soundfile~=0.12

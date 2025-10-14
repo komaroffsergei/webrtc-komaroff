@@ -1,0 +1,13 @@
+.env.local
+docker-compose.dev.yml
+dev/**
+*.iml
+yarn.lock
+.qodo
+.idea
+coverage
+*/spec/results
+**/venv
+
+
+/src_back/server/models/

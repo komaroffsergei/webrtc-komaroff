@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>WebRTC echo + frame interceptor</title>
+</head>
+<body>
+  <button id="connect">Connect</button>
+  <button id="stop" disabled>Stop</button>
+  <label style="margin-left:12px;">
+    <input type="checkbox" id="vadEnable" checked /> VAD (energy-based)
+  </label>
+  <label style="margin-left:8px;">
+    threshold: <input type="range" id="vadThresh" min="-60" max="0" value="-55" step="1" />
+    <span id="vadLevel">-55 dBFS</span>
+  </label>
+  <label style="margin-left:12px;">
+    <input type="checkbox" id="ecEnable" checked /> echoCancellation
+  </label>
+  <label style="margin-left:8px;">
+    <input type="checkbox" id="nsEnable" checked /> noiseSuppression
+  </label>
+  <div id="status">status: ready</div>
+
+  <div style="margin-top:10px; display:flex; gap:12px; align-items:center;">
+    <div>
+      <div>Input waveform</div>
+      <canvas id="waveIn" width="400" height="80" style="border:1px solid #ccc"></canvas>
+    </div>
+    <div>
+      <div>Output waveform</div>
+      <canvas id="waveOut" width="400" height="80" style="border:1px solid #ccc"></canvas>
+    </div>
+  </div>
+
+  <!-- remote audio track will be attached here by the server -->
+  <audio id="remoteAudio" autoplay></audio>
+
+  <script src="/static/config.js"></script>
+  <script src="/static/audio_viz.js"></script>
+  <script src="/static/vad.js"></script>
+  <script src="/static/webrtc.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

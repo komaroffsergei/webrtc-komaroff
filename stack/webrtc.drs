@@ -1,0 +1,9 @@
+Options name: 'web-rtc-komaroff'
+
+
+PublishPorts back: [ { target: 19302, published: 19302, protocol: 'udp', mode: 'host'}]
+Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/master', ports: 8000,
+        ingress: { host: 'webrtc-komaroff.*' }
+
+Service :front, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-front/master', ports: 7000,
+        ingress: { host: 'webrtc-komaroff2.*' }
