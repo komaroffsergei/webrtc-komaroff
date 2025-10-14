@@ -7,7 +7,7 @@ services:
 #        docker: ../docker
       dockerfile: ../docker/python/Dockerfile
     ports:
-      - "8000:8080"
+      - "8000:8000"
 
 #  webrtc-server-front:
 #    image: ${REGISTRY_HOST}/webrtc-server-front/${CI_COMMIT_BRANCH}
