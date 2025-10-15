@@ -6,8 +6,8 @@ services:
       dockerfile: ../docker/python/Dockerfile
     ports:
       - "8000:8000"
-    environment:
-      - NATS_URL=${NATS_URL}
+#    environment:
+#      - NATS_URL=${NATS_URL}
     depends_on:
       - audio_nats
 
