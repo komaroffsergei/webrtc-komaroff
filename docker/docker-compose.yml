@@ -6,3 +6,11 @@ services:
       dockerfile: ../docker/python/Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      - NATS_URL=${NATS_URL}
+    depends_on:
+      - audio_nats
+
+  audio_nats:
+    image: nats:2.11.6-scratch
+    command: ["-js"]

@@ -8,6 +8,8 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do
-  env NATS_URL: "nats://audio_nats:4222"
+  # Use env coming from compose's backend service (document purpose only)
+  # use env from docker/.env via CI or local export
+  env NATS_URL: NATS_URL
   entrypoint "sh -c \"sleep infinity\""
 end

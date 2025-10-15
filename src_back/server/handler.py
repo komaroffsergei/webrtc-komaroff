@@ -5,8 +5,10 @@ import os
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiohttp import web
 
-from .audio.graph import AudioGraph
-from .audio.processors import TrackSourceNode, EchoTrackNode
+from .processors.graph import AudioGraph
+from .processors import TrackSourceNode, EchoTrackNode, BlankNode, BgmMixerNode, LossFillerNode, \
+    RecorderNode
+from .processors.nats_node import NatsNode
 from .utils.config import STATIC_DIR
 from .utils.pc_lifecycle import attach_pc_lifecycle
 from .utils.validate import get_params, validate_sdp
@@ -62,12 +64,18 @@ async def handle_offer(request):
                 target_output_format='s16'
             ))
 
-            # bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
+            bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
-            # filler = graph.add(LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-            # recorder = graph.add(RecorderNode(filler, batch_frames=512))
+            filler = graph.add(LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
+            recorder = graph.add(RecorderNode(filler, batch_frames=512))
 
-            echo = EchoTrackNode(source)
+            source = graph.add(NatsNode(source))
+            # blank = BlankNode(source)
+            graph.add(source)
+
+
+
+            echo = EchoTrackNode(bgm)
             audio_transceiver.sender.replaceTrack(echo)
             echo_ref["node"] = echo
             logger.info("Echo attached with BGM")

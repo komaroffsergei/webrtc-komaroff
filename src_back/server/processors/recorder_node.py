@@ -5,13 +5,16 @@ from typing import Optional
 import numpy as np
 from av import AudioFrame
 
-from ...utils.config import RECORDINGS_DIR
+from ..utils.config import RECORDINGS_DIR
 import logging
 
 logger = logging.getLogger("audio.RecorderNode")
 
 
-class RecorderNode:
+from .base import ConsumerNode
+
+
+class RecorderNode(ConsumerNode):
     """
     Recorder node consuming normalized frames from a source node (subscribe()) and
     periodically flushing to WAV files with fixed batch size.
@@ -21,7 +24,7 @@ class RecorderNode:
     """
 
     def __init__(self, source_node, *, batch_frames: int = 128) -> None:
-        self.queue: asyncio.Queue = source_node.subscribe()
+        super().__init__(source_node)
         self.batch_frames = int(batch_frames)
         self._frames: list[np.ndarray] = []
         self._idx: int = 0
@@ -30,10 +33,8 @@ class RecorderNode:
         self._task: Optional[asyncio.Task] = None
         self._stopped: bool = False
 
-    def start(self) -> None:
-        if self._task is None:
-            logger.info("start: recorder task created")
-            self._task = asyncio.create_task(self._run())
+    async def start(self) -> None:
+        await super().start()
 
     async def stop(self) -> None:
         if self._stopped:
@@ -54,18 +55,8 @@ class RecorderNode:
         self._flush_batch(force=True)
         logger.info("stop: recorder stopped and flushed")
 
-    async def _run(self) -> None:
-        try:
-            while True:
-                frame = await self.queue.get()
-                if frame is None:
-                    logger.info("run: EOF received")
-                    break
-                self._handle_frame(frame)
-        except asyncio.CancelledError:
-            logger.info("run: cancelled")
-        except Exception as e:
-            logger.error(f"run: stopped with error: {e}")
+    async def handle_frame(self, frame: AudioFrame) -> None:
+        self._handle_frame(frame)
 
     def _handle_frame(self, frame: AudioFrame) -> None:
         if self._samplerate is None:

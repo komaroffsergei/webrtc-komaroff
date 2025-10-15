@@ -4,3 +4,4 @@ av~=12.3
 numpy~=1.26
 scipy~=1.11
 soundfile~=0.12
+nats-py~=2.11.0
