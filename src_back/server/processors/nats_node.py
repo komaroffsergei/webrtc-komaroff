@@ -23,14 +23,21 @@ class NatsNode(ConsumerNode):
         super().__init__(source_node)
         self.nc: Optional[nats.NATS] = None
         self.js = None
-        self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
+        self.nc_url = os.getenv("NATS_URL", "nats://audio_nats:4222")
         self.subject = os.getenv("NATS_SUBJECT", "audio.frames")
         self.stream_name = os.getenv("NATS_STREAM", "audio-stream")
 
     async def ensure_js(self):
         if self.nc is None or not getattr(self.nc, "is_connected", False):
-            self.nc = await nats.connect(self.nc_url)
-            logger.info(f"NATS connected: {self.nc_url}")
+            # Support multiple URLs in NATS_URL separated by comma
+            urls = [u.strip() for u in str(self.nc_url).split(",") if u.strip()]
+            self.nc = await nats.connect(
+                servers=urls or [self.nc_url],
+                max_reconnect_attempts=-1,
+                reconnect_time_wait=2,
+                ping_interval=10,
+            )
+            logger.info(f"NATS connected: {self.nc.connected_url.netloc}")
         if self.js is None:
             self.js = self.nc.jetstream()
             # ensure stream exists
@@ -40,6 +47,11 @@ class NatsNode(ConsumerNode):
                 await self.js.add_stream(name=self.stream_name, subjects=[self.subject])
                 logger.info(f"JetStream stream ensured: {self.stream_name} -> {self.subject}")
         return self.js
+
+    def use_source(self, source) -> "NatsNode":
+        """Bind upstream audio source after initialization and allow chaining."""
+        self.bind_source(source)
+        return self
 
     async def connect(self, nc_url: Optional[str] = None, subject: Optional[str] = None) -> None:
         if nc_url:
@@ -108,7 +120,7 @@ class NatsNode(ConsumerNode):
             payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_audio_bytes
 
             ack = await self.js.publish(self.subject, payload, timeout=5)
-            logger.debug(f"Published raw frame (seq={ack.seq}, {len(payload)} bytes)")
+            logger.info(f"Published raw frame (seq={ack.seq}, {len(payload)} bytes)")
 
         except Exception as e:
             logger.error(f"Failed to publish raw frame: {e}", exc_info=True)

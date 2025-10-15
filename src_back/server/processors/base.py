@@ -60,18 +60,29 @@ class ConsumerNode(FanOutNode):
 
     Subclasses must implement async handle_frame(frame: AudioFrame) -> None
     and call await self.fan_out(frame_or_new) when they want to forward.
+
+    Supports late binding: node may be constructed without a source and bound later
+    via bind_source(source_node) before start().
     """
 
-    def __init__(self, source_node) -> None:
+    def __init__(self, source_node: Optional[FanOutNode] = None) -> None:
         super().__init__()
-        self.source_node = source_node
-        self.queue: asyncio.Queue = source_node.subscribe()
+        self.source_node: Optional[FanOutNode] = None
+        self.queue: Optional[asyncio.Queue] = None
         self._task: Optional[asyncio.Task] = None
         self._stopped: bool = False
+        if source_node is not None:
+            self.bind_source(source_node)
+
+    def bind_source(self, source_node: FanOutNode) -> None:
+        self.source_node = source_node
+        self.queue = source_node.subscribe()
 
     async def start(self) -> None:
         if self._task is not None:
             return
+        if self.queue is None:
+            raise RuntimeError("ConsumerNode.start() called before binding a source via bind_source().")
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
@@ -79,7 +90,8 @@ class ConsumerNode(FanOutNode):
             return
         self._stopped = True
         try:
-            self.queue.put_nowait(None)
+            if self.queue is not None:
+                self.queue.put_nowait(None)
         except Exception:
             pass
         if self._task is not None:
@@ -91,6 +103,7 @@ class ConsumerNode(FanOutNode):
         await self.close_downstreams()
 
     async def _run(self) -> None:
+        assert self.queue is not None, "_run requires queue to be bound"
         try:
             while True:
                 frame = await self.queue.get()
