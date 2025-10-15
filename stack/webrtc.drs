@@ -4,3 +4,10 @@ Options name: 'web-rtc-komaroff'
 PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
 Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
         ingress: { host: 'webrtc-komaroff.*' }
+
+Service :audio_nats, image: 'nats:2.11.6-scratch'
+
+Service :nats_box, image: 'natsio/nats-box' do
+  env NATS_URL: VOICE_NATS_URL
+  entrypoint "sh -c \"sleep infinity\""
+end
