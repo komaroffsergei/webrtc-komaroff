@@ -1,4 +1,11 @@
-def _validate_sdp(sdp: str):
+import logging
+from aiohttp import web
+
+logger = logging.getLogger("webrtc")
+MAX_SDP_SIZE = 1_000_000
+
+
+def validate_sdp(sdp: str):
     """Basic, strict-ish SDP validation without deep parsing.
     Returns (ok: bool, error: str | None).
     """
@@ -7,6 +14,11 @@ def _validate_sdp(sdp: str):
         sdp.encode("ascii")
     except UnicodeEncodeError:
         return False, "SDP must be ASCII"
+
+    sdp_len = len(sdp)
+    if sdp_len > MAX_SDP_SIZE:
+        logger.warning("SDP too large: %d bytes", sdp_len)
+        return False, "SDP too large"
 
     # Line structure
     lines = sdp.splitlines()
@@ -30,3 +42,21 @@ def _validate_sdp(sdp: str):
         return False, "missing a=ice-pwd"
 
     return True, None
+
+
+
+async def get_params(request):
+    logger.info("handle_offer: received SDP offer")
+    # Validate content type and JSON body
+    answer = None
+    if request.content_type != "application/json":
+        logger.warning("Invalid content type: %s", request.content_type)
+        return [answer, {"error": "invalid content type, expected application/json"}]
+    try:
+        answer = await request.json()
+    except Exception:
+        logger.warning("Invalid JSON in /offer", exc_info=True)
+        return [answer, {"error": "invalid JSON body"}]
+
+    return [answer, None]
+

@@ -6,11 +6,11 @@
 
     // Optional diagnostics logging to help with debugging connection states
     if (config.webrtc.diagnostics){
-      pc.oniceconnectionstatechange = () => console.log('[pc] iceconnectionstate:', pc.iceConnectionState);
-      pc.onconnectionstatechange = () => console.log('[pc] connectionstate:', pc.connectionState);
-      pc.onsignalingstatechange = () => console.log('[pc] signalingstate:', pc.signalingState);
-      pc.onicegatheringstatechange = () => console.log('[pc] icegatheringstate:', pc.iceGatheringState);
-      pc.onicecandidate = (e) => console.log('[pc] icecandidate:', !!e.candidate);
+      pc.oniceconnectionstatechange = () => { console.log('[pc] iceconnectionstate:', pc.iceConnectionState); window.AppLog && AppLog.emit('[pc] iceconnectionstate', pc.iceConnectionState); };
+      pc.onconnectionstatechange = () => { console.log('[pc] connectionstate:', pc.connectionState); window.AppLog && AppLog.emit('[pc] connectionstate', pc.connectionState); };
+      pc.onsignalingstatechange = () => { console.log('[pc] signalingstate:', pc.signalingState); window.AppLog && AppLog.emit('[pc] signalingstate', pc.signalingState); };
+      pc.onicegatheringstatechange = () => { console.log('[pc] icegatheringstate:', pc.iceGatheringState); window.AppLog && AppLog.emit('[pc] icegatheringstate', pc.iceGatheringState); };
+      pc.onicecandidate = (e) => { console.log('[pc] icecandidate:', !!e.candidate); window.AppLog && AppLog.emit('[pc] icecandidate', e && e.candidate ? e.candidate.candidate : null); };
     }
     return pc;
   }

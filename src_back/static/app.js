@@ -14,7 +14,12 @@
     remoteAudio: document.getElementById('remoteAudio'),
     waveIn: document.getElementById('waveIn').getContext('2d'),
     waveOut: document.getElementById('waveOut').getContext('2d'),
+    log: document.getElementById('log'),
+    logClear: document.getElementById('logClear'),
+    logAutoscroll: document.getElementById('logAutoscroll'),
   };
+
+  if (window.AppLog){ AppLog.init({ el: els.log, clearBtn: els.logClear, autoChk: els.logAutoscroll, maxLines: 5000 }); }
 
   window.UIBindings = {
     vadThreshold: () => els.vadThresh.valueAsNumber,
@@ -62,6 +67,7 @@
       micStream = s;
       micTrack = newTrack;
       els.status.textContent = `mic reconfigured: EC=${els.ecEnable.checked} NS=${els.nsEnable.checked}`;
+      if (window.AppLog) AppLog.emit('[media] mic reconfigured', { echoCancellation: els.ecEnable.checked, noiseSuppression: els.nsEnable.checked });
       if (els.vadEnable.checked){
         await applyVAD();
       }
@@ -73,6 +79,7 @@
     stopVAD();
     vadInstance = window.VAD.createEnergyVAD(micTrack, cfg, (gate)=>{
       els.vadLevel.textContent = `${gate} dBFS`;
+      if (window.AppLog) AppLog.emit('[vad] level', gate);
     });
     await sender.replaceTrack(vadInstance.track);
   }

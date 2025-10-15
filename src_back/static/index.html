@@ -22,6 +22,17 @@
   </label>
   <div id="status">status: ready</div>
 
+  <div id="logWrap" style="margin-top:10px;border:1px solid #ccc;padding:8px;max-width:820px;">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:space-between;">
+      <strong>Log</strong>
+      <div>
+        <button id="logClear">Clear</button>
+        <label style="margin-left:8px;"><input type="checkbox" id="logAutoscroll" checked /> autoscroll</label>
+      </div>
+    </div>
+    <pre id="log" style="margin:8px 0 0 0;height:180px;overflow:auto;background:#fafafa;color:#222;padding:8px;"></pre>
+  </div>
+
   <div style="margin-top:10px; display:flex; gap:12px; align-items:center;">
     <div>
       <div>Input waveform</div>
@@ -37,6 +48,7 @@
   <audio id="remoteAudio" autoplay></audio>
 
   <script src="/static/config.js"></script>
+  <script src="/static/logger.js"></script>
   <script src="/static/audio_viz.js"></script>
   <script src="/static/vad.js"></script>
   <script src="/static/webrtc.js"></script>

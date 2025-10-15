@@ -1,63 +1,34 @@
 import asyncio
+import logging
 import os
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
 from aiohttp import web
 
-from server.audio.graph import AudioGraph
-from server.audio.processors import (
-    TrackSourceNode,
-    EchoTrackNode,
-    RecorderNode,
-    LossFillerNode,
-    BgmMixerNode,
-)
-from server.utils.config import STATIC_DIR
-
-import logging
-
-from server.utils.validate import _validate_sdp
+from .audio.graph import AudioGraph
+from .audio.processors import TrackSourceNode, EchoTrackNode
+from .utils.config import STATIC_DIR
+from .utils.pc_lifecycle import attach_pc_lifecycle
+from .utils.validate import get_params, validate_sdp
 
 logger = logging.getLogger("webrtc")
-
 MAX_SDP_SIZE = 1_000_000
 
 
 
 async def handle_offer(request):
-    logger.info("handle_offer: received SDP offer")
-    # Validate content type and JSON body
-    if request.content_type != "application/json":
-        logger.warning("Invalid content type: %s", request.content_type)
-        return web.json_response({"error": "invalid content type, expected application/json"}, status=415)
-    try:
-        params = await request.json()
-    except Exception:
-        logger.warning("Invalid JSON in /offer", exc_info=True)
-        return web.json_response({"error": "invalid JSON body"}, status=400)
+    [params, err] = await get_params(request)
+    if err is not None:
+        raise web.json_response({err}, status=400)
+
 
     sdp = params.get("sdp")
     offer_type = params.get("type")
 
-    if not isinstance(sdp, str) or not isinstance(offer_type, str):
-        logger.warning("Missing or invalid sdp/type fields")
-        return web.json_response({"error": "fields 'sdp' (string) and 'type' (string) are required"}, status=422)
-
-    if offer_type.lower() != "offer":
-        logger.warning("Invalid offer type: %s", offer_type)
-        return web.json_response({"error": "type must be 'offer'"}, status=422)
-
-    sdp_len = len(sdp)
-    if sdp_len > MAX_SDP_SIZE:
-        logger.warning("SDP too large: %d bytes", sdp_len)
-        return web.json_response({"error": "SDP too large"}, status=413)
-
-    ok, err = _validate_sdp(sdp)
+    ok, err = validate_sdp(sdp)
     if not ok:
-        logger.warning("Invalid SDP: %s", err)
-        return web.json_response({"error": f"invalid SDP: {err}"}, status=422)
+        return web.json_response(err, status=400)
 
-    logger.debug(f"offer type={offer_type} sdp_len={sdp_len}")
     offer = RTCSessionDescription(sdp=sdp, type=offer_type)
 
     pc = RTCPeerConnection()
@@ -74,7 +45,7 @@ async def handle_offer(request):
 
     graph = AudioGraph()
     echo_ref = {"node": None}
-    from server.utils.pc_lifecycle import attach_pc_lifecycle
+
     attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
 
     @pc.on("track")

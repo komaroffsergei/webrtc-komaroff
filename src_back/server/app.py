@@ -2,8 +2,8 @@ import os
 
 from aiohttp import web
 
-from server.handler import handle_index, handle_offer, handle_shutdown
-from server.utils.config import STATIC_DIR
+from .handler import handle_index, handle_offer, handle_shutdown
+from .utils.config import STATIC_DIR
 
 
 def setup_routes(app):

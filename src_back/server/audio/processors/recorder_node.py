@@ -5,7 +5,7 @@ from typing import Optional
 import numpy as np
 from av import AudioFrame
 
-from server.utils.config import RECORDINGS_DIR
+from ...utils.config import RECORDINGS_DIR
 import logging
 
 logger = logging.getLogger("audio.RecorderNode")
