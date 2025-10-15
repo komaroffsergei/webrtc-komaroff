@@ -10,6 +10,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch'
 Service :nats_box, image: 'natsio/nats-box' do
   # Use env coming from compose's backend service (document purpose only)
   # use env from docker/.env via CI or local export
-  env NATS_URL: NATS_URL
+  # env NATS_URL: NATS_URL
   entrypoint "sh -c \"sleep infinity\""
 end

@@ -23,7 +23,7 @@ class NatsNode(ConsumerNode):
         super().__init__(source_node)
         self.nc: Optional[nats.NATS] = None
         self.js = None
-        self.nc_url = os.getenv("NATS_URL", "nats://audio_nats:4222")
+        self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
         self.subject = os.getenv("NATS_SUBJECT", "audio.frames")
         self.stream_name = os.getenv("NATS_STREAM", "audio-stream")
 
