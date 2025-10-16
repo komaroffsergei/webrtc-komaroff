@@ -1,27 +1,8 @@
 (function(){
   // Create and configure RTCPeerConnection
   async function createPeer(config){
-    // Pre-warm ICE with pool, aggressive bundling
-    const pc = new RTCPeerConnection({
-      iceServers: config.webrtc.iceServers,
-      iceCandidatePoolSize: config.webrtc.iceCandidatePoolSize || 4,
-      bundlePolicy: config.webrtc.bundlePolicy || 'max-bundle',
-      rtcpMuxPolicy: config.webrtc.rtcpMuxPolicy || 'require',
-    });
-    // Reserve audio transceiver early
-    let audioTransceiver = null;
-    try { audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch{}
-    // Prefer OPUS via codec preferences (safe alternative to SDP rewriting)
-    try {
-      const caps = RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities('audio');
-      if (caps && Array.isArray(caps.codecs)){
-        const opusFirst = caps.codecs.filter(c => /opus/i.test(c.mimeType));
-        if (opusFirst.length){
-          const t = audioTransceiver || pc.getTransceivers().find(tr => tr.receiver?.track?.kind === 'audio' || tr.sender?.track?.kind === 'audio');
-          if (t && t.setCodecPreferences){ t.setCodecPreferences(opusFirst); }
-        }
-      }
-    } catch {}
+    // Create RTCPeerConnection with configured ICE servers
+    const pc = new RTCPeerConnection({ iceServers: config.webrtc.iceServers });
 
     // Optional diagnostics logging to help with debugging connection states
     if (config.webrtc.diagnostics){
@@ -29,23 +10,13 @@
       pc.onconnectionstatechange = () => { console.log('[pc] connectionstate:', pc.connectionState); window.AppLog && AppLog.emit('[pc] connectionstate', pc.connectionState); };
       pc.onsignalingstatechange = () => { console.log('[pc] signalingstate:', pc.signalingState); window.AppLog && AppLog.emit('[pc] signalingstate', pc.signalingState); };
       pc.onicegatheringstatechange = () => { console.log('[pc] icegatheringstate:', pc.iceGatheringState); window.AppLog && AppLog.emit('[pc] icegatheringstate', pc.iceGatheringState); };
-      pc.onicecandidate = (e) => {
-        const c = e && e.candidate ? e.candidate.candidate : null;
-        if (!c) { window.AppLog && AppLog.emit('[pc] icecandidate', null); return; }
-        // filter to speedup: only IPv4 UDP
-        if (c.includes(' udp ') && /\s\d+\.\d+\.\d+\.\d+\s/.test(c)){
-          window.AppLog && AppLog.emit('[pc] icecandidate', c);
-        } else {
-          // ignore TCP and IPv6 to reduce negotiation noise
-          return;
-        }
-      };
+      pc.onicecandidate = (e) => { console.log('[pc] icecandidate:', !!e.candidate); window.AppLog && AppLog.emit('[pc] icecandidate', e && e.candidate ? e.candidate.candidate : null); };
     }
     return pc;
   }
 
-  // Wait until ICE gathering completes or the timeout elapses (short timeout for faster offer)
-  async function waitForIceGatheringComplete(pc, timeoutMs = 400){
+  // Wait until ICE gathering completes or the timeout elapses
+  async function waitForIceGatheringComplete(pc, timeoutMs = 3000){
     if (pc.iceGatheringState === 'complete') return;
     await new Promise((resolve) => {
       let timer;
@@ -65,24 +36,30 @@
 
   // Create an offer, send it to the signaling server, and apply the received answer
   async function negotiate(pc, config){
-  // 1) Create and set local offer IMMEDIATELY
-  const offer = await pc.createOffer({ offerToReceiveAudio: true });
-  await pc.setLocalDescription(offer);
+    // 1) Create local offer and start ICE gathering
+    await pc.setLocalDescription(await pc.createOffer());
 
-  // 2) SEND OFFER RIGHT AWAY — no waiting!
-  const resp = await fetch(config.signaling.offerEndpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sdp: offer.sdp, type: offer.type })
-  });
+    // 2) Wait for ICE candidates (or timeout)
+    await waitForIceGatheringComplete(pc, 3000);
 
-  if (!resp.ok) throw new Error(`Signaling server responded with ${resp.status}`);
-  const answer = await resp.json();
-  await pc.setRemoteDescription(answer);
+    // 3) Send offer to signaling server and receive answer
+    const { sdp, type } = pc.localDescription;
+    const resp = await fetch(config.signaling.offerEndpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sdp, type })
+    });
+    if (!resp.ok) {
+      throw new Error(`Signaling server responded with ${resp.status}`);
+    }
+    const answer = await resp.json();
 
-  // 3) OPTIONAL: всё ещё можно ждать кандидаты для логгирования, но НЕ для отправки
-  // (это уже не влияет на скорость handshake)
-  return answer;
-}
+    // 4) Set remote description
+    await pc.setRemoteDescription(answer);
+
+    // Optional: return the answer for debugging/inspection
+    return answer;
+  }
+
   window.WebRTC = { createPeer, negotiate };
 })();
