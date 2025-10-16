@@ -4,7 +4,7 @@
   //   [pc], [ice], [signaling], [server]
   const ALLOWED_PREFIXES = ['[pc]', '[ice]', '[signaling]', '[server]'];
 
-  function ts(){ return new Date().toISOString(); }
+  function ts(){ return /*new Date().toISOString()*/ ''; }
 
   function format(arg){
     if (arg instanceof Error){ return `${arg.name}: ${arg.message}`; }
@@ -35,7 +35,7 @@
     const tag = arguments[0];
     if (!allowed(tag)) return; // ignore everything except WebRTC connection and server events
     const parts = Array.from(arguments).map(format);
-    write(`[${ts()}] ` + parts.join(' '));
+    write(parts.join(' '));
   }
 
   // Helper for logging server responses. Use as AppLog.server('offer', respOrError)
