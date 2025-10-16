@@ -81,12 +81,32 @@
   }
 
   // Create an offer, send it to the signaling server, and apply the received answer
+  // Wait until ICE gathering completes or timeout elapses
+  async function waitForIceGatheringComplete(pc, timeoutMs = 800){
+    if (pc.iceGatheringState === 'complete') return;
+    await new Promise((resolve) => {
+      let timer;
+      const onChange = () => {
+        if (pc.iceGatheringState === 'complete'){
+          clearTimeout(timer);
+          pc.removeEventListener('icegatheringstatechange', onChange);
+          resolve();
+        }
+      };
+      timer = setTimeout(() => {
+        pc.removeEventListener('icegatheringstatechange', onChange);
+        resolve();
+      }, timeoutMs);
+      pc.addEventListener('icegatheringstatechange', onChange);
+    });
+  }
+
   async function negotiate(pc, config){
     // 1) Create local offer and start ICE gathering
     await pc.setLocalDescription(await pc.createOffer());
 
-    // 2) With trickle enabled, we don't need to wait for complete; send offer immediately
-    // await waitForIceGatheringComplete(pc, 3000);
+    // 2) Short pre-wait to let srflx candidates appear in SDP for reliability in prod
+    await waitForIceGatheringComplete(pc, 800);
 
     // 3) Send offer to signaling server and receive answer
     const { sdp, type } = pc.localDescription;
