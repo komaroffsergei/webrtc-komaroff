@@ -1,6 +1,14 @@
 (function(){
   async function createPeer(config){
     const pc = new RTCPeerConnection({ iceServers: config.webrtc.iceServers });
+    // Ensure we have a receiving audio m-line even if no local mic is added yet
+    try{
+      const hasSend = pc.getSenders().some(s => s.track && s.track.kind === 'audio');
+      const hasRecv = pc.getTransceivers().some(t => t.receiver && t.receiver.track && t.receiver.track.kind === 'audio');
+      if (!hasSend && !hasRecv){
+        pc.addTransceiver('audio', { direction: 'recvonly' });
+      }
+    }catch{}
     if (config.webrtc.diagnostics){
       pc.oniceconnectionstatechange = () => { console.log('[pc] iceconnectionstate:', pc.iceConnectionState); window.AppLog && AppLog.emit('[pc] iceconnectionstate', pc.iceConnectionState); };
       pc.onconnectionstatechange = () => { console.log('[pc] connectionstate:', pc.connectionState); window.AppLog && AppLog.emit('[pc] connectionstate', pc.connectionState); };
@@ -12,11 +20,7 @@
   }
 
   async function negotiate(pc, config){
-    const offer = await pc.createOffer({
-      offerToReceiveAudio: 0,
-      offerToReceiveVideo: 0,
-      voiceActivityDetection: false
-    });
+    const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     const { sdp, type } = pc.localDescription;
     const resp = await fetch(config.signaling.offerEndpoint, {

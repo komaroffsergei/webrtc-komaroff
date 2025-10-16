@@ -122,6 +122,7 @@
       pc.ontrack = (event) => {
         const stream = event.streams?.[0] || new MediaStream([event.track]);
         els.remoteAudio.srcObject = stream;
+        els.remoteAudio.muted = false;
         els.remoteAudio.play().catch(err => console.warn('[audio] play() rejected', err));
         setupOutputViz(stream);
       };
