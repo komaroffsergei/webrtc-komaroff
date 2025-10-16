@@ -9,7 +9,7 @@
       // STUN/TURN servers used for ICE candidate gathering.
       // Prefer IP literal for STUN to skip DNS latency (replace with your STUN IP).
       iceServers: [
-        { urls: ["stun:178.20.41.87:3478"] }, // original: stun:stun.gis-master.ru:3478
+        { urls: ["stun:stun.gis-master.ru:3478"] }, // original: stun:stun.gis-master.ru:3478 // stun:178.20.41.87:3478
         // If direct P2P fails in some networks, enable TURN by adding your relays:
         // { urls: ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"], username: "user", credential: "pass" },
       ],
