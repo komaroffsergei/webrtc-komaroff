@@ -114,7 +114,7 @@ async def handle_offer(request):
             # bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
             filler = graph.add(LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-            recorder = graph.add(RecorderNode(filler, batch_frames=512))
+            # recorder = graph.add(RecorderNode(filler, batch_frames=512))
 
             # Bind upstream audio to pre-initialized NATS node and add into graph
             # nats_node.use_source(source)
