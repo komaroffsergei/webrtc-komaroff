@@ -4,7 +4,10 @@
 
   function startServerTricklePolling(pc, config){
     if (!config?.signaling?.trickleGetEndpoint) return;
-    const interval = setInterval(async ()=>{
+    // Prevent duplicate intervals
+    if (pc.__trickleInterval) { clearInterval(pc.__trickleInterval); }
+    let idleRounds = 0;
+    pc.__trickleInterval = setInterval(async ()=>{
       try{
         if (!window.__webrtcClientId) return;
         const url = `${config.signaling.trickleGetEndpoint}?clientId=${encodeURIComponent(window.__webrtcClientId)}`;
@@ -12,17 +15,28 @@
         if (!r.ok) return;
         const data = await r.json();
         const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+        if (candidates.length === 0){
+          idleRounds += 1;
+        } else {
+          idleRounds = 0;
+        }
         for (const c of candidates){
           try{ await pc.addIceCandidate(c); }catch(e){ console.warn('addIceCandidate failed', e); }
         }
+        // Auto-stop after connected and a few idle rounds (no new candidates)
+        if ((pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') && idleRounds >= 3){
+          clearInterval(pc.__trickleInterval);
+          pc.__trickleInterval = null;
+        }
       }catch(err){ /* ignore */ }
     }, 500);
-    // Stop when connection closed
-    pc.addEventListener('connectionstatechange', ()=>{
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed'){
-        clearInterval(interval);
+    const stopIfDone = ()=>{
+      if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'closed'){
+        if (pc.__trickleInterval){ clearInterval(pc.__trickleInterval); pc.__trickleInterval = null; }
       }
-    });
+    };
+    pc.addEventListener('connectionstatechange', stopIfDone);
+    pc.addEventListener('iceconnectionstatechange', stopIfDone);
   }
 
   // Create and configure RTCPeerConnection
