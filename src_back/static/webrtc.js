@@ -66,7 +66,7 @@
   // Create an offer, send it to the signaling server, and apply the received answer
   async function negotiate(pc, config){
   // 1) Create and set local offer IMMEDIATELY
-  const offer = await pc.createOffer();
+  const offer = await pc.createOffer({ offerToReceiveAudio: true });
   await pc.setLocalDescription(offer);
 
   // 2) SEND OFFER RIGHT AWAY — no waiting!
