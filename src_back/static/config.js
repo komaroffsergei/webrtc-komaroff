@@ -7,10 +7,11 @@
     },
     webrtc: {
       iceServers: [
-        { urls: ["stun:stun.gis-master.ru:3478"] },
-        // Uncomment and configure TURN if behind NAT with no direct connectivity
-        // { urls: ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"], username: "user", credential: "pass" },
+        { urls: ["stun:178.20.41.87:3478"] }, // stun:stun.gis-master.ru:3478
       ],
+      iceCandidatePoolSize: 4,
+      bundlePolicy: 'max-bundle',
+      rtcpMuxPolicy: 'require',
       diagnostics: true
     },
     audio: {
