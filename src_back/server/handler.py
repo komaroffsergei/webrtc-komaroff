@@ -114,25 +114,34 @@ async def handle_index(request):
 async def handle_trickle_post(request):
     data = await request.json()
     client_id = data.get("clientId")
-    cand = data.get("candidate")
-    sdp_mid = data.get("sdpMid")
-    sdp_mline = data.get("sdpMLineIndex")
-
     if not client_id or client_id not in PENDING:
         return web.json_response({"error": "unknown clientId"}, status=400)
     pc = PENDING[client_id]["pc"]
 
-    if cand:
+    # Accept either a single candidate or a batch { candidates: [{...}, ...] }
+    batch = data.get("candidates")
+    items = batch if isinstance(batch, list) else [
+        {
+            "candidate": data.get("candidate"),
+            "sdpMid": data.get("sdpMid"),
+            "sdpMLineIndex": data.get("sdpMLineIndex"),
+        }
+    ]
+
+    for item in items:
+        cand = item.get("candidate")
+        if not cand:
+            continue
         try:
             await pc.addIceCandidate(RTCIceCandidate(
-                sdpMid=sdp_mid,
-                sdpMLineIndex=sdp_mline,
+                sdpMid=item.get("sdpMid"),
+                sdpMLineIndex=item.get("sdpMLineIndex"),
                 candidate=cand
             ))
         except Exception:
             logger.warning("addIceCandidate failed", exc_info=True)
 
-    return web.json_response({"ok": True})
+    return web.json_response({"ok": True, "count": len([i for i in items if i.get('candidate')])})
 
 
 async def handle_trickle_get(request):

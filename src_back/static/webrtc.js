@@ -1,4 +1,30 @@
 (function(){
+  // Buffer for local candidates before clientId is known
+  const pendingCandidates = [];
+
+  function startServerTricklePolling(pc, config){
+    if (!config?.signaling?.trickleGetEndpoint) return;
+    const interval = setInterval(async ()=>{
+      try{
+        if (!window.__webrtcClientId) return;
+        const url = `${config.signaling.trickleGetEndpoint}?clientId=${encodeURIComponent(window.__webrtcClientId)}`;
+        const r = await fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } });
+        if (!r.ok) return;
+        const data = await r.json();
+        const candidates = Array.isArray(data?.candidates) ? data.candidates : [];
+        for (const c of candidates){
+          try{ await pc.addIceCandidate(c); }catch(e){ console.warn('addIceCandidate failed', e); }
+        }
+      }catch(err){ /* ignore */ }
+    }, 500);
+    // Stop when connection closed
+    pc.addEventListener('connectionstatechange', ()=>{
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed'){
+        clearInterval(interval);
+      }
+    });
+  }
+
   // Create and configure RTCPeerConnection
   async function createPeer(config){
     const pc = new RTCPeerConnection({ iceServers: config.webrtc.iceServers });
@@ -20,16 +46,20 @@
     // Trickle ICE: send local candidates to server as they appear
     pc.addEventListener('icecandidate', async (e) => {
       if (!e.candidate) return;
+      const item = {
+        candidate: e.candidate.candidate,
+        sdpMid: e.candidate.sdpMid,
+        sdpMLineIndex: e.candidate.sdpMLineIndex,
+      };
+      if (!window.__webrtcClientId){
+        pendingCandidates.push(item);
+        return;
+      }
       try{
         await fetch(config.signaling.tricklePostEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            clientId: window.__webrtcClientId,
-            candidate: e.candidate.candidate,
-            sdpMid: e.candidate.sdpMid,
-            sdpMLineIndex: e.candidate.sdpMLineIndex,
-          })
+          body: JSON.stringify({ clientId: window.__webrtcClientId, candidates: [item] })
         });
       }catch(err){ console.warn('trickle POST failed', err); }
     });
@@ -55,8 +85,20 @@
       throw new Error(`Signaling server responded with ${resp.status}`);
     }
     const answer = await resp.json();
-    // Save clientId to enable trickle
+    // Save clientId to enable trickle and flush buffered local candidates
     window.__webrtcClientId = answer.clientId;
+    try{
+      if (Array.isArray(pendingCandidates) && pendingCandidates.length){
+        await fetch(config.signaling.tricklePostEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientId: window.__webrtcClientId, candidates: pendingCandidates })
+        });
+        pendingCandidates.length = 0;
+      }
+    }catch(err){ console.warn('flush trickle failed', err); }
+    // Start polling for server-side candidates
+    startServerTricklePolling(pc, config);
 
     // 4) Set remote description
     await pc.setRemoteDescription(answer);
