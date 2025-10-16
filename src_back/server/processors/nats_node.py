@@ -119,8 +119,9 @@ class NatsNode(ConsumerNode):
             meta_bytes = json.dumps(meta).encode("utf-8")
             payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_audio_bytes
 
-            ack = await self.js.publish(self.subject, payload, timeout=5)
-            logger.info(f"Published raw frame (seq={ack.seq}, {len(payload)} bytes)")
+            self.js.publish(self.subject, payload, timeout=5)
+            # ack = await self.js.publish(self.subject, payload, timeout=5)
+            logger.info(f"Published raw frame (seq), {len(payload)} bytes)")
 
         except Exception as e:
             logger.error(f"Failed to publish raw frame: {e}", exc_info=True)
