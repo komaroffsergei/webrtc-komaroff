@@ -53,37 +53,37 @@ async def handle_offer(request):
     echo_ref = {"node": None}
 
     # Initialize NATS publisher and a debug durable pull subscriber before any tracks arrive
-    # nats_node = NatsNode()
-    # nats_url = "nats://localhost:4222"
-    # nats_subject = os.getenv("NATS_SUBJECT", "audio.frames")
-    # nats_durable = os.getenv("NATS_DURABLE", "debug_reader")
-    # await nats_node.connect(
-    #     # nc_url=os.getenv("NATS_URL", "nats://localhost:4222"),
-    #     nc_url=nats_url,
-    #     subject=nats_subject
-    # )
-    # js_ctx = await nats_node.ensure_js()
-    # try:
-    #     await js_ctx.pull_subscribe(nats_node.subject, durable=nats_durable)
-    # except Exception:
-    #     print(">>> durable may already exist; ignore")
-    #     #
-    #     pass
-    # #
-    # #
-    # # Pull-based subscription with near-immediate delivery via fetch loop
-    # sub = await js_ctx.pull_subscribe(nats_subject, durable=nats_durable)
+    nats_node = NatsNode()
+    nats_url = "nats://localhost:4222"
+    nats_subject = os.getenv("NATS_SUBJECT", "audio.frames")
+    nats_durable = os.getenv("NATS_DURABLE", "debug_reader")
+    await nats_node.connect(
+        # nc_url=os.getenv("NATS_URL", "nats://localhost:4222"),
+        nc_url=nats_url,
+        subject=nats_subject
+    )
+    js_ctx = await nats_node.ensure_js()
+    try:
+        await js_ctx.pull_subscribe(nats_node.subject, durable=nats_durable)
+    except Exception:
+        print(">>> durable may already exist; ignore")
+        #
+        pass
     #
-    # async def _pull_loop():
-    #     while True:
-    #         try:
-    #             msgs = await sub.fetch(10, timeout=1)
-    #             for msg in msgs:
-    #                 await message_handler(msg)
-    #         except Exception:
-    #             await asyncio.sleep(0.2)
     #
-    # asyncio.create_task(_pull_loop())
+    # Pull-based subscription with near-immediate delivery via fetch loop
+    sub = await js_ctx.pull_subscribe(nats_subject, durable=nats_durable)
+
+    async def _pull_loop():
+        while True:
+            try:
+                msgs = await sub.fetch(10, timeout=1)
+                for msg in msgs:
+                    await message_handler(msg)
+            except Exception:
+                await asyncio.sleep(0.2)
+
+    asyncio.create_task(_pull_loop())
 
     attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
 
@@ -107,8 +107,8 @@ async def handle_offer(request):
             recorder = graph.add(RecorderNode(filler, batch_frames=512))
 
             # Bind upstream audio to pre-initialized NATS node and add into graph
-            # nats_node.use_source(source)
-            # graph.add(nats_node)
+            nats_node.use_source(source)
+            graph.add(nats_node)
 
             echo = EchoTrackNode(bgm)
             audio_transceiver.sender.replaceTrack(echo)
