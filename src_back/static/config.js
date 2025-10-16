@@ -3,7 +3,10 @@
 (function(){
   window.AppConfig = {
     signaling: {
-      offerEndpoint: "/offer"
+      offerEndpoint: '/offer',
+      // Trickle ICE endpoints for incremental candidate exchange
+      tricklePostEndpoint: '/trickle',
+      trickleGetEndpoint: '/trickle'
     },
     webrtc: {
       // STUN/TURN servers used for ICE candidate gathering.

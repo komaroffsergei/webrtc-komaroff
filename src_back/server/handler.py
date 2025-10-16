@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 
-from aiortc import RTCPeerConnection, RTCSessionDescription
+from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 from aiohttp import web
 
 from .processors.graph import AudioGraph
@@ -14,6 +14,9 @@ from .utils.validate import get_params, validate_sdp
 logger = logging.getLogger("webrtc")
 MAX_SDP_SIZE = 1_000_000
 
+
+# In-memory mapping from client id -> pc and pending server candidates
+PENDING = {}
 
 async def handle_offer(request):
     [params, err] = await get_params(request)
@@ -35,6 +38,10 @@ async def handle_offer(request):
     pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
     request.app["pcs"] = pcs
     pcs.add(pc)
+
+    # Generate a simple client id and register in memory
+    client_id = params.get("clientId") or os.urandom(6).hex()
+    PENDING[client_id] = {"pc": pc, "candidates": []}
 
     logger.info("PC created and audio transceiver added (sendrecv)")
     if logger.isEnabledFor(logging.DEBUG):
@@ -71,6 +78,18 @@ async def handle_offer(request):
         await pc.setRemoteDescription(offer)
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
+
+        # Hook server-side trickle: push local candidates into PENDING for this client
+        @pc.on("icecandidate")
+        def on_server_candidate(event):
+            cand = event.candidate
+            if not cand:
+                return
+            PENDING[client_id]["candidates"].append({
+                "candidate": cand.to_sdp(),
+                "sdpMid": cand.sdpMid,
+                "sdpMLineIndex": cand.sdpMLineIndex,
+            })
     except Exception:
         logger.error("Failed to process SDP offer", exc_info=True)
         try:
@@ -82,13 +101,47 @@ async def handle_offer(request):
 
     return web.json_response({
         "sdp": pc.localDescription.sdp,
-        "type": pc.localDescription.type
+        "type": pc.localDescription.type,
+        "clientId": client_id
     })
 
 
 async def handle_index(request):
     logger.debug("Serving index.html")
     return web.FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+
+async def handle_trickle_post(request):
+    data = await request.json()
+    client_id = data.get("clientId")
+    cand = data.get("candidate")
+    sdp_mid = data.get("sdpMid")
+    sdp_mline = data.get("sdpMLineIndex")
+
+    if not client_id or client_id not in PENDING:
+        return web.json_response({"error": "unknown clientId"}, status=400)
+    pc = PENDING[client_id]["pc"]
+
+    if cand:
+        try:
+            await pc.addIceCandidate(RTCIceCandidate(
+                sdpMid=sdp_mid,
+                sdpMLineIndex=sdp_mline,
+                candidate=cand
+            ))
+        except Exception:
+            logger.warning("addIceCandidate failed", exc_info=True)
+
+    return web.json_response({"ok": True})
+
+
+async def handle_trickle_get(request):
+    client_id = request.query.get("clientId")
+    if not client_id or client_id not in PENDING:
+        return web.json_response({"candidates": []})
+    out = PENDING[client_id]["candidates"]
+    PENDING[client_id]["candidates"] = []
+    return web.json_response({"candidates": out})
 
 
 async def handle_shutdown(app):
