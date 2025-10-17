@@ -82,7 +82,7 @@
 
   // Create an offer, send it to the signaling server, and apply the received answer
   // Wait until ICE gathering completes or timeout elapses
-  async function waitForIceGatheringComplete(pc, timeoutMs = 800){
+  async function waitForIceGatheringComplete(pc, timeoutMs = 100){
     if (pc.iceGatheringState === 'complete') return;
     await new Promise((resolve) => {
       let timer;
