@@ -55,16 +55,16 @@ async def start_audio_pipeline(graph, track, audio_transceiver, echo_ref):
     recorder = graph.add(RecorderNode(filler, batch_frames=512))
 
     # Optional NATS tap if present
-    try:
-        nats_node = NatsNode()
-        await nats_node.connect(
-            nc_url=os.getenv("NATS_URL", "nats://localhost:4222"),
-            subject=os.getenv("NATS_SUBJECT", "audio.frames")
-        )
-        nats_node.use_source(source)
-        graph.add(nats_node)
-    except Exception:
-        logger.debug("NATS node init failed or not configured", exc_info=True)
+    # try:
+    #     nats_node = NatsNode()
+    #     await nats_node.connect(
+    #         nc_url=os.getenv("NATS_URL", "nats://localhost:4222"),
+    #         subject=os.getenv("NATS_SUBJECT", "audio.frames")
+    #     )
+    #     nats_node.use_source(source)
+    #     graph.add(nats_node)
+    # except Exception:
+    #     logger.debug("NATS node init failed or not configured", exc_info=True)
 
     echo = EchoTrackNode(bgm)
     audio_transceiver.sender.replaceTrack(echo)
@@ -106,14 +106,14 @@ async def handle_offer(request):
 
     echo_ref = {"node": None}
 
-    graph = AudioGraph()
-    attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
+
 
     @pc.on("track")
     async def on_track(track):
         logger.info(f"on_track: received kind={track.kind}")
         if track.kind == "audio":
-
+            graph = AudioGraph()
+            attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
             await start_audio_pipeline(graph, track, audio_transceiver, echo_ref)
             logger.info("Audio graph started")
 
