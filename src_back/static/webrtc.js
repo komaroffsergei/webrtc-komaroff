@@ -106,7 +106,7 @@
     await pc.setLocalDescription(await pc.createOffer());
 
     // 2) Short pre-wait to let srflx candidates appear in SDP for reliability in prod
-    await waitForIceGatheringComplete(pc, 800);
+    // await waitForIceGatheringComplete(pc, 800);
 
     // 3) Send offer to signaling server and receive answer
     const { sdp, type } = pc.localDescription;
