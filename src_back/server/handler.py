@@ -106,14 +106,14 @@ async def handle_offer(request):
 
     echo_ref = {"node": None}
 
-
+    graph = AudioGraph()
+    attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
 
     @pc.on("track")
     async def on_track(track):
         logger.info(f"on_track: received kind={track.kind}")
         if track.kind == "audio":
-            graph = AudioGraph()
-            attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
+
             await start_audio_pipeline(graph, track, audio_transceiver, echo_ref)
             logger.info("Audio graph started")
 
