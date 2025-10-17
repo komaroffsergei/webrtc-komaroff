@@ -131,8 +131,35 @@
         pendingCandidates.length = 0;
       }
     }catch(err){ console.warn('flush trickle failed', err); }
-    // Start polling for server-side candidates
-    startServerTricklePolling(pc, config);
+    // Prefer WebSocket for server-side candidates; fallback to polling if WS fails
+    try{
+      const wsUrl = (location.protocol.replace('http', 'ws') + '//' + location.host + config.signaling.wsEndpoint + `?clientId=${encodeURIComponent(window.__webrtcClientId)}`);
+      const ws = new WebSocket(wsUrl);
+      ws.onmessage = async (ev) => {
+        try{
+          const msg = JSON.parse(ev.data);
+          if (msg?.type === 'candidate'){
+            await pc.addIceCandidate(msg);
+          } else if (msg?.type === 'end-of-candidates'){
+            // no-op; ICE will complete naturally
+          }
+        }catch(e){ /* ignore */ }
+      };
+      pc.addEventListener('icecandidate', (e)=>{
+        if (!e.candidate) { try{ ws.send(JSON.stringify({ type: 'end-of-candidates' })); }catch{}; return; }
+        try{
+          ws.send(JSON.stringify({
+            type: 'candidate',
+            candidate: e.candidate.candidate,
+            sdpMid: e.candidate.sdpMid,
+            sdpMLineIndex: e.candidate.sdpMLineIndex,
+          }));
+        }catch{}
+      });
+      ws.onopen = () => { /* ready */ };
+      ws.onerror = () => { try{ ws.close(); }catch{}; startServerTricklePolling(pc, config); };
+      ws.onclose = () => { /* ended */ };
+    }catch(err){ startServerTricklePolling(pc, config); }
 
     // 4) Set remote description
     await pc.setRemoteDescription(answer);

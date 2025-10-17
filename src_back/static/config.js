@@ -6,7 +6,8 @@
       offerEndpoint: '/offer',
       // Trickle ICE endpoints for incremental candidate exchange
       tricklePostEndpoint: '/trickle',
-      trickleGetEndpoint: '/trickle'
+      trickleGetEndpoint: '/trickle',
+      wsEndpoint: '/ws'
     },
     webrtc: {
       // STUN/TURN servers used for ICE candidate gathering.

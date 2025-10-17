@@ -3,7 +3,7 @@ import logging
 import os
 
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
-from aiohttp import web
+from aiohttp import web, WSMsgType
 
 from .processors.graph import AudioGraph
 from .processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
@@ -18,6 +18,7 @@ MAX_SDP_SIZE = 1_000_000
 
 # In-memory mapping from client id -> pc and pending server candidates
 PENDING = {}
+WS = {}
 
 # Helpers split: connection setup vs stream processing
 async def establish_connection(pc, offer, client_id):
@@ -28,14 +29,33 @@ async def establish_connection(pc, offer, client_id):
     @pc.on("icecandidate")
     def on_server_candidate(event):
         cand = event.candidate
-        if not cand:
+        if client_id not in PENDING:
             return
-        if client_id in PENDING:
-            PENDING[client_id]["candidates"].append({
-                "candidate": cand.to_sdp(),
-                "sdpMid": cand.sdpMid,
-                "sdpMLineIndex": cand.sdpMLineIndex,
-            })
+        if cand is None:
+            # end-of-candidates
+            # push via WS if available, else just clear pending buffer
+            ws = WS.get(client_id)
+            if ws and not ws.closed:
+                try:
+                    ws.send_json({"type": "end-of-candidates"})
+                except Exception:
+                    pass
+            return
+        payload = {
+            "type": "candidate",
+            "candidate": cand.to_sdp(),
+            "sdpMid": cand.sdpMid,
+            "sdpMLineIndex": cand.sdpMLineIndex,
+        }
+        # Push via WS if available, otherwise buffer for REST GET
+        ws = WS.get(client_id)
+        if ws and not ws.closed:
+            try:
+                ws.send_json(payload)
+                return
+            except Exception:
+                pass
+        PENDING[client_id]["candidates"].append(payload)
 
     return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "clientId": client_id}
 
@@ -176,6 +196,52 @@ async def handle_trickle_get(request):
     out = PENDING[client_id]["candidates"]
     PENDING[client_id]["candidates"] = []
     return web.json_response({"candidates": out})
+
+
+async def handle_ws(request):
+    client_id = request.query.get("clientId")
+    if not client_id or client_id not in PENDING:
+        return web.Response(status=400, text="unknown clientId")
+    ws = web.WebSocketResponse(heartbeat=20)
+    await ws.prepare(request)
+    WS[client_id] = ws
+
+    # Flush buffered server candidates if any
+    buf = PENDING[client_id].get("candidates", [])
+    for item in buf:
+        try:
+            await ws.send_json(item)
+        except Exception:
+            pass
+    PENDING[client_id]["candidates"] = []
+
+    async for msg in ws:
+        if msg.type == WSMsgType.TEXT:
+            try:
+                data = msg.json()
+            except Exception:
+                continue
+            if data.get("type") == "candidate":
+                try:
+                    pc = PENDING[client_id]["pc"]
+                    await pc.addIceCandidate(RTCIceCandidate(
+                        sdpMid=data.get("sdpMid"),
+                        sdpMLineIndex=data.get("sdpMLineIndex"),
+                        candidate=data.get("candidate"),
+                    ))
+                except Exception:
+                    logger.warning("ws addIceCandidate failed", exc_info=True)
+            elif data.get("type") == "end-of-candidates":
+                # Optional: finalize candidate gathering on server
+                pass
+        elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
+            break
+
+    try:
+        del WS[client_id]
+    except Exception:
+        pass
+    return ws
 
 
 async def handle_shutdown(app):
