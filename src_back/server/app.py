@@ -9,11 +9,8 @@ from .utils.config import STATIC_DIR
 def setup_routes(app):
     app.router.add_get("/", handle_index)
     app.router.add_post("/offer", handle_offer)
-    # Trickle ICE endpoints (REST fallback)
-    from .handler import handle_trickle_post, handle_trickle_get, handle_ws
-    app.router.add_post("/trickle", handle_trickle_post)
-    app.router.add_get("/trickle", handle_trickle_get)
     # WebSocket for full-duplex trickle
+    from .handler import handle_ws
     app.router.add_get("/ws", handle_ws)
     app.router.add_static("/static", path=STATIC_DIR)
 

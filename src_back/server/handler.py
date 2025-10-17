@@ -16,10 +16,11 @@ logger = logging.getLogger("webrtc")
 MAX_SDP_SIZE = 1_000_000
 
 
-# In-memory mapping from client id -> pc and pending server candidates
+# In-memory registries
+# PENDING maps client_id -> {"pc": RTCPeerConnection}
 PENDING = {}
+# WS maps client_id -> WebSocketResponse
 WS = {}
-
 # Helpers split: connection setup vs stream processing
 async def establish_connection(pc, offer, client_id):
     await pc.setRemoteDescription(offer)
@@ -33,7 +34,6 @@ async def establish_connection(pc, offer, client_id):
             return
         if cand is None:
             # end-of-candidates
-            # push via WS if available, else just clear pending buffer
             ws = WS.get(client_id)
             if ws and not ws.closed:
                 try:
@@ -47,15 +47,12 @@ async def establish_connection(pc, offer, client_id):
             "sdpMid": cand.sdpMid,
             "sdpMLineIndex": cand.sdpMLineIndex,
         }
-        # Push via WS if available, otherwise buffer for REST GET
         ws = WS.get(client_id)
         if ws and not ws.closed:
             try:
                 ws.send_json(payload)
-                return
             except Exception:
-                pass
-        PENDING[client_id]["candidates"].append(payload)
+                logger.debug("failed to send candidate via WS", exc_info=True)
 
     return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "clientId": client_id}
 
@@ -156,45 +153,7 @@ async def handle_index(request):
     return web.FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
-async def handle_trickle_post(request):
-    data = await request.json()
-    client_id = data.get("clientId")
-    if not client_id or client_id not in PENDING:
-        return web.json_response({"error": "unknown clientId"}, status=400)
-    pc = PENDING[client_id]["pc"]
 
-    # Accept either a single candidate or a batch { candidates: [{...}, ...] }
-    batch = data.get("candidates")
-    items = batch if isinstance(batch, list) else [
-        {
-            "candidate": data.get("candidate"),
-            "sdpMid": data.get("sdpMid"),
-            "sdpMLineIndex": data.get("sdpMLineIndex"),
-        }
-    ]
-
-    for item in items:
-        cand = item.get("candidate")
-        if not cand:
-            continue
-        try:
-            await pc.addIceCandidate(RTCIceCandidate(
-                sdpMid=item.get("sdpMid"),
-                sdpMLineIndex=item.get("sdpMLineIndex"),
-                candidate=cand
-            ))
-        except Exception:
-            logger.warning("addIceCandidate failed", exc_info=True)
-
-    return web.json_response({"ok": True, "count": len([i for i in items if i.get('candidate')])})
-
-
-async def handle_trickle_get(request):
-    client_id = request.query.get("clientId")
-    if not client_id or client_id not in PENDING:
-        return web.json_response({"candidates": []})
-    out = PENDING[client_id]["candidates"]
-    PENDING[client_id]["candidates"] = []
     return web.json_response({"candidates": out})
 
 
@@ -206,14 +165,7 @@ async def handle_ws(request):
     await ws.prepare(request)
     WS[client_id] = ws
 
-    # Flush buffered server candidates if any
-    buf = PENDING[client_id].get("candidates", [])
-    for item in buf:
-        try:
-            await ws.send_json(item)
-        except Exception:
-            pass
-    PENDING[client_id]["candidates"] = []
+    # No buffering: WS is the sole channel for server-side trickle
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:

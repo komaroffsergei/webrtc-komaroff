@@ -4,9 +4,7 @@
   window.AppConfig = {
     signaling: {
       offerEndpoint: '/offer',
-      // Trickle ICE endpoints for incremental candidate exchange
-      tricklePostEndpoint: '/trickle',
-      trickleGetEndpoint: '/trickle',
+      // WebSocket endpoint for incremental candidate exchange (full-duplex trickle)
       wsEndpoint: '/ws'
     },
     webrtc: {
