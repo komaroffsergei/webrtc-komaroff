@@ -1,6 +1,10 @@
 import logging
 from aiohttp import web
 
+# Ensure aiortc boot patch applied before any RTCPeerConnection is constructed
+import os
+os.environ.setdefault("AIORTC_ICE_GATHERING_TIMEOUT_MS", "300")
+from server import boot_patch  # noqa: F401  # side-effect import
 from server.app import create_app
 
 if __name__ == "__main__":
