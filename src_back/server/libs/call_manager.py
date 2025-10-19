@@ -22,13 +22,13 @@ class CallManager:
         # Warm up cryptographic RNG and OpenSSL by generating a DTLS certificate once at boot.
         # aiortc==1.14.0 does not support passing certificates= to RTCPeerConnection, so we cannot reuse it directly.
         # Nevertheless, the warm-up removes most of the latency spikes during the first PC creation.
-        t0 = time.monotonic()
-        try:
-            _ = RTCCertificate.generateCertificate()
-            t1 = time.monotonic()
-            logger.info("offer_timing_boot: certificate_generate=%.2fms (warm-up)", (t1 - t0) * 1000)
-        except Exception:
-            logger.warning("offer_timing_boot: certificate_generate_failed; continuing without warm-up", exc_info=True)
+        # t0 = time.monotonic()
+        # try:
+        #     _ = RTCCertificate.generateCertificate()
+        #     t1 = time.monotonic()
+        #     logger.info("offer_timing_boot: certificate_generate=%.2fms (warm-up)", (t1 - t0) * 1000)
+        # except Exception:
+        #     logger.warning("offer_timing_boot: certificate_generate_failed; continuing without warm-up", exc_info=True)
 
     def get_client_id(self, params):
         return params.get("clientId") or os.urandom(6).hex()
