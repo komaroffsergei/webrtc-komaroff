@@ -1,171 +1,67 @@
 import asyncio
 import logging
-import os
+import time
 
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 from aiohttp import web, WSMsgType
 
-from .processors.graph import AudioGraph
-from .processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
-from .processors.nats_node import NatsNode
-from .utils.config import STATIC_DIR
-from .utils.pc_lifecycle import attach_pc_lifecycle
 from .utils.validate import get_params, validate_sdp
 
 logger = logging.getLogger("webrtc")
-MAX_SDP_SIZE = 1_000_000
-
-
-# In-memory registries
-# PENDING maps client_id -> {"pc": RTCPeerConnection}
-PENDING = {}
-# WS maps client_id -> WebSocketResponse
-WS = {}
-# Helpers split: connection setup vs stream processing
-async def establish_connection(pc, offer, client_id):
-    await pc.setRemoteDescription(offer)
-    answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    @pc.on("icecandidate")
-    def on_server_candidate(event):
-        cand = event.candidate
-        if client_id not in PENDING:
-            return
-        if cand is None:
-            # end-of-candidates
-            ws = WS.get(client_id)
-            if ws and not ws.closed:
-                try:
-                    ws.send_json({"type": "end-of-candidates"})
-                except Exception:
-                    pass
-            return
-        payload = {
-            "type": "candidate",
-            "candidate": cand.to_sdp(),
-            "sdpMid": cand.sdpMid,
-            "sdpMLineIndex": cand.sdpMLineIndex,
-        }
-        ws = WS.get(client_id)
-        if ws and not ws.closed:
-            try:
-                ws.send_json(payload)
-            except Exception:
-                logger.debug("failed to send candidate via WS", exc_info=True)
-
-    return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "clientId": client_id}
-
-
-async def start_audio_pipeline(graph, track, audio_transceiver, echo_ref):
-    # Build modular audio pipeline only when audio track arrives
-    source = graph.add(TrackSourceNode(
-        track,
-        frame_duration_ms=20,
-        target_rate=48000,
-        target_channels=1,
-        target_output_format='s16'
-    ))
-
-    bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
-    filler = graph.add(LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-    recorder = graph.add(RecorderNode(filler, batch_frames=512))
-
-    # Optional NATS tap if present
-    # try:
-    #     nats_node = NatsNode()
-    #     await nats_node.connect(
-    #         nc_url=os.getenv("NATS_URL", "nats://localhost:4222"),
-    #         subject=os.getenv("NATS_SUBJECT", "audio.frames")
-    #     )
-    #     nats_node.use_source(source)
-    #     graph.add(nats_node)
-    # except Exception:
-    #     logger.debug("NATS node init failed or not configured", exc_info=True)
-
-    echo = EchoTrackNode(bgm)
-    audio_transceiver.sender.replaceTrack(echo)
-    echo_ref["node"] = echo
-
-    # Start graph if not running
-    asyncio.create_task(graph.start())
 
 
 async def handle_offer(request):
+    t0 = time.monotonic()
     [params, err] = await get_params(request)
+    t_json = time.monotonic()
     if err is not None:
         return web.json_response({"error": err}, status=400)
 
     sdp = params.get("sdp")
-    offer_type = params.get("type")
-
     ok, err = validate_sdp(sdp)
+    t_validate = time.monotonic()
     if not ok:
         return web.json_response({"error": err}, status=400)
 
-    offer = RTCSessionDescription(sdp=sdp, type=offer_type)
+    t_parse = time.monotonic()
+    call_manager = request.app["call_manager"]
+    resp, error = await call_manager.handle_offer(params)
+    t_done = time.monotonic()
 
-    pc = RTCPeerConnection()
-    audio_transceiver = pc.addTransceiver("audio", direction="sendrecv")
+    if error:
+        logger.info(
+            "offer_timing_total: json=%.2fms validate=%.2fms parse=%.2fms total=%.2fms",
+            (t_json - t0) * 1000,
+            (t_validate - t_json) * 1000,
+            (t_parse - t_validate) * 1000,
+            (t_done - t0) * 1000,
+        )
+        return web.json_response({"error": error}, status=400)
 
-    pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
-    request.app["pcs"] = pcs
-    pcs.add(pc)
-
-    # Generate a simple client id and register in memory
-    client_id = params.get("clientId") or os.urandom(6).hex()
-    PENDING[client_id] = {"pc": pc, "candidates": []}
-
-    logger.info("PC created and audio transceiver added (sendrecv)")
-    if logger.isEnabledFor(logging.DEBUG):
-        logger.debug(f"Active PCs: {len(pcs)}")
-
-
-    echo_ref = {"node": None}
-
-
-
-    @pc.on("track")
-    async def on_track(track):
-        logger.info(f"on_track: received kind={track.kind}")
-        if track.kind == "audio":
-            graph = AudioGraph()
-            attach_pc_lifecycle(pc, request.app, graph, audio_transceiver, echo_ref)
-            await start_audio_pipeline(graph, track, audio_transceiver, echo_ref)
-            logger.info("Audio graph started")
-
-    try:
-        resp = await establish_connection(pc, offer, client_id)
-    except Exception:
-        logger.error("Failed to process SDP offer", exc_info=True)
-        try:
-            await audio_transceiver.sender.replaceTrack(None)
-        except Exception:
-            logger.debug("replaceTrack(None) failed or not needed", exc_info=True)
-        await pc.close()
-        return web.json_response({"error": "failed to process offer"}, status=400)
-
+    logger.info(
+        "offer_timing_total: json=%.2fms validate=%.2fms parse=%.2fms setRemote+create+setLocal=see-above total=%.2fms",
+        (t_json - t0) * 1000,
+        (t_validate - t_json) * 1000,
+        (t_parse - t_validate) * 1000,
+        (t_done - t0) * 1000,
+    )
     return web.json_response(resp)
 
 
 async def handle_index(request):
+    from .utils.config import STATIC_DIR
+    import os
     logger.debug("Serving index.html")
     return web.FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
-
-    return web.json_response({"candidates": out})
-
-
 async def handle_ws(request):
     client_id = request.query.get("clientId")
-    if not client_id or client_id not in PENDING:
+    call_manager = request.app["call_manager"]
+    if not client_id or client_id not in call_manager.pending:
         return web.Response(status=400, text="unknown clientId")
     ws = web.WebSocketResponse(heartbeat=20)
     await ws.prepare(request)
-    WS[client_id] = ws
-
-    # No buffering: WS is the sole channel for server-side trickle
+    call_manager.ws_registry[client_id] = ws
 
     async for msg in ws:
         if msg.type == WSMsgType.TEXT:
@@ -173,26 +69,11 @@ async def handle_ws(request):
                 data = msg.json()
             except Exception:
                 continue
-            if data.get("type") == "candidate":
-                try:
-                    pc = PENDING[client_id]["pc"]
-                    await pc.addIceCandidate(RTCIceCandidate(
-                        sdpMid=data.get("sdpMid"),
-                        sdpMLineIndex=data.get("sdpMLineIndex"),
-                        candidate=data.get("candidate"),
-                    ))
-                except Exception:
-                    logger.warning("ws addIceCandidate failed", exc_info=True)
-            elif data.get("type") == "end-of-candidates":
-                # Optional: finalize candidate gathering on server
-                pass
+            await call_manager.handle_ws_message(client_id, data)
         elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
             break
 
-    try:
-        del WS[client_id]
-    except Exception:
-        pass
+    call_manager.cleanup_connection(client_id)
     return ws
 
 
