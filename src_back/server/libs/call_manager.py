@@ -2,17 +2,12 @@ import asyncio
 import ipaddress
 import logging
 import os
-import socket
 import time
-from typing import Optional
 
-from aioice import Candidate, turn
-from aioice.candidate import candidate_foundation, candidate_priority
-from aioice.ice import StunProtocol, TransportPolicy, server_reflexive_candidate, relayed_candidate
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceGatherer, RTCIceServer
 from aiortc.rtcicetransport import Connection
 
-from ..libs.aiortc_patch import get_component_candidates
+from ..libs.aiortc_patch import get_component_candidates, getDefaultIceServers
 from ..processors.graph import AudioGraph
 from ..processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
 from ..utils.config import STATIC_DIR

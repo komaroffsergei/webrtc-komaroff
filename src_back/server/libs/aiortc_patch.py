@@ -9,8 +9,8 @@ from aioice.ice import StunProtocol, TransportPolicy, server_reflexive_candidate
 from aiortc import RTCIceServer
 
 
-# def getDefaultIceServers(self):
-#     return [RTCIceServer("stun:stun.gis-master.ru:3478")]
+def getDefaultIceServers(self):
+    return [RTCIceServer("stun:stun.gis-master.ru:3478")]
 
 async def get_component_candidates(
     self, component: int, addresses: list[str], timeout: int = 2
