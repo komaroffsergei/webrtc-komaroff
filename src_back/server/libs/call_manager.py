@@ -21,15 +21,16 @@ logger = logging.getLogger("webrtc")
 class CallManager:
     def __init__(self, app):
         self.app = app
-        # RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
+        RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
         Connection.get_component_candidates = get_component_candidates
 
     async def establish_connection(self, pc, offer):
         await pc.setRemoteDescription(offer)
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
-        while pc.iceGatheringState != "complete":
-            await asyncio.sleep(0.1)
+
+        while getattr(pc, "iceGatheringState", None) != "complete":
+            await asyncio.sleep(0.05)
 
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 

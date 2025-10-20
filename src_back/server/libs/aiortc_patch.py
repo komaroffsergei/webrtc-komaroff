@@ -10,10 +10,11 @@ from aiortc import RTCIceServer
 
 
 def getDefaultIceServers(self):
-    return [RTCIceServer("stun:stun.gis-master.ru:3478")]
+    # return [RTCIceServer("stun:stun.gis-master.ru:3478")]
+    return [RTCIceServer("stun:stun.l.google.com:19302")]
 
 async def get_component_candidates(
-    self, component: int, addresses: list[str], timeout: int = 1.5
+    self, component: int, addresses: list[str], timeout: int = 2
 ) -> list[Candidate]:
     candidates = []
     loop = asyncio.get_event_loop()
