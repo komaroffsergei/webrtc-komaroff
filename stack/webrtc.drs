@@ -1,15 +1,17 @@
 Options name: 'web-rtc-komaroff'
 
-
+NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
 PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
 Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
-        ingress: { host: 'webrtc-komaroff.*' }
+        ingress: { host: 'webrtc-komaroff.*' } do
+    env NATS_URL: NATS_URL
+end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do
   # Use env coming from compose's backend service (document purpose only)
   # use env from docker/.env via CI or local export
-  # env NATS_URL: NATS_URL
+  env NATS_URL: NATS_URL
   entrypoint "sh -c \"sleep infinity\""
 end
