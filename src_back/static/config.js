@@ -10,7 +10,7 @@
       // STUN/TURN servers used for ICE candidate gathering.
       // Prefer IP literal for STUN to skip DNS latency (replace with your STUN IP).
       iceServers: [
-        { urls: ["stun:stun.gis-master.ru:3478"] }, // original: stun:stun.gis-master.ru:3478 // stun:178.20.41.87:3478
+        // { urls: ["stun:stun.gis-master.ru:3478"] }, // original: stun:stun.gis-master.ru:3478 // stun:178.20.41.87:3478
         // If direct P2P fails in some networks, enable TURN by adding your relays:
         // { urls: ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"], username: "user", credential: "pass" },
       ],
@@ -21,7 +21,9 @@
       // Require RTCP multiplexing over the same transport (standard in modern WebRTC).
       rtcpMuxPolicy: 'require',
       // Enable verbose diagnostics (state changes, candidates) to the on-page log.
-      diagnostics: true
+      diagnostics: true,
+      // Client-side fallback timeout for waiting ICE gathering completion
+      iceGatherTimeoutMs: 1500
     },
     audio: {
       // Default constraints for getUserMedia audio capture.

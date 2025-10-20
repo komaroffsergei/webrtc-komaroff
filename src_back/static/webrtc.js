@@ -21,43 +21,33 @@
 
 
 
-    function waitForIceGatheringComplete(pc) {
-      // если уже complete, выходим немедленно
-      if (pc.iceGatheringState === "complete") return Promise.resolve();
-
-      return new Promise((resolve) => {
-        let resolved = false;
-
-        const checkAndResolve = () => {
-          if (!resolved && pc.iceGatheringState === "complete") {
-            resolved = true;
-            cleanup();
-            resolve();
-          }
-        };
-
-        const onCandidate = (e) => {
-          if (!resolved && e.candidate === null) {
-            resolved = true;
-            cleanup();
-            resolve();
-          }
-        };
-
-        const onChange = () => checkAndResolve();
-
-        const cleanup = () => {
-          pc.removeEventListener("icecandidate", onCandidate);
-          pc.removeEventListener("icegatheringstatechange", onChange);
-        };
-
-        // подписываемся
-        pc.addEventListener("icecandidate", onCandidate);
-        pc.addEventListener("icegatheringstatechange", onChange);
-
-        // если ICE уже complete — сработает немедленно
-        checkAndResolve();
-      });
+    function waitForIceGatheringComplete(pc, timeoutMs = 1500) {
+        if (pc.iceGatheringState === 'complete') return Promise.resolve();
+        return new Promise((resolve) => {
+            const onState = () => {
+                if (pc.iceGatheringState === 'complete') {
+                    cleanup();
+                    resolve();
+                }
+            };
+            const onCandidate = (e) => {
+                if (!e.candidate) {
+                    cleanup();
+                    resolve();
+                }
+            };
+            const cleanup = () => {
+                clearTimeout(timer);
+                pc.removeEventListener('icegatheringstatechange', onState);
+                pc.removeEventListener('icecandidate', onCandidate);
+            };
+            const timer = setTimeout(() => {
+                cleanup();
+                resolve();
+            }, timeoutMs);
+            pc.addEventListener('icegatheringstatechange', onState);
+            pc.addEventListener('icecandidate', onCandidate);
+        });
     }
 
 
@@ -111,7 +101,7 @@
         // 1) Create local offer and wait for full ICE gathering (non-trickle)
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        // await waitForIceGatheringComplete(pc);
+        await waitForIceGatheringComplete(pc, (config.webrtc && config.webrtc.iceGatherTimeoutMs) || 1500);
 
         // 2) Send offer to signaling server and receive answer
         const {sdp, type} = pc.localDescription;
