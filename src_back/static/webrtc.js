@@ -68,7 +68,7 @@
     async function negotiate(pc, config) {
         // 1) Create local offer and wait for full ICE gathering (non-trickle)
         await pc.setLocalDescription(await pc.createOffer());
-        await waitForIceGatheringComplete(pc, 500);
+        await waitForIceGatheringComplete(pc, 1);
 
         // 2) Send offer to signaling server and receive answer
         const {sdp, type} = pc.localDescription;
