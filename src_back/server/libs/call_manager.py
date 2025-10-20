@@ -4,10 +4,10 @@ import os
 import time
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
-from server.processors.graph import AudioGraph
-from server.processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
-from server.utils.config import STATIC_DIR
-from server.utils.pc_lifecycle import attach_pc_lifecycle
+from ..processors.graph import AudioGraph
+from ..processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
+from ..utils.config import STATIC_DIR
+from ..utils.pc_lifecycle import attach_pc_lifecycle
 
 logger = logging.getLogger("webrtc")
 
