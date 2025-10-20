@@ -12,7 +12,7 @@ from aioice.ice import StunProtocol, TransportPolicy, server_reflexive_candidate
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceGatherer, RTCIceServer
 from aiortc.rtcicetransport import Connection
 
-from ..libs.aiortc_patch import getDefaultIceServers, get_component_candidates
+from ..libs.aiortc_patch import get_component_candidates
 from ..processors.graph import AudioGraph
 from ..processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
 from ..utils.config import STATIC_DIR
@@ -26,7 +26,7 @@ logger = logging.getLogger("webrtc")
 class CallManager:
     def __init__(self, app):
         self.app = app
-        RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
+        # RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
         Connection.get_component_candidates = get_component_candidates
 
     async def establish_connection(self, pc, offer):
