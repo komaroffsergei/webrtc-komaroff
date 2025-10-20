@@ -52,31 +52,11 @@ class CallManager:
             (t_set_local - t_create_answer) * 1000,
         )
 
-        @pc.on("icecandidate")
-        def on_server_candidate(event):
-            cand = event.candidate
-            if client_id not in self.pending:
-                return
-            if cand is None:
-                ws = self.ws_registry.get(client_id)
-                if ws and not ws.closed:
-                    try:
-                        ws.send_json({"type": "end-of-candidates"})
-                    except Exception:
-                        pass
-                return
-            payload = {
-                "type": "candidate",
-                "candidate": cand.to_sdp(),
-                "sdpMid": cand.sdpMid,
-                "sdpMLineIndex": cand.sdpMLineIndex,
-            }
-            ws = self.ws_registry.get(client_id)
-            if ws and not ws.closed:
-                try:
-                    ws.send_json(payload)
-                except Exception:
-                    logger.debug("failed to send candidate via WS", exc_info=True)
+        # aiortc does not emit 'icecandidate' events like browsers. Use completed SDP after ICE gathering.
+        # Wait until ICE gathering completes to embed all candidates into the SDP answer.
+        # This avoids trickle and ensures reliable connectivity without relying on non-existent events.
+        while getattr(pc, "iceGatheringState", None) != "complete":
+            await asyncio.sleep(0.05)
 
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "clientId": client_id}
 

@@ -3,9 +3,8 @@
 (function(){
   window.AppConfig = {
     signaling: {
-      offerEndpoint: '/offer',
-      // WebSocket endpoint for incremental candidate exchange (full-duplex trickle)
-      wsEndpoint: '/ws'
+      // Non-trickle signaling: server replies with a finalized SDP answer (candidates embedded)
+      offerEndpoint: '/offer'
     },
     webrtc: {
       // STUN/TURN servers used for ICE candidate gathering.
