@@ -35,12 +35,25 @@
   let micStream = null;
   let micTrack = null;
   let vadInstance = null;
+  // Pre-warm RTCPeerConnection to utilize ICE candidate pool
+  window.addEventListener('load', async ()=>{
+    try{
+      if (!pc) {
+        pc = await window.WebRTC.createPeer(cfg);
+        if (window.AppLog) AppLog.emit('[pc] prewarmed');
+      }
+    }catch(e){ console.warn('prewarm pc failed', e); }
+  });
 
   function getUserMediaOpts(){
     return {
       audio: {
         echoCancellation: els.ecEnable.checked,
         noiseSuppression: els.nsEnable.checked,
+        autoGainControl: false,
+        channelCount: 1,
+        sampleRate: 48000,
+        sampleSize: 16
       },
       video: false
     };
@@ -111,13 +124,27 @@
       // add track, optionally VAD-wrapped later
       sender = pc.addTrack(micTrack, micStream);
 
-      // opus bitrate constrain
+      // OPUS encoder tuning: bitrate + DTX
       try{
         const params = sender.getParameters() || {};
         params.encodings = params.encodings || [{}];
         params.encodings[0].maxBitrate = cfg.audio.opus.maxBitrate;
+        params.encodings[0].dtx = true;
         await sender.setParameters(params);
-      }catch(e){ console.warn('failed to set sender bitrate', e); }
+      }catch(e){ console.warn('failed to set sender params', e); }
+
+      // Prefer OPUS codec explicitly where supported
+      try{
+        const txv = pc.getTransceivers().find(t => t.sender && t.sender.track === micTrack) || pc.getTransceivers().find(t => t.sender && t.sender.track && t.sender.track.kind === 'audio');
+        if (txv && typeof RTCRtpSender !== 'undefined' && RTCRtpSender.getCapabilities){
+          const caps = RTCRtpSender.getCapabilities('audio');
+          if (caps && caps.codecs && txv.setCodecPreferences){
+            const opus = caps.codecs.filter(c => /opus/i.test(c.mimeType));
+            const cn = caps.codecs.filter(c => /CN/i.test(c.mimeType));
+            if (opus.length){ txv.setCodecPreferences([...opus, ...cn]); }
+          }
+        }
+      }catch(e){ console.warn('failed to set codec preferences', e); }
 
       pc.ontrack = (event) => {
         const stream = event.streams?.[0] || new MediaStream([event.track]);

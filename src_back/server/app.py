@@ -1,7 +1,7 @@
 import logging
 from aiohttp import web
 
-from .handler import handle_index, handle_offer, handle_shutdown, handle_ws
+from .handler import handle_index, handle_offer, handle_shutdown
 from .libs.call_manager import CallManager
 
 from .utils.config import STATIC_DIR
@@ -10,7 +10,6 @@ from .utils.config import STATIC_DIR
 def setup_routes(app):
     app.router.add_get("/", handle_index)
     app.router.add_post("/offer", handle_offer)
-    app.router.add_get("/ws", handle_ws)
     app.router.add_static("/static", path=STATIC_DIR)
     logger = logging.getLogger(__name__)
     logger.info("http://localhost:8080")

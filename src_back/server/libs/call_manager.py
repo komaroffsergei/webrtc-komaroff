@@ -3,9 +3,7 @@ import logging
 import os
 import time
 
-from aiortc import RTCPeerConnection, RTCSessionDescription, RTCCertificate
-from aiortc.contrib.signaling import candidate_from_sdp
-
+from aiortc import RTCPeerConnection, RTCSessionDescription
 from src_back.server.processors.graph import AudioGraph
 from src_back.server.processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
 from src_back.server.utils.config import STATIC_DIR
@@ -17,8 +15,6 @@ logger = logging.getLogger("webrtc")
 class CallManager:
     def __init__(self, app):
         self.app = app
-        self.pending = {}
-        self.ws_registry = {}
         # Warm up cryptographic RNG and OpenSSL by generating a DTLS certificate once at boot.
         # aiortc==1.14.0 does not support passing certificates= to RTCPeerConnection, so we cannot reuse it directly.
         # Nevertheless, the warm-up removes most of the latency spikes during the first PC creation.
@@ -30,14 +26,7 @@ class CallManager:
         # except Exception:
         #     logger.warning("offer_timing_boot: certificate_generate_failed; continuing without warm-up", exc_info=True)
 
-    def get_client_id(self, params):
-        return params.get("clientId") or os.urandom(6).hex()
-
-    def cleanup_connection(self, client_id):
-        self.pending.pop(client_id, None)
-        self.ws_registry.pop(client_id, None)
-
-    async def establish_connection(self, pc, offer, client_id):
+    async def establish_connection(self, pc, offer):
         t0 = time.monotonic()
         await pc.setRemoteDescription(offer)
         t_set_remote = time.monotonic()
@@ -58,7 +47,7 @@ class CallManager:
         while getattr(pc, "iceGatheringState", None) != "complete":
             await asyncio.sleep(0.05)
 
-        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type, "clientId": client_id}
+        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
     async def start_audio_pipeline(self, graph, track, audio_transceiver, echo_ref):
         source = graph.add(TrackSourceNode(
@@ -98,9 +87,6 @@ class CallManager:
         self.app["pcs"] = pcs
         pcs.add(pc)
 
-        client_id = self.get_client_id(params)
-        self.pending[client_id] = {"pc": pc, "candidates": []}
-
         logger.info("PC created and audio transceiver added (sendrecv)")
         if logger.isEnabledFor(logging.DEBUG):
             logger.debug(f"Active PCs: {len(pcs)}")
@@ -117,7 +103,7 @@ class CallManager:
                 logger.info("Audio graph started")
 
         try:
-            resp = await self.establish_connection(pc, offer, client_id)
+            resp = await self.establish_connection(pc, offer)
             return resp, None
         except Exception:
             logger.error("Failed to process SDP offer", exc_info=True)

@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 
-from aiohttp import web, WSMsgType
+from aiohttp import web
 
 from .utils.validate import get_params, validate_sdp
 
@@ -53,28 +53,6 @@ async def handle_index(request):
     logger.debug("Serving index.html")
     return web.FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
-
-async def handle_ws(request):
-    client_id = request.query.get("clientId")
-    call_manager = request.app["call_manager"]
-    if not client_id or client_id not in call_manager.pending:
-        return web.Response(status=400, text="unknown clientId")
-    ws = web.WebSocketResponse(heartbeat=20)
-    await ws.prepare(request)
-    call_manager.ws_registry[client_id] = ws
-
-    async for msg in ws:
-        if msg.type == WSMsgType.TEXT:
-            try:
-                data = msg.json()
-            except Exception:
-                continue
-            await call_manager.handle_ws_message(client_id, data)
-        elif msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED, WSMsgType.ERROR):
-            break
-
-    call_manager.cleanup_connection(client_id)
-    return ws
 
 
 async def handle_shutdown(app):

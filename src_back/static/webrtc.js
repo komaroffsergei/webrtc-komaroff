@@ -26,6 +26,8 @@
       bundlePolicy: config.webrtc.bundlePolicy || 'max-bundle',
       rtcpMuxPolicy: config.webrtc.rtcpMuxPolicy || 'require',
     });
+    // Low-latency hint for Chromium-based browsers
+    try { pc.setConfiguration({ ...pc.getConfiguration(), sdpSemantics: 'unified-plan' }); } catch {}
 
     // Ensure we have a receiving audio m-line even if no local mic is added yet
     try{
@@ -50,7 +52,7 @@
   async function negotiate(pc, config){
     // 1) Create local offer and wait for full ICE gathering (non-trickle)
     await pc.setLocalDescription(await pc.createOffer());
-    await waitForIceGatheringComplete(pc, 3000);
+    // await waitForIceGatheringComplete(pc, 3000);
 
     // 2) Send offer to signaling server and receive answer
     const { sdp, type } = pc.localDescription;
