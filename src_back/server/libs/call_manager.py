@@ -4,10 +4,10 @@ import os
 import time
 
 from aiortc import RTCPeerConnection, RTCSessionDescription
-from src_back.server.processors.graph import AudioGraph
-from src_back.server.processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
-from src_back.server.utils.config import STATIC_DIR
-from src_back.server.utils.pc_lifecycle import attach_pc_lifecycle
+from server.processors.graph import AudioGraph
+from server.processors import TrackSourceNode, EchoTrackNode, LossFillerNode, RecorderNode, BgmMixerNode
+from server.utils.config import STATIC_DIR
+from server.utils.pc_lifecycle import attach_pc_lifecycle
 
 logger = logging.getLogger("webrtc")
 
@@ -15,16 +15,6 @@ logger = logging.getLogger("webrtc")
 class CallManager:
     def __init__(self, app):
         self.app = app
-        # Warm up cryptographic RNG and OpenSSL by generating a DTLS certificate once at boot.
-        # aiortc==1.14.0 does not support passing certificates= to RTCPeerConnection, so we cannot reuse it directly.
-        # Nevertheless, the warm-up removes most of the latency spikes during the first PC creation.
-        # t0 = time.monotonic()
-        # try:
-        #     _ = RTCCertificate.generateCertificate()
-        #     t1 = time.monotonic()
-        #     logger.info("offer_timing_boot: certificate_generate=%.2fms (warm-up)", (t1 - t0) * 1000)
-        # except Exception:
-        #     logger.warning("offer_timing_boot: certificate_generate_failed; continuing without warm-up", exc_info=True)
 
     async def establish_connection(self, pc, offer):
         t0 = time.monotonic()
@@ -41,9 +31,7 @@ class CallManager:
             (t_set_local - t_create_answer) * 1000,
         )
 
-        # aiortc does not emit 'icecandidate' events like browsers. Use completed SDP after ICE gathering.
-        # Wait until ICE gathering completes to embed all candidates into the SDP answer.
-        # This avoids trickle and ensures reliable connectivity without relying on non-existent events.
+
         while getattr(pc, "iceGatheringState", None) != "complete":
             await asyncio.sleep(0.05)
 
@@ -113,16 +101,3 @@ class CallManager:
                 logger.debug("replaceTrack(None) failed or not needed", exc_info=True)
             await pc.close()
             return None, "failed to process offer"
-
-    async def handle_ws_message(self, client_id, data):
-        if client_id not in self.pending:
-            return
-        if data.get("type") == "candidate":
-            try:
-                pc = self.pending[client_id]["pc"]
-                cand = candidate_from_sdp(data.get("candidate"))
-                cand.sdpMid = data.get("sdpMid")
-                cand.sdpMLineIndex = data.get("sdpMLineIndex")
-                await pc.addIceCandidate(cand)
-            except Exception:
-                logger.warning("ws addIceCandidate failed", exc_info=True)
