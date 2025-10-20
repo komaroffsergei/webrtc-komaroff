@@ -21,7 +21,7 @@ logger = logging.getLogger("webrtc")
 class CallManager:
     def __init__(self, app):
         self.app = app
-        RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
+        # RTCIceGatherer.getDefaultIceServers = getDefaultIceServers
         Connection.get_component_candidates = get_component_candidates
 
     async def establish_connection(self, pc, offer):
