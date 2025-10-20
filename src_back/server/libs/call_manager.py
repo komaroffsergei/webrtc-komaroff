@@ -28,11 +28,8 @@ class CallManager:
         await pc.setRemoteDescription(offer)
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
-
         while getattr(pc, "iceGatheringState", None) != "complete":
             await asyncio.sleep(0.05)
-
-        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
     async def start_audio_pipeline(self, graph, track, audio_transceiver, echo_ref):
         source = graph.add(TrackSourceNode(
@@ -58,7 +55,22 @@ class CallManager:
         offer = RTCSessionDescription(sdp=sdp, type=offer_type)
 
         t_create_start = time.monotonic()
-        pc = RTCPeerConnection()
+        # Configure ICE servers and transport policy from environment if provided
+        ice_servers_json = os.getenv("ICE_SERVERS_JSON")
+        ice_servers = None
+        if ice_servers_json:
+            try:
+                import json
+                ice_servers = json.loads(ice_servers_json)
+            except Exception:
+                logger.warning("Invalid ICE_SERVERS_JSON, ignoring", exc_info=True)
+        force_relay = os.getenv("ICE_FORCE_RELAY", "0") in ("1", "true", "True")
+        config_kwargs = {}
+        if ice_servers:
+            config_kwargs["iceServers"] = ice_servers
+        if force_relay:
+            config_kwargs["iceTransportPolicy"] = "relay"
+        pc = RTCPeerConnection(configuration=config_kwargs if config_kwargs else None)
         t_pc_created = time.monotonic()
         audio_transceiver = pc.addTransceiver("audio", direction="sendrecv")
         t_transceiver_added = time.monotonic()

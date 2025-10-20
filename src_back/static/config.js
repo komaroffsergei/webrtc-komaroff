@@ -10,9 +10,15 @@
       // STUN/TURN servers used for ICE candidate gathering.
       // Prefer IP literal for STUN to skip DNS latency (replace with your STUN IP).
       iceServers: [
-        // { urls: ["stun:stun.gis-master.ru:3478"] }, // original: stun:stun.gis-master.ru:3478 // stun:178.20.41.87:3478
-        // If direct P2P fails in some networks, enable TURN by adding your relays:
-        // { urls: ["turn:turn.example.com:3478?transport=udp", "turn:turn.example.com:3478?transport=tcp"], username: "user", credential: "pass" },
+          // { urls: ["stun:stun.gis-master.ru:3478"] }
+        { urls: [
+          // Public STUNs for basic NAT traversal. Replace with your infra for production.
+          "stun:stun.l.google.com:19302",
+          "stun:stun1.l.google.com:19302",
+          "stun:stun2.l.google.com:19302"
+        ] },
+        // TURN is required for symmetric NAT / firewalled networks. Replace with your server:
+        // { urls: ["turn:TURN_HOST:3478?transport=udp", "turn:TURN_HOST:3478?transport=tcp", "turns:TURN_HOST:5349?transport=tcp"], username: "user", credential: "pass" },
       ],
       // Pre-allocate ICE candidates to reduce time-to-connect.
       iceCandidatePoolSize: 4,
@@ -20,6 +26,9 @@
       bundlePolicy: 'max-bundle',
       // Require RTCP multiplexing over the same transport (standard in modern WebRTC).
       rtcpMuxPolicy: 'require',
+      // Force relay via TURN in restrictive networks (behind VPN / symmetric NAT)
+      // Set to true when TURN is configured above.
+      forceRelay: false,
       // Enable verbose diagnostics (state changes, candidates) to the on-page log.
       diagnostics: true,
       // Client-side fallback timeout for waiting ICE gathering completion

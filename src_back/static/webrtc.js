@@ -57,6 +57,7 @@
             iceCandidatePoolSize: config.webrtc.iceCandidatePoolSize || 4,
             bundlePolicy: config.webrtc.bundlePolicy || 'max-bundle',
             rtcpMuxPolicy: config.webrtc.rtcpMuxPolicy || 'require',
+            iceTransportPolicy: (config.webrtc.forceRelay ? 'relay' : undefined),
         });
         // Low-latency hint for Chromium-based browsers
         try {
