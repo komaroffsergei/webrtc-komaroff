@@ -32,7 +32,7 @@
       // Enable verbose diagnostics (state changes, candidates) to the on-page log.
       diagnostics: true,
       // Client-side fallback timeout for waiting ICE gathering completion
-      iceGatherTimeoutMs: 3000
+      iceGatherTimeoutMs: 1000
     },
     audio: {
       // Default constraints for getUserMedia audio capture.

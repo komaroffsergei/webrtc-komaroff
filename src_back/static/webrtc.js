@@ -102,7 +102,7 @@
         // 1) Create local offer and wait for full ICE gathering (non-trickle)
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        await waitForIceGatheringComplete(pc, (config.webrtc && config.webrtc.iceGatherTimeoutMs));
+        await waitForIceGatheringComplete(pc, config.webrtc.iceGatherTimeoutMs);
 
         // 2) Send offer to signaling server and receive answer
         const {sdp, type} = pc.localDescription;
