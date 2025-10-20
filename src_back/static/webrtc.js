@@ -1,6 +1,6 @@
 (function () {
     // Wait until ICE gathering completes or timeout elapses
-/*    async function waitForIceGatheringComplete(pc, timeoutMs = 3000) {
+    async function waitForIceGatheringComplete(pc, timeoutMs = 3000) {
         if (pc.iceGatheringState === 'complete') return;
         await new Promise((resolve) => {
             let timer;
@@ -17,11 +17,11 @@
             }, timeoutMs);
             pc.addEventListener('icegatheringstatechange', onChange);
         });
-    }*/
+    }
 
 
 
-    function waitForIceGatheringComplete(pc, timeoutMs = 1500) {
+/*    function waitForIceGatheringComplete(pc, timeoutMs = 1500) {
         if (pc.iceGatheringState === 'complete') return Promise.resolve();
         return new Promise((resolve) => {
             const onState = () => {
@@ -48,7 +48,7 @@
             pc.addEventListener('icegatheringstatechange', onState);
             pc.addEventListener('icecandidate', onCandidate);
         });
-    }
+    }*/
 
 
     async function createPeer(config) {
