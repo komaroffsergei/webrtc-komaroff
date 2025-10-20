@@ -1,7 +1,7 @@
 import logging
 from aiohttp import web
 
-from server import boot_patch  # noqa: F401  # side-effect import
+# from server import boot_patch  # noqa: F401  # side-effect import
 from server.app import create_app
 
 if __name__ == "__main__":
