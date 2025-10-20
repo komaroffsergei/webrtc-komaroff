@@ -25,23 +25,11 @@ class CallManager:
         Connection.get_component_candidates = get_component_candidates
 
     async def establish_connection(self, pc, offer):
-        t0 = time.monotonic()
         await pc.setRemoteDescription(offer)
-        t_set_remote = time.monotonic()
         answer = await pc.createAnswer()
-        t_create_answer = time.monotonic()
         await pc.setLocalDescription(answer)
-        t_set_local = time.monotonic()
-        logger.info(
-            "offer_timing: setRemote=%.2fms createAnswer=%.2fms setLocal=%.2fms",
-            (t_set_remote - t0) * 1000,
-            (t_create_answer - t_set_remote) * 1000,
-            (t_set_local - t_create_answer) * 1000,
-        )
-
-
-        while getattr(pc, "iceGatheringState", None) != "complete":
-            await asyncio.sleep(0.05)
+        while pc.iceGatheringState != "complete":
+            await asyncio.sleep(0.1)
 
         return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 

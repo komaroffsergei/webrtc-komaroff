@@ -1,6 +1,6 @@
 (function () {
     // Wait until ICE gathering completes or timeout elapses
-    async function waitForIceGatheringComplete(pc, timeoutMs = 3000) {
+/*    async function waitForIceGatheringComplete(pc, timeoutMs = 3000) {
         if (pc.iceGatheringState === 'complete') return;
         await new Promise((resolve) => {
             let timer;
@@ -8,7 +8,7 @@
                 if (pc.iceGatheringState === 'complete') {
                     clearTimeout(timer);
                     pc.removeEventListener('icegatheringstatechange', onChange);
-                    resolve();
+                    setTimeout(() => resolve())
                 }
             };
             timer = setTimeout(() => {
@@ -17,7 +17,49 @@
             }, timeoutMs);
             pc.addEventListener('icegatheringstatechange', onChange);
         });
+    }*/
+
+
+
+    function waitForIceGatheringComplete(pc) {
+      // если уже complete, выходим немедленно
+      if (pc.iceGatheringState === "complete") return Promise.resolve();
+
+      return new Promise((resolve) => {
+        let resolved = false;
+
+        const checkAndResolve = () => {
+          if (!resolved && pc.iceGatheringState === "complete") {
+            resolved = true;
+            cleanup();
+            resolve();
+          }
+        };
+
+        const onCandidate = (e) => {
+          if (!resolved && e.candidate === null) {
+            resolved = true;
+            cleanup();
+            resolve();
+          }
+        };
+
+        const onChange = () => checkAndResolve();
+
+        const cleanup = () => {
+          pc.removeEventListener("icecandidate", onCandidate);
+          pc.removeEventListener("icegatheringstatechange", onChange);
+        };
+
+        // подписываемся
+        pc.addEventListener("icecandidate", onCandidate);
+        pc.addEventListener("icegatheringstatechange", onChange);
+
+        // если ICE уже complete — сработает немедленно
+        checkAndResolve();
+      });
     }
+
 
     async function createPeer(config) {
         const pc = new RTCPeerConnection({
@@ -67,8 +109,9 @@
 
     async function negotiate(pc, config) {
         // 1) Create local offer and wait for full ICE gathering (non-trickle)
-        await pc.setLocalDescription(await pc.createOffer());
-        await waitForIceGatheringComplete(pc, 1200);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        // await waitForIceGatheringComplete(pc);
 
         // 2) Send offer to signaling server and receive answer
         const {sdp, type} = pc.localDescription;
