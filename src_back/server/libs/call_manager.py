@@ -28,8 +28,11 @@ class CallManager:
         await pc.setRemoteDescription(offer)
         answer = await pc.createAnswer()
         await pc.setLocalDescription(answer)
+
         while getattr(pc, "iceGatheringState", None) != "complete":
             await asyncio.sleep(0.05)
+
+        return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}
 
     async def start_audio_pipeline(self, graph, track, audio_transceiver, echo_ref):
         source = graph.add(TrackSourceNode(
