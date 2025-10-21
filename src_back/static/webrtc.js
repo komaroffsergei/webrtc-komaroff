@@ -17,7 +17,26 @@
             }, timeoutMs);
             pc.addEventListener('icegatheringstatechange', onChange);
         });
+
+
+
+        //  return new Promise((resolve) => {
+        //     if (pc.iceGatheringState === 'complete') {
+        //         resolve();
+        //     } else {
+        //         function checkState() {
+        //             if (pc.iceGatheringState === 'complete') {
+        //                 pc.removeEventListener('icegatheringstatechange', checkState);
+        //                 resolve();
+        //             }
+        //         }
+        //         pc.addEventListener('icegatheringstatechange', checkState);
+        //     }
+        // });
     }
+
+
+
 
 
 
