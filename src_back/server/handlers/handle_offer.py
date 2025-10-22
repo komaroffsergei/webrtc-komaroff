@@ -20,7 +20,6 @@ async def handle_offer(request):
     if not ok:
         return web.json_response({"error": err}, status=400)
 
-    # call_manager = request.app["call_manager"]
     resp, error = await handle_offer_connect(request, params)
 
     if error:

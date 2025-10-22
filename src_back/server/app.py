@@ -18,7 +18,6 @@ def setup_routes(app):
 def create_app():
     app = web.Application(client_max_size=1_048_576)
     app["pcs"] = set()
-    # app["call_manager"] = CallManager(app)
     setup_routes(app)
     app.on_shutdown.append(handle_shutdown)
     return app
