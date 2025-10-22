@@ -20,6 +20,6 @@ end
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do
-  env NATS_URL: VOICE_NATS_URL
+  env NATS_URL: NATS_URL
   entrypoint "sh -c \"sleep infinity\""
 end

@@ -4,7 +4,6 @@ from aiohttp import web
 from .handlers.handle_index import handle_index
 from .handlers.handle_offer import handle_offer
 from .handlers.handle_shutdown import handle_shutdown
-from .libs.call_manager import CallManager
 from .utils.config import STATIC_DIR
 
 
