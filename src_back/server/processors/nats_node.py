@@ -40,6 +40,16 @@ class NatsNode(ConsumerNode):
             logger.info(f"NATS connected: {self.nc.connected_url.netloc}")
         if self.js is None:
             self.js = self.nc.jetstream()
+            # Check JetStream server availability first for clear diagnostics
+            try:
+                # A lightweight API call that fails fast if JS is disabled
+                await self.js.account_info()
+            except Exception as e:
+                logger.error(
+                    "JetStream is NOT available on the NATS server. "
+                    "Enable JetStream on your NATS cluster or point NATS_URL to a server with JS. "
+                    f"connected_url={getattr(self.nc, 'connected_url', None)} error={e}")
+                raise
             # ensure stream exists
             try:
                 await self.js.stream_info(self.stream_name)
