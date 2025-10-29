@@ -15,19 +15,17 @@ from .base import ConsumerNode
 
 class NatsNode(ConsumerNode):
     """
-    Publishes audio frames to NATS JetStream and fans out downstream.
-    Supports late source binding. Exposes ensure_js() to get JetStream context.
+    Publishes audio frames to NATS (core) and fans out downstream.
+    JetStream support removed by requirement. ensure_js() now only ensures core NATS connection.
     """
 
     def __init__(self, source_node=None) -> None:
         super().__init__(source_node)
         self.nc: Optional[nats.NATS] = None
-        self.js = None
         self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
         self.subject = os.getenv("NATS_SUBJECT", "audio.frames")
-        self.stream_name = os.getenv("NATS_STREAM", "audio-stream")
 
-    async def ensure_js(self):
+    async def ensure_nc(self):
         if self.nc is None or not getattr(self.nc, "is_connected", False):
             # Support multiple URLs in NATS_URL separated by comma
             urls = [u.strip() for u in str(self.nc_url).split(",") if u.strip()]
@@ -38,25 +36,8 @@ class NatsNode(ConsumerNode):
                 ping_interval=10,
             )
             logger.info(f"NATS connected: {self.nc.connected_url.netloc}")
-        if self.js is None:
-            self.js = self.nc.jetstream()
-            # Check JetStream server availability first for clear diagnostics
-            try:
-                # A lightweight API call that fails fast if JS is disabled
-                await self.js.account_info()
-            except Exception as e:
-                logger.error(
-                    "JetStream is NOT available on the NATS server. "
-                    "Enable JetStream on your NATS cluster or point NATS_URL to a server with JS. "
-                    f"connected_url={getattr(self.nc, 'connected_url', None)} error={e}")
-                raise
-            # ensure stream exists
-            try:
-                await self.js.stream_info(self.stream_name)
-            except Exception:
-                await self.js.add_stream(name=self.stream_name, subjects=[self.subject])
-                logger.info(f"JetStream stream ensured: {self.stream_name} -> {self.subject}")
-        return self.js
+        # JetStream support removed: ensure only core NATS connection
+        return self.nc
 
     def use_source(self, source) -> "NatsNode":
         """Bind upstream audio source after initialization and allow chaining."""
@@ -68,10 +49,10 @@ class NatsNode(ConsumerNode):
             self.nc_url = nc_url
         if subject:
             self.subject = subject
-        await self.ensure_js()
+        await self.ensure_nc()
 
     async def start(self) -> None:
-        await self.ensure_js()
+        await self.ensure_nc()
         await super().start()
 
     async def stop(self) -> None:
@@ -100,8 +81,7 @@ class NatsNode(ConsumerNode):
 
     async def _publish_raw_frame(self, frame: AudioFrame) -> None:
         try:
-            if self.js is None:
-                await self.ensure_js()
+            await self.ensure_nc()
             if len(frame.planes) == 0:
                 logger.warning("Skipping empty audio frame")
                 return
@@ -129,9 +109,8 @@ class NatsNode(ConsumerNode):
             meta_bytes = json.dumps(meta).encode("utf-8")
             payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_audio_bytes
 
-            self.js.publish(self.subject, payload, timeout=5)
-            # ack = await self.js.publish(self.subject, payload, timeout=5)
-            logger.info(f"Published raw frame (seq), {len(payload)} bytes)")
+            await self.nc.publish(self.subject, payload)
+            logger.info(f"Published raw frame via NATS, {len(payload)} bytes")
 
         except Exception as e:
             logger.error(f"Failed to publish raw frame: {e}", exc_info=True)

@@ -55,30 +55,16 @@ async def nats_init():
         nc_url=nats_url,
         subject=nats_subject
     )
-    js_ctx = await nats_node.ensure_js()
-    try:
-        await js_ctx.pull_subscribe(nats_node.subject, durable=nats_durable)
-    except Exception:
-        print(">>> durable may already exist; ignore")
-        #
-        pass
+    await nats_node.ensure_nc()
 
-    # Pull-based subscription with near-immediate delivery via fetch loop
-    sub = await js_ctx.pull_subscribe(nats_subject, durable=nats_durable)
+    async def _core_cb(msg):
+        await nats_on_message_core(msg)
 
-    async def _pull_loop():
-        while True:
-            try:
-                msgs = await sub.fetch(10, timeout=1)
-                for msg in msgs:
-                    await nats_on_message(msg)
-            except Exception:
-                await asyncio.sleep(0.2)
-
-    asyncio.create_task(_pull_loop())
+    await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
+    logger.info("Subscribed to NATS subject (core mode, no JetStream)")
     return nats_node
 
-async def nats_on_message(msg):
-    print(f"--- new msg:: {msg.metadata.sequence.stream}")
+async def nats_on_message_core(msg):
+    # Core NATS message (no JS metadata/ack)
+    print(f"--- new msg (core): subject={msg.subject} reply={msg.reply}")
     print(f"---- data: {msg.data[:100]}...")
-    await msg.ack()  # подтверждаем обработку
