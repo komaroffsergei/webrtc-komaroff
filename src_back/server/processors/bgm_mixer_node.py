@@ -47,6 +47,8 @@ class BgmMixerNode(ConsumerNode):
         self._bgm_container: Optional[av.container.InputContainer] = None
         self._bgm_stream: Optional[av.audio.stream.AudioStream] = None
         self._bgm_resampler: Optional[av.audio.resampler.AudioResampler] = None
+        # Tail buffer to avoid losing bgm samples between frames
+        self._bgm_tail: Optional[np.ndarray] = None
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue()
@@ -122,11 +124,26 @@ class BgmMixerNode(ConsumerNode):
     def _read_bgm_samples(self, samples: int, channels: int) -> Optional[np.ndarray]:
         """Return planar int16 ndarray (C, N) of bgm audio with exact sample count.
         Robust to EOF: loops file by seeking(0) when end is reached.
+        Uses a persistent tail buffer to avoid dropping bgm samples between frames.
         """
         if self._bgm_container is None or self._bgm_stream is None or self._bgm_resampler is None:
             return None
+
         out_buf = np.zeros((channels, samples), dtype=np.int16)
         filled = 0
+
+        # 1) Consume from tail first, if available
+        if self._bgm_tail is not None and self._bgm_tail.size > 0:
+            take = min(samples, self._bgm_tail.shape[1])
+            out_buf[:, :take] = self._bgm_tail[:, :take]
+            filled += take
+            # shrink or clear tail
+            if take < self._bgm_tail.shape[1]:
+                self._bgm_tail = self._bgm_tail[:, take:]
+                return out_buf  # enough from tail
+            else:
+                self._bgm_tail = None
+
         attempts = 0
         while filled < samples and attempts < 3:
             try:
@@ -137,14 +154,24 @@ class BgmMixerNode(ConsumerNode):
                             continue
                         rs = rs[0] if isinstance(rs, list) else rs
                         bg_np = rs.to_ndarray()  # (C, N') int16 planar
+
                         need = samples - filled
-                        take = min(need, bg_np.shape[1])
-                        out_buf[:, filled:filled + take] = bg_np[:, :take]
-                        filled += take
+                        n_avail = bg_np.shape[1]
+                        if n_avail <= need:
+                            # take all, nothing to keep
+                            out_buf[:, filled:filled + n_avail] = bg_np
+                            filled += n_avail
+                        else:
+                            # take what we need; keep the rest in tail
+                            out_buf[:, filled:filled + need] = bg_np[:, :need]
+                            self._bgm_tail = bg_np[:, need:]
+                            filled += need
+
                         if filled >= samples:
                             break
                     if filled >= samples:
                         break
+
                 if filled < samples:
                     # likely EOF: loop back to start and try again
                     try:
@@ -153,6 +180,7 @@ class BgmMixerNode(ConsumerNode):
                         logger.debug("BGM seek(0) failed")
                     attempts += 1
                     continue
+
             except av.AVError as e:
                 logger.debug(f"BGM AVError during demux/decode: {e}")
                 try:
@@ -164,6 +192,7 @@ class BgmMixerNode(ConsumerNode):
             except Exception as e:
                 logger.error(f"BGM read error: {e}")
                 break
+
         return out_buf if filled > 0 else None
 
     async def _fan_out(self, frame: AudioFrame):
