@@ -69,9 +69,9 @@ class NatsNode(ConsumerNode):
             self.nc = None
 
     async def handle_frame(self, frame: AudioFrame) -> None:
-        print(
-            f"NatsNode: frame pts={getattr(frame, 'pts', None)} sr={getattr(frame, 'sample_rate', None)} fmt={getattr(frame, 'format', None)}"
-        )
+        # print(
+        #     f"NatsNode: frame pts={getattr(frame, 'pts', None)} sr={getattr(frame, 'sample_rate', None)} fmt={getattr(frame, 'format', None)}"
+        # )
         # publish in bg
         # await self._publish_raw_frame(frame)
         asyncio.create_task(self._publish_raw_frame(frame))
