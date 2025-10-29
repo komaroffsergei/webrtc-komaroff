@@ -4,8 +4,6 @@ import os
 from typing import Dict, Any
 
 from aiortc import RTCPeerConnection
-from aiortc.contrib.media import MediaPlayer
-
 from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, RecorderNode, EchoTrackNode
 from ..processors.graph import AudioGraph
 from ..processors.nats_node import NatsNode
@@ -27,15 +25,11 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             frame_duration_ms=20,
             target_rate=48000,
             target_channels=1,
-            target_output_format='s16'
+            target_output_format='s16p'
         ))
 
-        # Replace BgmMixerNode with direct MediaPlayer source attached to pc
-        player = MediaPlayer(os.path.join(STATIC_DIR, "bg.wav"))
-        if track.kind == "audio" and player.audio is not None:
-            audio_transceiver.sender.replaceTrack(player.audio)
-        else:
-            logger.warning("MediaPlayer has no audio track; keeping upstream track")
+        # Build BGM mixer on top of microphone source
+        bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
         filler = graph.add(
             LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
@@ -45,9 +39,9 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         nats_node.use_source(source)
         graph.add(nats_node)
 
-        # Recorder continues to consume mic; we no longer echo mixed audio, so detach echo
-        echo = None
-        echo_ref["node"] = echo
+        # Echo back mixed audio to the browser
+        echo = EchoTrackNode(bgm)
+        audio_transceiver.sender.replaceTrack(echo)
         echo_ref["node"] = echo
         asyncio.create_task(graph.start())
 
