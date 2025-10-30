@@ -37,7 +37,12 @@
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (window.AppLog) AppLog.emit('[sse]', msg);
+        const line = msg && (msg.text || JSON.stringify(msg));
+        console.log('[whisper log]', line);
+        // if (window.AppLog) {
+        //   AppLog.emit('[sse]', msg);
+        //   if (line) AppLog.emit('[whisper]', line);
+        // }
       } catch {}
     };
   } catch(e) { console.warn('SSE init failed', e); }

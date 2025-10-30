@@ -56,9 +56,10 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                         meta = json.loads(data[4:4+meta_len].decode("utf-8"))
                     except Exception:
                         meta = {}
-                print(f"[whisper] subject={msg.subject} note={meta.get('note')} meta={meta}")
+                text_line = f"[whisper] subject={msg.subject} note={meta.get('note')} meta={meta}"
+                print(text_line)
                 try:
-                    await sse_broadcast(app, {"type": "whisper", "meta": meta})
+                    await sse_broadcast(app, {"type": "whisper", "meta": meta, "text": text_line})
                 except Exception:
                     pass
             except Exception as e:
