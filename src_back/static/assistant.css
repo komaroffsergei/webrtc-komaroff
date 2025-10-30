@@ -1,0 +1,242 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f5f7;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.assistant-container {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    z-index: 1000;
+}
+
+.header {
+    display: none;
+}
+
+/* Свернутое состояние */
+.chat-window {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+    width: 60px;
+    height: 60px;
+    transition: all 0.3s ease;
+    margin-bottom: 10px;
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* Развернутое состояние */
+.chat-window.expanded {
+    width: 400px;
+    height: 500px;
+    padding: 15px;
+    opacity: 1;
+    visibility: visible;
+}
+
+.waveform-background {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0.1;
+    pointer-events: none;
+    display: block;
+}
+
+.message-log {
+    height: 0;
+    overflow-y: auto;
+    position: relative;
+    z-index: 2;
+    margin-bottom: 15px;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.chat-window.expanded .message-log {
+    height: 400px;
+    opacity: 1;
+}
+
+.message {
+    margin-bottom: 16px;
+    padding: 12px 16px;
+    border-radius: 18px;
+    max-width: 85%;
+    word-wrap: break-word;
+    transform: translateY(20px);
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.chat-window.expanded .message {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.server-message {
+    background: #007aff;
+    color: white;
+    margin-right: auto;
+    border-bottom-left-radius: 4px;
+}
+
+.status-message {
+    background: #e5e5ea;
+    color: #1d1d1f;
+    margin-left: auto;
+    border-bottom-right-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+}
+
+.text-input-container {
+    position: relative;
+    z-index: 2;
+    height: 0;
+    opacity: 0;
+    transition: all 0.3s ease;
+}
+
+.chat-window.expanded .text-input-container {
+    height: auto;
+    opacity: 1;
+}
+
+.text-input {
+    width: 100%;
+    padding: 12px 16px;
+    border: 1px solid #e5e5ea;
+    border-radius: 20px;
+    font-size: 16px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.text-input:focus {
+    border-color: #007aff;
+}
+
+.mic-button-container {
+    position: relative;
+}
+
+.mic-button {
+    width: 60px;
+    height: 60px;
+    border-radius: 30px;
+    background: #007aff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.mic-button.expanded {
+    width: 220px;
+    justify-content: flex-start;
+    padding-left: 15px;
+}
+
+.mic-button:hover {
+    transform: scale(1.05);
+}
+
+.mic-button:active {
+    transform: scale(0.95);
+}
+
+.mic-icon {
+    width: 24px;
+    height: 24px;
+    fill: white;
+    transition: transform 0.3s ease;
+    flex-shrink: 0;
+}
+
+.mic-button.expanded .mic-icon {
+    transform: scale(0.9);
+}
+
+.mic-waveform {
+    width: 0;
+    height: 40px;
+    margin-left: 10px;
+    opacity: 0;
+    transition: all 0.3s ease;
+    flex: 1;
+    display: none;
+}
+
+.mic-button.expanded .mic-waveform {
+    width: 140px;
+    opacity: 1;
+    display: block;
+}
+
+.connection-status {
+    position: absolute;
+    top: -30px;
+    right: 0;
+    font-size: 14px;
+    color: #8e8e93;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.chat-window.expanded ~ .connection-status {
+    opacity: 1;
+}
+
+.hidden {
+    display: none;
+}
+
+.active .mic-button {
+    background: #ff3b30;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Анимация появления сообщений с задержкой */
+.chat-window.expanded .message:nth-child(1) { transition-delay: 0.1s; }
+.chat-window.expanded .message:nth-child(2) { transition-delay: 0.2s; }
+.chat-window.expanded .message:nth-child(3) { transition-delay: 0.3s; }
+.chat-window.expanded .message:nth-child(4) { transition-delay: 0.4s; }
+.chat-window.expanded .message:nth-child(5) { transition-delay: 0.5s; }
