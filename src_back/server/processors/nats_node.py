@@ -23,7 +23,8 @@ class NatsNode(ConsumerNode):
         super().__init__(source_node)
         self.nc: Optional[nats.NATS] = None
         self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
-        self.subject = os.getenv("NATS_SUBJECT", "audio.frames")
+        raw_subj = os.getenv("AUDIO_SUBJ") or os.getenv("NATS_SUBJECT") or "audio.frames"
+        self.subject = raw_subj if not str(raw_subj).endswith(".") else f"{raw_subj}frames"
 
     async def ensure_nc(self):
         if self.nc is None or not getattr(self.nc, "is_connected", False):

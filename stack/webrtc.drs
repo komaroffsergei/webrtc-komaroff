@@ -9,6 +9,14 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
       TRANSCRIBE_SUBJ: 'voice_chat_transcription.'
 end
 
+Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-whisper/master', ports: 9000,
+        ingress: { host: 'webrtc3.*' } do
+   env NATS_URL: NATS_URL,
+       AUDIO_SUBJ: 'voice_chat_audio.',
+       TRANSCRIBE_SUBJ: 'voice_chat_transcription.'
+   volume name: 'wisper_models', target: '/app/server/models'
+end
+
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do

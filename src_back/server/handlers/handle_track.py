@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import json
 from typing import Dict, Any
 
 from aiortc import RTCPeerConnection
@@ -8,6 +9,7 @@ from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, Recorder
 from ..processors.graph import AudioGraph
 from ..processors.nats_node import NatsNode
 from ..utils.config import STATIC_DIR
+from .sse import sse_broadcast
 from ..utils.pc_lifecycle import attach_pc_lifecycle
 
 logger = logging.getLogger("handle_track")
@@ -39,6 +41,32 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         nats_node.use_source(source)
         graph.add(nats_node)
 
+        # Subscribe to whisper subject and forward to logs and SSE
+        await nats_node.ensure_nc()
+        in_subject = os.getenv("AUDIO_SUBJ", "audio.frames")
+        whisper_subject = os.getenv("WHISPER_SUBJ") or f"{in_subject}.whisper"
+
+        async def _whisper_cb(msg):
+            try:
+                data = msg.data
+                meta_len = int.from_bytes(data[:4], "big") if len(data) >= 4 else 0
+                meta = {}
+                if meta_len and 4 + meta_len <= len(data):
+                    try:
+                        meta = json.loads(data[4:4+meta_len].decode("utf-8"))
+                    except Exception:
+                        meta = {}
+                print(f"[whisper] subject={msg.subject} note={meta.get('note')} meta={meta}")
+                try:
+                    await sse_broadcast(app, {"type": "whisper", "meta": meta})
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.warning(f"whisper cb error: {e}")
+
+        await nats_node.nc.subscribe(whisper_subject, cb=_whisper_cb)
+        logger.info(f"Subscribed to whisper subject: {whisper_subject}")
+
         # Echo back mixed audio to the browser
         echo = EchoTrackNode(bgm)
         audio_transceiver.sender.replaceTrack(echo)
@@ -51,7 +79,8 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 async def nats_init():
     nats_node = NatsNode()
     nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    nats_subject = os.getenv("NATS_SUBJECT", "audio.frames")
+    raw_subj = os.getenv("AUDIO_SUBJ", "audio.frames")
+    nats_subject = raw_subj if not str(raw_subj).endswith(".") else f"{raw_subj}frames"
     nats_durable = os.getenv("NATS_DURABLE", "debug_reader")
     await nats_node.connect(
         nc_url=nats_url,

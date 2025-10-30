@@ -31,6 +31,16 @@
   });
 
   let pc = null;
+  // SSE events
+  try {
+    const es = new EventSource('/events');
+    es.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (window.AppLog) AppLog.emit('[sse]', msg);
+      } catch {}
+    };
+  } catch(e) { console.warn('SSE init failed', e); }
   let sender = null;
   let micStream = null;
   let micTrack = null;
