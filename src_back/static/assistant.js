@@ -7,6 +7,7 @@
         let vadInstance = null;
         let backgroundViz = null;
         let micWaveformViz = null;
+        let eventSource = null;
 
         let els = {};
 
@@ -29,19 +30,9 @@
             }
         }
 
-        function addMessage(text, type = 'server') {
-            if (!els.messageLog) return;
-
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}-message`;
-            messageDiv.textContent = text;
-            els.messageLog.appendChild(messageDiv);
-
-            // Автоскролл только если чат развернут
-            if (els.chatWindow && els.chatWindow.classList.contains('expanded')) {
-                setTimeout(() => {
-                    els.messageLog.scrollTop = els.messageLog.scrollHeight;
-                }, 100);
+        function addMessage(text, type = 'server', uid = null) {
+            if (window.ChatUI) {
+                window.ChatUI.addMessage(text, type, uid);
             }
         }
 
@@ -332,11 +323,57 @@
         }
 
         // Обработка текстового ввода
-        function handleTextInput(e) {
+        async function handleTextInput(e) {
             if (e.key === 'Enter' && e.target.value.trim()) {
                 const text = e.target.value.trim();
-                addMessage(text, 'status');
+                addMessage(text, 'user');
                 e.target.value = '';
+                
+                // Отправляем сообщение на сервер
+                try {
+                    await window.CommandHandler.sendMessage(text);
+                } catch (error) {
+                    addMessage('Ошибка отправки сообщения', 'status');
+                }
+            }
+        }
+
+        // Инициализация SSE
+        function initSSE() {
+            try {
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                eventSource = new EventSource('/events');
+                
+                eventSource.onmessage = (e) => {
+                    try {
+                        const msg = JSON.parse(e.data);
+                        
+                        // Передаем в CommandHandler для обработки
+                        if (window.CommandHandler) {
+                            window.CommandHandler.handleServerMessage(msg);
+                        }
+                        
+                        // Обратная совместимость - старая логика
+                        if (msg.text && !msg.type) {
+                            addMessage(msg.text, 'server');
+                        }
+                    } catch (err) {
+                        console.error('SSE message parse error:', err);
+                    }
+                };
+                
+                eventSource.onerror = (e) => {
+                    console.warn('SSE error, reconnecting...', e);
+                    setTimeout(() => {
+                        initSSE();
+                    }, 3000);
+                };
+                
+            } catch (e) {
+                console.warn('SSE failed', e);
             }
         }
 
@@ -354,6 +391,11 @@
                 micWaveform: document.getElementById('micWaveform'),
                 chatWindow: document.querySelector('.chat-window')
             };
+            
+            // Инициализируем ChatUI
+            if (window.ChatUI && els.messageLog) {
+                window.ChatUI.init(els.messageLog);
+            }
 
             // Устанавливаем начальные размеры canvas с запасом
             if (els.waveBackground) {
@@ -368,6 +410,9 @@
             if (els.textInput) {
                 els.textInput.addEventListener('keypress', handleTextInput);
             }
+            
+            // Инициализируем SSE
+            initSSE();
         });
 
         window.addEventListener('resize', () => {
@@ -380,21 +425,5 @@
                 }
             }
         });
-
-        // SSE для получения сообщений от сервера
-        try {
-            const es = new EventSource('/events');
-            es.onmessage = (e) => {
-                try {
-                    const msg = JSON.parse(e.data);
-                    if (msg.text) {
-                        addMessage(msg.text, 'server');
-                    }
-                } catch {
-                }
-            };
-        } catch (e) {
-            console.warn('SSE failed', e);
-        }
 
     })();
