@@ -5,13 +5,12 @@ import json
 from typing import Dict, Any
 
 from aiortc import RTCPeerConnection
-from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, RecorderNode, EchoTrackNode
+from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, RecorderNode, EchoTrackNode, AudioMonitorNode
 from ..processors.graph import AudioGraph
 from ..processors.nats_node import NatsNode
 from ..utils.config import STATIC_DIR
-from .sse import sse_log, sse_message
+from .sse import sse_log, sse_message, sse_warning
 from ..utils.pc_lifecycle import attach_pc_lifecycle
-from ..utils.audio_monitor import AudioMonitor
 
 logger = logging.getLogger("handle_track")
 
@@ -34,45 +33,28 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             target_output_format='s16p'
         ))
 
-        # Инициализация аудио монитора
-        audio_monitor = AudioMonitor(app)
-        
-        # Создаем задачу для периодической проверки аудио
-        async def monitor_loop():
-            while True:
-                await asyncio.sleep(0.5)
-                await audio_monitor.check_and_warn()
-        
-        monitor_task = asyncio.create_task(monitor_loop())
-        
-        # Сохраняем monitor_task для очистки при закрытии
-        if not hasattr(app, 'monitor_tasks'):
-            app['monitor_tasks'] = set()
-        app['monitor_tasks'].add(monitor_task)
+        # Callback для отправки предупреждений об уровне звука
+        async def audio_warning_callback(warning_type: str):
+            await sse_warning(app, warning_type)
 
-        # Build BGM mixer on top of microphone source
-        bgm = graph.add(BgmMixerNode(source, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
+        # Нода мониторинга аудио (встраивается в граф)
+        monitor = graph.add(AudioMonitorNode(
+            source,
+            warning_callback=audio_warning_callback,
+            check_interval=2.0,
+            loud_threshold=0.9,
+            quiet_threshold=0.02,
+            noise_threshold=0.15,
+            min_frames_for_check=10,
+            warning_cooldown=10.0
+        ))
+
+        # Build BGM mixer on top of monitored source
+        bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
         filler = graph.add(
-            LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-        # recorder = graph.add(RecorderNode(filler, batch_frames=512))
-        
-        # Подключаем мониторинг к источнику
-        monitor_queue = source.subscribe()
-        
-        async def monitor_frames():
-            try:
-                while True:
-                    frame = await monitor_queue.get()
-                    if frame is None:
-                        break
-                    audio_monitor.add_frame(frame)
-            except asyncio.CancelledError:
-                pass
-            finally:
-                source.unsubscribe(monitor_queue)
-        
-        asyncio.create_task(monitor_frames())
+            LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
+        recorder = graph.add(RecorderNode(filler, batch_frames=512))
 
         # Bind upstream audio to pre-initialized NATS node and add into graph
         nats_node.use_source(source)

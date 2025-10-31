@@ -1,63 +1,101 @@
 """
-Audio Monitor - мониторинг уровня звука и детекция проблем
+Audio Monitor Node - нода для мониторинга уровня звука в аудио-графе
 """
 
 import asyncio
 import logging
 import time
-from typing import Optional
+from typing import Optional, Callable, Awaitable
 
 import numpy as np
 from av import AudioFrame
 
-from ..handlers.sse import sse_warning
+from .base import ConsumerNode
 
-logger = logging.getLogger("audio.AudioMonitor")
+logger = logging.getLogger("audio.AudioMonitorNode")
 
 
-class AudioMonitor:
+class AudioMonitorNode(ConsumerNode):
     """
-    Мониторинг аудио для детекции проблем:
+    Нода мониторинга аудио в реальном времени.
+    
+    Анализирует аудио фреймы на:
     - Слишком громкий сигнал (clipping)
     - Слишком тихий сигнал
     - Высокий уровень шума
     
-    Отправляет предупреждения через SSE.
+    Вызывает callback при обнаружении проблем.
     """
 
     def __init__(
         self,
-        app,
+        source: ConsumerNode,
+        warning_callback: Optional[Callable[[str], Awaitable[None]]] = None,
         check_interval: float = 2.0,
         loud_threshold: float = 0.9,
         quiet_threshold: float = 0.02,
         noise_threshold: float = 0.15,
-        min_frames_for_check: int = 10
+        min_frames_for_check: int = 10,
+        warning_cooldown: float = 10.0
     ):
         """
         Args:
-            app: aiohttp application для отправки SSE
+            source: источник аудио фреймов
+            warning_callback: async функция для отправки предупреждений (warning_type: str)
             check_interval: интервал проверки в секундах
             loud_threshold: порог для определения слишком громкого сигнала (0.0-1.0)
             quiet_threshold: порог для определения тихого сигнала (0.0-1.0)
             noise_threshold: порог RMS для определения шума при отсутствии речи
             min_frames_for_check: минимальное количество фреймов для анализа
+            warning_cooldown: не отправлять одинаковые предупреждения чаще раз в N секунд
         """
-        self.app = app
+        super().__init__(source)
+        self.warning_callback = warning_callback
         self.check_interval = check_interval
         self.loud_threshold = loud_threshold
         self.quiet_threshold = quiet_threshold
         self.noise_threshold = noise_threshold
         self.min_frames_for_check = min_frames_for_check
+        self.warning_cooldown = warning_cooldown
 
         self.samples_buffer = []
         self.last_check_time = time.time()
         self.last_warning_type = None
         self.last_warning_time = 0
-        self.warning_cooldown = 10.0  # не спамить предупреждениями чаще раз в N секунд
 
-    def add_frame(self, frame: AudioFrame) -> None:
-        """Добавить фрейм для анализа."""
+        self._check_task = None
+
+    async def handle_frame(self, frame: AudioFrame) -> None:
+        """Обработка фрейма: добавление в буфер и проброс дальше"""
+        # Добавляем фрейм в буфер для анализа
+        self._add_frame_to_buffer(frame)
+        
+        # Пробрасываем фрейм дальше по графу
+        await self.fan_out(frame)
+    
+    async def start(self) -> None:
+        """Переопределяем start чтобы запустить задачу периодической проверки"""
+        # Запускаем базовый ConsumerNode
+        await super().start()
+        
+        # Запускаем задачу периодической проверки
+        self._check_task = asyncio.create_task(self._periodic_check())
+    
+    async def stop(self) -> None:
+        """Переопределяем stop чтобы остановить задачу проверки"""
+        # Останавливаем задачу проверки
+        if self._check_task:
+            self._check_task.cancel()
+            try:
+                await self._check_task
+            except asyncio.CancelledError:
+                pass
+        
+        # Останавливаем базовый ConsumerNode
+        await super().stop()
+
+    def _add_frame_to_buffer(self, frame: AudioFrame) -> None:
+        """Добавить фрейм в буфер для анализа"""
         try:
             pcm = frame.to_ndarray()
             if pcm.ndim == 1:
@@ -80,17 +118,20 @@ class AudioMonitor:
                 self.samples_buffer = self.samples_buffer[-100:]
                 
         except Exception as e:
-            logger.debug(f"Error adding frame to monitor: {e}")
+            logger.debug(f"Error adding frame to buffer: {e}")
 
-    async def check_and_warn(self) -> None:
-        """Проверить накопленные данные и отправить предупреждение если нужно."""
+    async def _periodic_check(self):
+        """Периодическая проверка накопленных данных"""
+        try:
+            while True:
+                await asyncio.sleep(self.check_interval)
+                await self._check_and_warn()
+        except asyncio.CancelledError:
+            pass
+
+    async def _check_and_warn(self) -> None:
+        """Проверить накопленные данные и отправить предупреждение если нужно"""
         current_time = time.time()
-        
-        # Проверяем только с заданным интервалом
-        if current_time - self.last_check_time < self.check_interval:
-            return
-        
-        self.last_check_time = current_time
         
         if len(self.samples_buffer) < self.min_frames_for_check:
             return
@@ -128,7 +169,7 @@ class AudioMonitor:
             logger.error(f"Error in audio monitoring: {e}")
 
     async def _send_warning(self, warning_type: str, current_time: float) -> None:
-        """Отправить предупреждение через SSE с учетом cooldown."""
+        """Отправить предупреждение через callback с учетом cooldown"""
         # Проверяем cooldown чтобы не спамить
         if (self.last_warning_type == warning_type and 
             current_time - self.last_warning_time < self.warning_cooldown):
@@ -137,6 +178,9 @@ class AudioMonitor:
         self.last_warning_type = warning_type
         self.last_warning_time = current_time
         
-        await sse_warning(self.app, warning_type)
-        
-        logger.info(f"Audio warning sent: {warning_type}")
+        if self.warning_callback:
+            try:
+                await self.warning_callback(warning_type)
+                logger.info(f"Audio warning sent: {warning_type}")
+            except Exception as e:
+                logger.error(f"Error calling warning callback: {e}")
