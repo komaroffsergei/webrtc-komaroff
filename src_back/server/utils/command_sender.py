@@ -1,9 +1,9 @@
 """
 Command Sender - утилита для отправки команд клиенту через SSE
+Обертки над специализированными SSE функциями для обратной совместимости.
 """
 
-import uuid
-from ..handlers.sse import sse_broadcast
+from ..handlers.sse import sse_command, sse_message
 
 
 async def send_command(app, method: str, params=None):
@@ -18,16 +18,7 @@ async def send_command(app, method: str, params=None):
     Returns:
         str: uid команды
     """
-    command_uid = str(uuid.uuid4())
-    
-    await sse_broadcast(app, {
-        "type": "command",
-        "method": method,
-        "params": params,
-        "uid": command_uid
-    })
-    
-    return command_uid
+    return await sse_command(app, method, params)
 
 
 async def send_text_message(app, text: str):
@@ -41,13 +32,4 @@ async def send_text_message(app, text: str):
     Returns:
         str: uid сообщения
     """
-    message_uid = str(uuid.uuid4())
-    
-    await sse_broadcast(app, {
-        "type": "message",
-        "descr": "send",
-        "uid": message_uid,
-        "text": text
-    })
-    
-    return message_uid
+    return await sse_message(app, text, descr="send")

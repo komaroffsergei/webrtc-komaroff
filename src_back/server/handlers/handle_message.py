@@ -1,8 +1,7 @@
 import logging
-import uuid
 from aiohttp import web
 
-from .sse import sse_broadcast
+from .sse import sse_message
 
 logger = logging.getLogger("handle_message")
 
@@ -28,26 +27,13 @@ async def message_handler(request: web.Request):
     if not text:
         return web.json_response({"error": "text field is required"}, status=400)
     
-    message_uid = str(uuid.uuid4())
-    
     # Отправляем подтверждение получения через SSE
-    await sse_broadcast(request.app, {
-        "type": "message",
-        "descr": "received",
-        "uid": message_uid,
-        "text": text
-    })
+    message_uid = await sse_message(request.app, text, descr="received")
     
     logger.info(f"Message received: {text[:50]}... (uid={message_uid})")
     
     # Отправляем ответ клиенту через SSE
-    response_uid = str(uuid.uuid4())
-    await sse_broadcast(request.app, {
-        "type": "message",
-        "descr": "send",
-        "uid": response_uid,
-        "text": f"Эхо: {text}"
-    })
+    await sse_message(request.app, f"Эхо: {text}", descr="send")
     
     return web.json_response({
         "status": "ok",

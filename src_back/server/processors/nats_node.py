@@ -37,6 +37,13 @@ class NatsNode(ConsumerNode):
                 ping_interval=10,
             )
             logger.info(f"NATS connected: {self.nc.connected_url.netloc}")
+            
+            # Отправляем лог о подключении если есть app
+            if hasattr(self, '_app'):
+                from ..handlers.sse import sse_log
+                await sse_log(self._app, f"NATS connected: {self.nc.connected_url.netloc}", 
+                            level="info", category="nats")
+        
         # JetStream support removed: ensure only core NATS connection
         return self.nc
 
@@ -111,7 +118,7 @@ class NatsNode(ConsumerNode):
             payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_audio_bytes
 
             await self.nc.publish(self.subject, payload)
-            logger.info(f"Published raw frame via NATS, {len(payload)} bytes")
+            logger.debug(f"Published raw frame via NATS, {len(payload)} bytes")
 
         except Exception as e:
             logger.error(f"Failed to publish raw frame: {e}", exc_info=True)

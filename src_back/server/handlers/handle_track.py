@@ -9,7 +9,7 @@ from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, Recorder
 from ..processors.graph import AudioGraph
 from ..processors.nats_node import NatsNode
 from ..utils.config import STATIC_DIR
-from .sse import sse_broadcast
+from .sse import sse_log, sse_message
 from ..utils.pc_lifecycle import attach_pc_lifecycle
 from ..utils.audio_monitor import AudioMonitor
 
@@ -19,6 +19,9 @@ logger = logging.getLogger("handle_track")
 async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     nats_node = await nats_init()
     logger.info(f"on_track: received kind={track.kind}")
+    await sse_log(app, f"Audio track processing started, kind={track.kind}", 
+                  level="info", category="audio")
+    
     if track.kind == "audio":
         graph = AudioGraph()
         attach_pc_lifecycle(pc, app, graph, audio_transceiver, echo_ref)
@@ -52,7 +55,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
         filler = graph.add(
             LossFillerNode(source, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-        recorder = graph.add(RecorderNode(filler, batch_frames=512))
+        # recorder = graph.add(RecorderNode(filler, batch_frames=512))
         
         # Подключаем мониторинг к источнику
         monitor_queue = source.subscribe()
@@ -91,16 +94,22 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                     except Exception:
                         meta = {}
                 text_line = f"[whisper] subject={msg.subject} note={meta.get('note')} meta={meta}"
-                print(text_line)
+                await sse_log(app, f"NATS: Whisper message - {text_line}", 
+                             level="info", category="nats", meta=meta)
+                
                 try:
-                    await sse_broadcast(app, {"type": "whisper", "meta": meta, "text": text_line})
+                    await sse_message(app, text_line, descr="transcription", meta=meta)
                 except Exception:
                     pass
             except Exception as e:
                 logger.warning(f"whisper cb error: {e}")
+                await sse_log(app, f"NATS: Whisper callback error - {str(e)}", 
+                             level="error", category="nats")
 
         await nats_node.nc.subscribe(whisper_subject, cb=_whisper_cb)
         logger.info(f"Subscribed to whisper subject: {whisper_subject}")
+        await sse_log(app, f"NATS: Subscribed to {whisper_subject}", 
+                     level="info", category="nats")
 
         # Echo back mixed audio to the browser
         echo = EchoTrackNode(bgm)
@@ -109,6 +118,8 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         asyncio.create_task(graph.start())
 
         logger.info("Audio graph started")
+        await sse_log(app, "Audio graph started successfully", 
+                     level="info", category="audio")
 
 
 async def nats_init():
@@ -126,8 +137,12 @@ async def nats_init():
     async def _core_cb(msg):
         await nats_on_message_core(msg)
 
-    # await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
+    await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
     logger.info("Subscribed to NATS subject (core mode, no JetStream)")
+    
+    # Сохраняем app для логирования (если доступен через контекст)
+    # nats_node._app = app  # Будет добавлено в вызывающей функции
+    
     return nats_node
 
 async def nats_on_message_core(msg):

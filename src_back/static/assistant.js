@@ -351,6 +351,11 @@
                     try {
                         const msg = JSON.parse(e.data);
                         
+                        // Логируем все события в отладочную панель
+                        if (window.DebugPanel) {
+                            window.DebugPanel.addLog(msg);
+                        }
+                        
                         // Передаем в CommandHandler для обработки
                         if (window.CommandHandler) {
                             window.CommandHandler.handleServerMessage(msg);
@@ -365,8 +370,14 @@
                     }
                 };
                 
+                eventSource.onopen = () => {
+                    console.log('SSE connected');
+                    updateStatus('Подключено к серверу');
+                };
+                
                 eventSource.onerror = (e) => {
                     console.warn('SSE error, reconnecting...', e);
+                    updateStatus('Переподключение...');
                     setTimeout(() => {
                         initSSE();
                     }, 3000);

@@ -6,6 +6,7 @@ from aiohttp import web
 from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
 
 from .handle_track import handle_track
+from .sse import sse_log
 from ..utils.validate import get_params, validate_sdp
 logger = logging.getLogger("handle_offer")
 
@@ -40,9 +41,15 @@ async def handle_offer_connect(request, params):
     pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
     request.app["pcs"] = pcs
     pcs.add(pc)
+    
+    await sse_log(request.app, f"WebRTC: Creating peer connection (total active: {len(pcs)})", 
+                  level="info", category="webrtc")
+    
     echo_ref = {"node": None}
     @pc.on("track")
     async def on_track(track):
+        await sse_log(request.app, f"WebRTC: Track received, kind={track.kind}", 
+                      level="info", category="webrtc")
         await handle_track(
             track, 
             pc, 
@@ -53,9 +60,13 @@ async def handle_offer_connect(request, params):
 
     try:
         resp = await establish_connection(pc, offer)
+        await sse_log(request.app, "WebRTC: Connection established successfully", 
+                      level="info", category="webrtc")
         return resp, None
-    except Exception:
+    except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
+        await sse_log(request.app, f"WebRTC: Connection failed - {str(e)}", 
+                      level="error", category="webrtc")
         try:
             await audio_transceiver.sender.replaceTrack(None)
         except Exception:
@@ -67,10 +78,14 @@ async def handle_offer_connect(request, params):
 
 async def establish_connection(pc, offer):
     await pc.setRemoteDescription(offer)
+    logger.debug("Remote description set")
+    
     answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
+    logger.debug("Local description set")
 
     while getattr(pc, "iceGatheringState", None) != "complete":
         await asyncio.sleep(0.05)
-
+    
+    logger.debug("ICE gathering complete")
     return {"sdp": pc.localDescription.sdp, "type": pc.localDescription.type}

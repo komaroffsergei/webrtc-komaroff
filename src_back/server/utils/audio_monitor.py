@@ -10,7 +10,7 @@ from typing import Optional
 import numpy as np
 from av import AudioFrame
 
-from ..handlers.sse import sse_broadcast
+from ..handlers.sse import sse_warning
 
 logger = logging.getLogger("audio.AudioMonitor")
 
@@ -137,9 +137,6 @@ class AudioMonitor:
         self.last_warning_type = warning_type
         self.last_warning_time = current_time
         
-        await sse_broadcast(self.app, {
-            "type": "warning",
-            "descr": warning_type
-        })
+        await sse_warning(self.app, warning_type)
         
         logger.info(f"Audio warning sent: {warning_type}")

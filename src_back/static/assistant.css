@@ -276,3 +276,265 @@ body {
     opacity: 1;
     transform: translateY(0);
 }
+
+/* Debug Panel */
+.debug-panel {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    width: 700px;
+    max-height: 80vh;
+    background: rgba(20, 20, 25, 0.95);
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+    transition: all 0.3s ease;
+}
+
+.debug-panel.collapsed {
+    max-height: 50px;
+    overflow: hidden;
+}
+
+.debug-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.debug-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.debug-toggle {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 18px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.debug-toggle:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.debug-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    align-items: center;
+}
+
+.filter-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 8px;
+    font-weight: 500;
+}
+
+.filter-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 4px 10px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.filter-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.filter-btn.active {
+    background: rgba(0, 122, 255, 0.8);
+    border-color: rgba(0, 122, 255, 1);
+    color: #fff;
+}
+
+.debug-controls {
+    display: flex;
+    gap: 8px;
+    padding: 8px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.clear-btn, .export-btn {
+    flex: 1;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    padding: 6px 12px;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.clear-btn:hover {
+    background: rgba(255, 59, 48, 0.8);
+    border-color: rgba(255, 59, 48, 1);
+}
+
+.export-btn:hover {
+    background: rgba(52, 199, 89, 0.8);
+    border-color: rgba(52, 199, 89, 1);
+}
+
+.debug-logs {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+    max-height: calc(80vh - 250px);
+}
+
+.debug-log-entry {
+    padding: 6px 10px;
+    margin-bottom: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.debug-log-entry:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.log-command {
+    color: #5ac8fa;
+    border-left: 3px solid #5ac8fa;
+}
+
+.log-log {
+    color: #ffffff;
+    border-left: 3px solid #8e8e93;
+}
+
+.log-message {
+    color: #30d158;
+    border-left: 3px solid #30d158;
+}
+
+.log-warning {
+    color: #ff9f0a;
+    border-left: 3px solid #ff9f0a;
+}
+
+.log-level-debug {
+    opacity: 0.7;
+}
+
+.log-level-info {
+    opacity: 0.9;
+}
+
+.log-level-warning {
+    color: #ff9f0a;
+    font-weight: 500;
+}
+
+.log-level-error {
+    color: #ff453a;
+    font-weight: 600;
+}
+
+/* Debug Modal */
+.debug-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+}
+
+.debug-modal-content {
+    background: #1c1c1e;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 600px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.debug-modal-content h3 {
+    margin: 0 0 16px 0;
+    color: #fff;
+    font-size: 18px;
+}
+
+.debug-modal-content pre {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 16px;
+    border-radius: 8px;
+    color: #00ff00;
+    font-size: 12px;
+    overflow-x: auto;
+    margin: 0 0 16px 0;
+}
+
+.debug-modal-content button {
+    background: rgba(0, 122, 255, 0.8);
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 10px 20px;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+
+.debug-modal-content button:hover {
+    background: rgba(0, 122, 255, 1);
+}
+
+/* Scrollbar для debug панели */
+.debug-logs::-webkit-scrollbar {
+    width: 8px;
+}
+
+.debug-logs::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.debug-logs::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+.debug-logs::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
