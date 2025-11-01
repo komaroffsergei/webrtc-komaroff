@@ -231,15 +231,22 @@
                 updateStatus('Подключение...');
                 expandChatWindow();
 
+                // Получаем настройки аудио из элементов управления
+                const audioConstraints = getAudioConstraints();
+                
+                // Логируем настройки
+                if (window.DebugPanel) {
+                    window.DebugPanel.addLog({
+                        type: 'log',
+                        level: 'info',
+                        category: 'audio',
+                        message: `Requesting microphone: EC=${audioConstraints.echoCancellation}, NS=${audioConstraints.noiseSuppression}, SR=${audioConstraints.sampleRate}`
+                    });
+                }
+
                 // Получаем доступ к микрофону
                 micStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true,
-                        channelCount: 1,
-                        sampleRate: 48000
-                    },
+                    audio: audioConstraints,
                     video: false
                 });
 
@@ -388,6 +395,110 @@
             }
         }
 
+        // Инициализация элементов управления
+        function initAudioControls() {
+            const vadEnableEl = document.getElementById('vadEnable');
+            const vadThreshEl = document.getElementById('vadThresh');
+            const vadLevelEl = document.getElementById('vadLevel');
+            const ecEnableEl = document.getElementById('ecEnable');
+            const nsEnableEl = document.getElementById('nsEnable');
+
+            // Обновление отображения порога VAD
+            if (vadThreshEl && vadLevelEl) {
+                vadThreshEl.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    vadLevelEl.textContent = `${value} dBFS`;
+                    
+                    // Логируем изменение в отладочную панель
+                    if (window.DebugPanel) {
+                        window.DebugPanel.addLog({
+                            type: 'log',
+                            level: 'info',
+                            category: 'audio',
+                            message: `VAD threshold changed: ${value} dBFS`
+                        });
+                    }
+                });
+            }
+
+            // Логирование включения/выключения VAD
+            if (vadEnableEl) {
+                vadEnableEl.addEventListener('change', (e) => {
+                    const enabled = e.target.checked;
+                    
+                    if (window.DebugPanel) {
+                        window.DebugPanel.addLog({
+                            type: 'log',
+                            level: 'info',
+                            category: 'audio',
+                            message: `VAD ${enabled ? 'enabled' : 'disabled'}`
+                        });
+                    }
+                    
+                    // Обновляем VAD если есть активный экземпляр
+                    if (vadInstance) {
+                        vadInstance.enabled = enabled;
+                    }
+                });
+            }
+
+            // Логирование echoCancellation
+            if (ecEnableEl) {
+                ecEnableEl.addEventListener('change', (e) => {
+                    const enabled = e.target.checked;
+                    
+                    if (window.DebugPanel) {
+                        window.DebugPanel.addLog({
+                            type: 'log',
+                            level: 'info',
+                            category: 'audio',
+                            message: `Echo Cancellation ${enabled ? 'enabled' : 'disabled'}`
+                        });
+                    }
+                });
+            }
+
+            // Логирование noiseSuppression
+            if (nsEnableEl) {
+                nsEnableEl.addEventListener('change', (e) => {
+                    const enabled = e.target.checked;
+                    
+                    if (window.DebugPanel) {
+                        window.DebugPanel.addLog({
+                            type: 'log',
+                            level: 'info',
+                            category: 'audio',
+                            message: `Noise Suppression ${enabled ? 'enabled' : 'disabled'}`
+                        });
+                    }
+                });
+            }
+
+            // Логируем начальное состояние
+            if (window.DebugPanel) {
+                window.DebugPanel.addLog({
+                    type: 'log',
+                    level: 'info',
+                    category: 'audio',
+                    message: `Audio controls initialized: VAD=${vadEnableEl?.checked}, EC=${ecEnableEl?.checked}, NS=${nsEnableEl?.checked}, Threshold=${vadThreshEl?.value}dBFS`
+                });
+            }
+        }
+
+        // Получение настроек аудио для getUserMedia
+        function getAudioConstraints() {
+            const ecEnable = document.getElementById('ecEnable')?.checked ?? true;
+            const nsEnable = document.getElementById('nsEnable')?.checked ?? true;
+
+            return {
+                echoCancellation: ecEnable,
+                noiseSuppression: nsEnable,
+                autoGainControl: true,
+                sampleRate: 48000,
+                channelCount: 1
+            };
+        }
+
         // Инициализация
         window.addEventListener('load', () => {
             // Инициализируем элементы после загрузки DOM
@@ -421,6 +532,9 @@
             if (els.textInput) {
                 els.textInput.addEventListener('keypress', handleTextInput);
             }
+            
+            // Инициализируем элементы управления аудио
+            initAudioControls();
             
             // Инициализируем SSE
             initSSE();

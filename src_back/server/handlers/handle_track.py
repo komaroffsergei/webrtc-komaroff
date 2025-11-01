@@ -50,7 +50,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         ))
 
         # Build BGM mixer on top of monitored source
-        bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
+        # bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
         filler = graph.add(
             LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
@@ -67,22 +67,51 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
         async def _whisper_cb(msg):
             try:
-                data = msg.data
-                meta_len = int.from_bytes(data[:4], "big") if len(data) >= 4 else 0
-                meta = {}
-                if meta_len and 4 + meta_len <= len(data):
-                    try:
-                        meta = json.loads(data[4:4+meta_len].decode("utf-8"))
-                    except Exception:
-                        meta = {}
-                text_line = f"[whisper] subject={msg.subject} note={meta.get('note')} meta={meta}"
-                await sse_log(app, f"NATS: Whisper message - {text_line}", 
-                             level="info", category="nats", meta=meta)
-                
+                # Whisper отправляет JSON напрямую
                 try:
-                    await sse_message(app, text_line, descr="transcription", meta=meta)
+                    data = json.loads(msg.data.decode("utf-8"))
                 except Exception:
-                    pass
+                    # Fallback на старый формат (meta_len + meta + audio)
+                    raw_data = msg.data
+                    meta_len = int.from_bytes(raw_data[:4], "big") if len(raw_data) >= 4 else 0
+                    meta = {}
+                    if meta_len and 4 + meta_len <= len(raw_data):
+                        try:
+                            meta = json.loads(raw_data[4:4+meta_len].decode("utf-8"))
+                        except Exception:
+                            meta = {}
+                    data = meta
+                
+                msg_type = data.get("type", "unknown")
+                
+                # Обработка транскрипции
+                if msg_type == "transcription":
+                    text = data.get("text", "").strip()
+                    if text:
+                        await sse_log(app, f"Transcription: {text}", 
+                                     level="info", category="nats")
+                        
+                        # Отправляем транскрипцию в чат
+                        await sse_message(app, text, descr="transcription")
+                
+                # Обработка команды от Whisper
+                elif msg_type == "command":
+                    method = data.get("method")
+                    params = data.get("params", {})
+                    
+                    if method:
+                        await sse_log(app, f"Voice command: {method}", 
+                                     level="info", category="nats")
+                        
+                        # Отправляем команду клиенту через SSE
+                        from ..handlers.sse import sse_command
+                        await sse_command(app, method, params)
+                
+                # Обработка других типов
+                else:
+                    text_line = f"[whisper] type={msg_type} data={data}"
+                    await sse_log(app, text_line, level="debug", category="nats")
+                
             except Exception as e:
                 logger.warning(f"whisper cb error: {e}")
                 await sse_log(app, f"NATS: Whisper callback error - {str(e)}", 
@@ -94,7 +123,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                      level="info", category="nats")
 
         # Echo back mixed audio to the browser
-        echo = EchoTrackNode(bgm)
+        echo = EchoTrackNode(source)
         audio_transceiver.sender.replaceTrack(echo)
         echo_ref["node"] = echo
         asyncio.create_task(graph.start())
