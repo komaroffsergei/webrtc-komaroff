@@ -7,11 +7,13 @@ from .nats_receiver_node import NatsReceiverNode
 from .phrase_segmenter_node import PhraseSegmenterNode
 from .file_saver_node import FileSaverNode
 from .whisper_transcriber_node import WhisperTranscriberNode
+from .raw_recorder_node import RawRecorderNode
 
 __all__ = [
     'BaseNode',
     'NatsReceiverNode',
     'PhraseSegmenterNode',
     'FileSaverNode',
-    'WhisperTranscriberNode'
+    'WhisperTranscriberNode',
+    'RawRecorderNode'
 ]

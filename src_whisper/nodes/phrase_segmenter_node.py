@@ -70,6 +70,9 @@ class PhraseSegmenterNode(BaseNode):
         self.vad_model = None
         self.get_speech_timestamps = None
         
+        # Флаг для предотвращения параллельных проверок
+        self._check_in_progress = False
+        
         self.logger.info(f"Initialized with Silero VAD: sample_rate={sample_rate}, "
                         f"threshold={threshold}, min_silence={min_silence_duration_ms}ms")
 
@@ -132,16 +135,30 @@ class PhraseSegmenterNode(BaseNode):
             
             self.buffer.append(audio_float)
             
+            # НЕ сбрасываем буфер, накапливаем до детекции речи
             buffer_duration = sum(len(x) for x in self.buffer) / self.buffer_sample_rate
             
-            if buffer_duration >= self.buffer_check_interval_s:
-                await self._process_buffer()
+            # Проверяем периодически в фоне (не блокируем прием фреймов)
+            if buffer_duration >= self.buffer_check_interval_s and not self._check_in_progress:
+                asyncio.create_task(self._check_buffer_async())
             
         except Exception as e:
             self.logger.error(f"Error processing audio frame: {e}", exc_info=True)
 
-    async def _process_buffer(self) -> None:
-        """Обработать буфер через Silero VAD."""
+    async def _check_buffer_async(self) -> None:
+        """Проверить буфер на наличие завершенных фраз (асинхронно)."""
+        if self._check_in_progress:
+            return
+        
+        self._check_in_progress = True
+        
+        try:
+            await self._check_buffer()
+        finally:
+            self._check_in_progress = False
+    
+    async def _check_buffer(self) -> None:
+        """Проверить буфер на наличие завершенных фраз."""
         if not self.buffer or not self.vad_model:
             return
         
@@ -149,15 +166,14 @@ class PhraseSegmenterNode(BaseNode):
             audio = np.concatenate(self.buffer)
             buffer_duration = len(audio) / self.buffer_sample_rate
             
-            self.logger.debug(f"Processing buffer: {buffer_duration:.2f}s, {len(audio)} samples")
+            self.logger.debug(f"Checking buffer: {buffer_duration:.2f}s, {len(audio)} samples")
             
             if self.buffer_sample_rate != self.target_sample_rate:
                 audio = self._resample(audio, self.buffer_sample_rate, self.target_sample_rate)
-                self.logger.debug(f"Resampled: {self.buffer_sample_rate}Hz -> {self.target_sample_rate}Hz")
             
             vad_duration = len(audio) / self.target_sample_rate
-            if vad_duration < 0.5:
-                self.logger.debug(f"Buffer too short for VAD: {vad_duration:.2f}s")
+            if vad_duration < 1.0:
+                self.logger.debug(f"Buffer too short for VAD: {vad_duration:.2f}s, continuing...")
                 return
             
             audio_tensor = torch.from_numpy(audio)
@@ -166,6 +182,7 @@ class PhraseSegmenterNode(BaseNode):
             max_amp = np.max(np.abs(audio))
             self.logger.debug(f"Audio stats: RMS={rms:.4f}, max_amp={max_amp:.4f}")
             
+            # Получаем все speech timestamps
             speech_timestamps = await asyncio.get_event_loop().run_in_executor(
                 None,
                 self._get_timestamps,
@@ -175,33 +192,55 @@ class PhraseSegmenterNode(BaseNode):
             self.logger.debug(f"VAD detected {len(speech_timestamps)} speech segments")
             
             if not speech_timestamps:
-                self.logger.debug("No speech detected, clearing buffer")
-                self.buffer.clear()
+                # Нет речи в буфере
+                # Если буфер слишком большой - очищаем
+                if buffer_duration > 5.0:
+                    self.logger.debug("No speech in 5+ seconds, clearing buffer")
+                    self.buffer.clear()
                 return
             
-            for ts in speech_timestamps:
-                start_sample = ts['start']
-                end_sample = ts['end']
-                
-                segment_audio = audio[start_sample:end_sample]
-                duration = len(segment_audio) / self.target_sample_rate
-                
-                phrase = PhraseSegment(
-                    audio=segment_audio,
-                    sample_rate=self.target_sample_rate,
-                    start_time=start_sample / self.target_sample_rate,
-                    end_time=end_sample / self.target_sample_rate,
-                    duration=duration
-                )
-                
-                await self.emit(phrase)
-                self.logger.info(f"Phrase detected: {duration:.2f}s")
+            # Проверяем последний сегмент - закончился ли он?
+            last_segment = speech_timestamps[-1]
+            last_end_sample = last_segment['end']
+            samples_after_speech = len(audio) - last_end_sample
+            silence_after = samples_after_speech / self.target_sample_rate
             
-            self.buffer.clear()
+            self.logger.debug(f"Last segment ends at {last_end_sample}/{len(audio)}, "
+                            f"silence after: {silence_after:.2f}s")
+            
+            # Если после последнего сегмента есть тишина >= min_silence_duration_ms
+            min_silence_s = self.min_silence_duration_ms / 1000.0
+            
+            if silence_after >= min_silence_s:
+                # Речь закончена, отправляем все завершенные сегменты
+                self.logger.info(f"Speech ended (silence {silence_after:.2f}s), emitting {len(speech_timestamps)} segments")
+                
+                for ts in speech_timestamps:
+                    start_sample = ts['start']
+                    end_sample = ts['end']
+                    
+                    segment_audio = audio[start_sample:end_sample]
+                    duration = len(segment_audio) / self.target_sample_rate
+                    
+                    phrase = PhraseSegment(
+                        audio=segment_audio,
+                        sample_rate=self.target_sample_rate,
+                        start_time=start_sample / self.target_sample_rate,
+                        end_time=end_sample / self.target_sample_rate,
+                        duration=duration
+                    )
+                    
+                    await self.emit(phrase)
+                    self.logger.info(f"Phrase emitted: {duration:.2f}s")
+                
+                # Очищаем буфер
+                self.buffer.clear()
+            else:
+                # Речь еще продолжается, ждем
+                self.logger.debug(f"Speech still ongoing (silence only {silence_after:.2f}s), waiting...")
             
         except Exception as e:
-            self.logger.error(f"Error processing buffer: {e}", exc_info=True)
-            self.buffer.clear()
+            self.logger.error(f"Error checking buffer: {e}", exc_info=True)
 
     def _get_timestamps(self, audio_tensor):
         """Получить timestamps речи через Silero VAD."""

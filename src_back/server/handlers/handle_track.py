@@ -28,7 +28,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         source = graph.add(TrackSourceNode(
             track,
             frame_duration_ms=20,
-            target_rate=48000,
+            target_rate=16000,
             target_channels=1,
             target_output_format='s16p'
         ))
@@ -38,26 +38,26 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             await sse_warning(app, warning_type)
 
         # Нода мониторинга аудио (встраивается в граф)
-        monitor = graph.add(AudioMonitorNode(
-            source,
-            warning_callback=audio_warning_callback,
-            check_interval=2.0,
-            loud_threshold=0.9,
-            quiet_threshold=0.02,
-            noise_threshold=0.15,
-            min_frames_for_check=10,
-            warning_cooldown=10.0
-        ))
+        # monitor = graph.add(AudioMonitorNode(
+        #     source,
+        #     warning_callback=audio_warning_callback,
+        #     check_interval=2.0,
+        #     loud_threshold=0.9,
+        #     quiet_threshold=0.02,
+        #     noise_threshold=0.15,
+        #     min_frames_for_check=10,
+        #     warning_cooldown=10.0
+        # ))
 
         # Build BGM mixer on top of monitored source
         # bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
         # filler = graph.add(
         #     LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-        recorder = graph.add(RecorderNode(monitor, batch_frames=512))
+        # recorder = graph.add(RecorderNode(monitor, batch_frames=512))
 
         # Bind upstream audio to pre-initialized NATS node and add into graph
-        nats_node.use_source(monitor)
+        nats_node.use_source(source)
         graph.add(nats_node)
 
         # Subscribe to whisper subject and forward to logs and SSE

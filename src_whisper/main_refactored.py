@@ -18,7 +18,8 @@ from nodes import (
     NatsReceiverNode,
     PhraseSegmenterNode,
     FileSaverNode,
-    WhisperTranscriberNode
+    WhisperTranscriberNode,
+    RawRecorderNode
 )
 
 # Импорт системы команд
@@ -83,6 +84,13 @@ async def main():
         subject=AUDIO_SUBJECT
     )
     
+    # 1.5. Raw Recorder - запись сырого аудио для диагностики
+    raw_recorder = RawRecorderNode(
+        recordings_dir="recordings_raw",
+        max_duration_s=10.0,
+        enabled=True
+    )
+    
     # 2. Phrase Segmenter - нарезка на фразы по тишине
     phrase_segmenter = PhraseSegmenterNode()
     
@@ -126,20 +134,22 @@ async def main():
                 log.info(f"Published command: {command_result['command']}")
     
     # Связываем ноды через callback
+    # nats_receiver.set_callback(raw_recorder.process)
     nats_receiver.set_callback(phrase_segmenter.process)
     phrase_segmenter.set_callback(file_saver.process)
-    file_saver.set_callback(whisper_transcriber.process)
-    whisper_transcriber.set_callback(on_transcription)
+    # file_saver.set_callback(whisper_transcriber.process)
+    # whisper_transcriber.set_callback(on_transcription)
     
     log.info("")
     log.info("Pipeline configured:")
-    log.info("  NATS Receiver → Phrase Segmenter → File Saver → Whisper → Commands")
+    log.info("  NATS Receiver → Raw Recorder → Phrase Segmenter → File Saver → Whisper → Commands")
     log.info("")
     
     # ===== ЗАПУСК НОД =====
     
     try:
         # Запускаем ноды
+        await raw_recorder.start()
         await phrase_segmenter.start()
         await file_saver.start()
         await whisper_transcriber.start()
@@ -161,6 +171,7 @@ async def main():
         await whisper_transcriber.stop()
         await file_saver.stop()
         await phrase_segmenter.stop()
+        await raw_recorder.stop()
         
         # Закрываем NATS для публикации
         try:
