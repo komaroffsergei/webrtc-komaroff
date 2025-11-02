@@ -137,8 +137,8 @@ async def main():
     # nats_receiver.set_callback(raw_recorder.process)
     nats_receiver.set_callback(phrase_segmenter.process)
     phrase_segmenter.set_callback(file_saver.process)
-    # file_saver.set_callback(whisper_transcriber.process)
-    # whisper_transcriber.set_callback(on_transcription)
+    file_saver.set_callback(whisper_transcriber.process)
+    whisper_transcriber.set_callback(on_transcription)
     
     log.info("")
     log.info("Pipeline configured:")

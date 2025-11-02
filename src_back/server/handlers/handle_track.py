@@ -63,7 +63,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         # Subscribe to whisper subject and forward to logs and SSE
         await nats_node.ensure_nc()
         in_subject = os.getenv("AUDIO_SUBJ", "audio.frames")
-        whisper_subject = os.getenv("WHISPER_SUBJ") or f"{in_subject}.whisper"
+        whisper_subject = os.getenv("WHISPER_SUBJ", "whisper.transcription")
 
         async def _whisper_cb(msg):
             try:
