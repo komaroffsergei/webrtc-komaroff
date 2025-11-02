@@ -13,3 +13,5 @@ coverage
 /src_whisper/models/
 /src_back/server/recordings/
 /src_back/.venv/
+/src_whisper/.venv/
+/src_whisper/.venv/*

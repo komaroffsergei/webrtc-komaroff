@@ -83,6 +83,13 @@
                 }
                 break;
 
+            case 'log':
+                if (descr && window.DebugPanel) {
+                    window.DebugPanel.addLog(message);
+                }
+                break;
+
+
             default:
                 logger.debug(`[CommandHandler] Unhandled message type: ${type}`);
         }

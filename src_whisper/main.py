@@ -7,12 +7,17 @@ from typing import Tuple, Optional
 from pathlib import Path
 
 import nats
+from dotenv import load_dotenv
 
 from audio_buffer import AudioBuffer
 from whisper_processor import WhisperProcessor
+from vad_processor import VADProcessor
 from voice_commands import CommandRegistry, CommandMatcher
 from commands.alert_command import register_alert_command
 from commands.example_commands import register_example_commands
+
+# Загружаем .env файл если есть
+load_dotenv()
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -29,9 +34,16 @@ MODEL_PATH = os.getenv("WHISPER_MODEL", "models/whisper-medium-ru-fine-ct2")
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", "recordings")
 
 # Параметры буферизации
-MIN_DURATION = float(os.getenv("MIN_DURATION", "1.0"))  # минимум 1 секунда
-MAX_DURATION = float(os.getenv("MAX_DURATION", "30.0"))  # максимум 30 секунд
+MAX_BUFFER_DURATION = float(os.getenv("MAX_BUFFER_DURATION", "60.0"))  # Максимальный буфер перед принудительной обработки
 SAVE_RECORDINGS = os.getenv("SAVE_RECORDINGS", "true").lower() == "true"
+
+# VAD параметры
+ENABLE_VAD = os.getenv("ENABLE_VAD", "true").lower() == "true"
+VAD_SILENCE_THRESHOLD = float(os.getenv("VAD_SILENCE_THRESHOLD", "0.02"))
+VAD_MIN_SILENCE_DURATION = float(os.getenv("VAD_MIN_SILENCE_DURATION", "0.3"))  # Пауза для определения конца фразы
+VAD_MIN_SPEECH_DURATION = float(os.getenv("VAD_MIN_SPEECH_DURATION", "0.5"))
+VAD_PADDING_DURATION = float(os.getenv("VAD_PADDING_DURATION", "0.1"))
+VAD_CHECK_INTERVAL = float(os.getenv("VAD_CHECK_INTERVAL", "0.5"))  # Как часто проверять окончание фразы
 
 
 def decode_payload(data: bytes) -> Tuple[Optional[dict], Optional[bytes]]:
@@ -64,6 +76,22 @@ async def main():
     audio_buffer = AudioBuffer(recordings_dir=RECORDINGS_DIR)
     whisper_processor = WhisperProcessor(model_path=MODEL_PATH)
     
+    # Инициализация VAD
+    vad_processor = None
+    if ENABLE_VAD:
+        vad_processor = VADProcessor(
+            silence_threshold=VAD_SILENCE_THRESHOLD,
+            min_silence_duration=VAD_MIN_SILENCE_DURATION,
+            min_speech_duration=VAD_MIN_SPEECH_DURATION,
+            padding_duration=VAD_PADDING_DURATION,
+            sample_rate=48000
+        )
+        log.info(f"VAD enabled: silence_threshold={VAD_SILENCE_THRESHOLD}, "
+                f"min_silence={VAD_MIN_SILENCE_DURATION}s, "
+                f"min_speech={VAD_MIN_SPEECH_DURATION}s")
+    else:
+        log.info("VAD disabled")
+    
     # Инициализация системы команд
     command_registry = CommandRegistry()
     register_alert_command(command_registry)
@@ -87,11 +115,6 @@ async def main():
     async def process_buffer():
         """Обработать накопленный аудио буфер"""
         try:
-            # Сохраняем WAV для отладки
-            if SAVE_RECORDINGS:
-                wav_path = audio_buffer.save_to_wav()
-                log.info(f"Saved recording: {wav_path}")
-            
             # Получаем аудио данные
             audio_data = audio_buffer.get_audio_data()
             
@@ -99,6 +122,78 @@ async def main():
                 log.warning("Empty audio buffer")
                 audio_buffer.clear()
                 return
+            
+            # Конвертируем в numpy array для VAD
+            import numpy as np
+            if audio_buffer.sample_width == 2:
+                audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                audio_float = audio_array.astype(np.float32) / 32768.0
+            else:
+                audio_array = np.frombuffer(audio_data, dtype=np.int32)
+                audio_float = audio_array.astype(np.float32) / 2147483648.0
+            
+            # Применяем VAD если включен
+            speech_segments_float = []
+            if vad_processor and ENABLE_VAD:
+                # Проверяем наличие речи
+                if not vad_processor.has_speech(audio_float):
+                    log.info("No speech detected in buffer (VAD)")
+                    audio_buffer.clear()
+                    return
+                
+                # Разделяем на сегменты с речью
+                speech_segments_float = vad_processor.split_audio_by_speech(audio_float)
+                
+                if not speech_segments_float:
+                    log.info("No speech segments after VAD filtering")
+                    audio_buffer.clear()
+                    return
+                
+                speech_ratio = vad_processor.get_speech_ratio(audio_float)
+                log.info(f"VAD: {len(speech_segments_float)} segments, {speech_ratio*100:.1f}% speech")
+                
+                # Сохраняем каждый сегмент отдельно
+                if SAVE_RECORDINGS:
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    
+                    for idx, segment_float in enumerate(speech_segments_float):
+                        # Конвертируем сегмент в bytes
+                        if audio_buffer.sample_width == 2:
+                            segment_int = (segment_float * 32768.0).astype(np.int16)
+                        else:
+                            segment_int = (segment_float * 2147483648.0).astype(np.int32)
+                        segment_bytes = segment_int.tobytes()
+                        
+                        # Создаем временный буфер для сохранения
+                        segment_buffer = AudioBuffer(recordings_dir=RECORDINGS_DIR)
+                        segment_buffer.sample_rate = audio_buffer.sample_rate
+                        segment_buffer.channels = audio_buffer.channels
+                        segment_buffer.sample_width = audio_buffer.sample_width
+                        segment_buffer.frames.append(segment_bytes)
+                        segment_buffer.frame_count = 1
+                        
+                        # Сохраняем с уникальным именем
+                        filename = f"segment_{timestamp}_part{idx+1:02d}"
+                        wav_path = segment_buffer.save_to_wav(filename)
+                        
+                        duration = len(segment_float) / audio_buffer.sample_rate
+                        log.info(f"Saved speech segment {idx+1}/{len(speech_segments_float)}: {wav_path} ({duration:.2f}s)")
+                
+                # Объединяем сегменты для транскрипции
+                audio_float = np.concatenate(speech_segments_float)
+                
+                # Конвертируем обратно в bytes
+                if audio_buffer.sample_width == 2:
+                    audio_int = (audio_float * 32768.0).astype(np.int16)
+                else:
+                    audio_int = (audio_float * 2147483648.0).astype(np.int32)
+                audio_data = audio_int.tobytes()
+            else:
+                # VAD отключен, сохраняем все как есть
+                if SAVE_RECORDINGS:
+                    wav_path = audio_buffer.save_to_wav()
+                    log.info(f"Saved full recording: {wav_path}")
             
             # Транскрибируем
             log.info(f"Transcribing {len(audio_data)} bytes...")
@@ -146,6 +241,85 @@ async def main():
             log.error(f"Error processing buffer: {e}", exc_info=True)
             audio_buffer.clear()
 
+    # Состояние для отслеживания тишины
+    last_check_time = asyncio.get_event_loop().time()
+    silence_start_time = None
+    
+    async def check_phrase_end():
+        """Периодическая проверка окончания фразы"""
+        nonlocal last_check_time, silence_start_time
+        
+        try:
+            while True:
+                await asyncio.sleep(VAD_CHECK_INTERVAL)
+                
+                # Пропускаем если буфер пустой
+                if audio_buffer.frame_count == 0:
+                    silence_start_time = None
+                    continue
+                
+                duration = audio_buffer.get_duration()
+                
+                # Принудительная обработка если буфер слишком большой
+                if duration >= MAX_BUFFER_DURATION:
+                    log.warning(f"Buffer overflow: {duration:.2f}s, forcing processing")
+                    asyncio.create_task(process_buffer())
+                    silence_start_time = None
+                    continue
+                
+                # Проверяем окончание фразы через VAD
+                if vad_processor and ENABLE_VAD and duration >= 1.0:
+                    # Получаем последние N секунд для проверки
+                    check_duration = min(2.0, duration)
+                    audio_data = audio_buffer.get_audio_data()
+                    
+                    # Конвертируем в float для VAD
+                    import numpy as np
+                    if audio_buffer.sample_width == 2:
+                        audio_array = np.frombuffer(audio_data, dtype=np.int16)
+                        audio_float = audio_array.astype(np.float32) / 32768.0
+                    else:
+                        audio_array = np.frombuffer(audio_data, dtype=np.int32)
+                        audio_float = audio_array.astype(np.float32) / 2147483648.0
+                    
+                    # Берем последние check_duration секунд
+                    check_samples = int(check_duration * audio_buffer.sample_rate)
+                    tail_audio = audio_float[-check_samples:] if len(audio_float) > check_samples else audio_float
+                    
+                    # Проверяем энергию в конце буфера
+                    window_size = int(0.02 * audio_buffer.sample_rate)  # 20ms
+                    if len(tail_audio) >= window_size:
+                        # Вычисляем RMS последнего окна
+                        last_window = tail_audio[-window_size:]
+                        rms = np.sqrt(np.mean(last_window ** 2))
+                        
+                        is_silent = rms < VAD_SILENCE_THRESHOLD
+                        
+                        if is_silent:
+                            if silence_start_time is None:
+                                # Начало тишины
+                                silence_start_time = asyncio.get_event_loop().time()
+                            else:
+                                # Проверяем длительность тишины
+                                silence_duration = asyncio.get_event_loop().time() - silence_start_time
+                                
+                                if silence_duration >= VAD_MIN_SILENCE_DURATION:
+                                    # Фраза закончена - обрабатываем
+                                    log.info(f"Phrase ended (silence {silence_duration:.2f}s): {duration:.2f}s, {audio_buffer.frame_count} frames")
+                                    asyncio.create_task(process_buffer())
+                                    silence_start_time = None
+                        else:
+                            # Есть активность - сбрасываем счетчик тишины
+                            silence_start_time = None
+                            
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            log.error(f"Error in phrase end check: {e}", exc_info=True)
+    
+    # Запускаем фоновую задачу проверки окончания фраз
+    check_task = asyncio.create_task(check_phrase_end())
+    
     async def handler(msg: nats.aio.client.Msg):
         """Обработчик входящих аудио фреймов"""
         meta, audio = decode_payload(msg.data)
@@ -155,14 +329,6 @@ async def main():
         
         # Добавляем фрейм в буфер
         audio_buffer.add_frame(audio, meta)
-        
-        # Проверяем, нужно ли обработать буфер
-        if audio_buffer.should_process(MIN_DURATION, MAX_DURATION):
-            duration = audio_buffer.get_duration()
-            log.info(f"Buffer ready for processing: {duration:.2f}s, {audio_buffer.frame_count} frames")
-            
-            # Обрабатываем в фоне
-            asyncio.create_task(process_buffer())
 
     await nc.subscribe(IN_SUBJ, cb=handler)
     log.info("Subscription established, ready to process audio")
@@ -172,6 +338,14 @@ async def main():
             await asyncio.sleep(3600)
     finally:
         log.info("Shutting down...")
+        
+        # Останавливаем задачу проверки фраз
+        check_task.cancel()
+        try:
+            await check_task
+        except asyncio.CancelledError:
+            pass
+        
         try:
             await nc.drain()
         except Exception:

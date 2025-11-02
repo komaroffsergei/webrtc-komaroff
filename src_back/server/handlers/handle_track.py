@@ -52,12 +52,12 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         # Build BGM mixer on top of monitored source
         # bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
 
-        filler = graph.add(
-            LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
-        recorder = graph.add(RecorderNode(filler, batch_frames=512))
+        # filler = graph.add(
+        #     LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
+        recorder = graph.add(RecorderNode(monitor, batch_frames=512))
 
         # Bind upstream audio to pre-initialized NATS node and add into graph
-        nats_node.use_source(source)
+        nats_node.use_source(monitor)
         graph.add(nats_node)
 
         # Subscribe to whisper subject and forward to logs and SSE
@@ -123,9 +123,9 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                      level="info", category="nats")
 
         # Echo back mixed audio to the browser
-        echo = EchoTrackNode(source)
-        audio_transceiver.sender.replaceTrack(echo)
-        echo_ref["node"] = echo
+        # echo = EchoTrackNode(source)
+        # audio_transceiver.sender.replaceTrack(echo)
+        # echo_ref["node"] = echo
         asyncio.create_task(graph.start())
 
         logger.info("Audio graph started")
@@ -148,7 +148,7 @@ async def nats_init():
     async def _core_cb(msg):
         await nats_on_message_core(msg)
 
-    await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
+    # await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
     logger.info("Subscribed to NATS subject (core mode, no JetStream)")
     
     # Сохраняем app для логирования (если доступен через контекст)
