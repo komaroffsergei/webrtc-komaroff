@@ -13,6 +13,13 @@ logger = logging.getLogger("audio.NatsNode")
 from .base import ConsumerNode
 
 
+def _normalize_subject(candidate: Optional[str], default: str) -> str:
+    subject = (candidate or "").strip()
+    if not subject:
+        subject = default
+    return subject[:-1] if subject.endswith(".") else subject
+
+
 class NatsNode(ConsumerNode):
     """
     Publishes audio frames to NATS (core) and fans out downstream.
@@ -23,8 +30,7 @@ class NatsNode(ConsumerNode):
         super().__init__(source_node)
         self.nc: Optional[nats.NATS] = None
         self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
-        raw_subj = os.getenv("AUDIO_SUBJ") or os.getenv("NATS_SUBJECT") or "audio.frames"
-        self.subject = raw_subj if not str(raw_subj).endswith(".") else f"{raw_subj}frames"
+        self.subject = _normalize_subject(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames")
 
     async def ensure_nc(self):
         if self.nc is None or not getattr(self.nc, "is_connected", False):
@@ -56,7 +62,7 @@ class NatsNode(ConsumerNode):
         if nc_url:
             self.nc_url = nc_url
         if subject:
-            self.subject = subject
+            self.subject = _normalize_subject(subject, self.subject or "audio.frames")
         await self.ensure_nc()
 
     async def start(self) -> None:

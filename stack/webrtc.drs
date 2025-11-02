@@ -5,15 +5,17 @@ PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: '
 Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
         ingress: { host: 'webrtc-komaroff.*' } do
   env NATS_URL: NATS_URL,
-      AUDIO_SUBJ: 'voice_chat_audio.',
-      TRANSCRIBE_SUBJ: 'voice_chat_transcription.'
+      NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
+      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
+      NATS_LOGS_SUBJECT: 'voice_chat_logs'
 end
 
 Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-whisper/master', ports: 9000,
         ingress: { host: 'webrtc3.*' } do
    env NATS_URL: NATS_URL,
-       AUDIO_SUBJ: 'voice_chat_audio.',
-       TRANSCRIBE_SUBJ: 'voice_chat_transcription.'
+      NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
+      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
+      NATS_LOGS_SUBJECT: 'voice_chat_logs'
    volume name: 'wisper_models', target: '/app/server/models'
 end
 

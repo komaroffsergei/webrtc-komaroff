@@ -34,10 +34,19 @@ logging.basicConfig(
 )
 log = logging.getLogger("whisper.main")
 
+
+def _resolve_subject(env_value: str, default: str) -> str:
+    value = (env_value or "").strip()
+    if not value:
+        value = default
+    return value[:-1] if value.endswith(".") else value
+
+
 # Конфигурация
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-AUDIO_SUBJECT = os.getenv("AUDIO_SUBJ", "audio.frames")
-WHISPER_SUBJECT = os.getenv("WHISPER_SUBJ", "whisper.transcription")
+NATS_AUDIO_SUBJECT = _resolve_subject(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames")
+NATS_WHISPER_SUBJECT = _resolve_subject(os.getenv("NATS_WHISPER_SUBJECT"), "whisper.transcription")
+NATS_LOGS_SUBJECT = _resolve_subject(os.getenv("NATS_LOGS_SUBJECT"), "whisper.logs")
 
 MODEL_PATH = os.getenv("WHISPER_MODEL", "models/whisper-medium-ru-fine-ct2")
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", "recordings")
@@ -66,7 +75,17 @@ async def main():
         max_reconnect_attempts=-1,
         reconnect_time_wait=2
     )
-    log.info(f"Connected to NATS for publishing: {nc.connected_url.netloc}")
+    log.info(f"Connected to NATS: {nc.connected_url.netloc}")
+    log.info(f"Subjects: audio={NATS_AUDIO_SUBJECT}, whisper={NATS_WHISPER_SUBJECT}, logs={NATS_LOGS_SUBJECT}")
+    
+    # Настраиваем отправку логов в NATS
+    from nats_log_handler import NatsLogHandler
+    whisper_logger = logging.getLogger("whisper")
+    if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
+        nats_handler = NatsLogHandler(nc, NATS_LOGS_SUBJECT, level=logging.DEBUG)
+        nats_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+        whisper_logger.addHandler(nats_handler)
+        log.info("NATS log handler enabled")
     
     # Инициализация системы команд
     command_registry = CommandRegistry()
@@ -81,7 +100,7 @@ async def main():
     # 1. NATS Receiver - получение аудио из NATS
     nats_receiver = NatsReceiverNode(
         nats_url=NATS_URL,
-        subject=AUDIO_SUBJECT
+        subject=NATS_AUDIO_SUBJECT
     )
     
     # 1.5. Raw Recorder - запись сырого аудио для диагностики
@@ -116,9 +135,11 @@ async def main():
         transcription_msg = {
             "type": "transcription",
             "text": text,
-            "segments": len(result["segments"])
+            "segments": len(result["segments"]),
+            "audio_duration": result.get("audio_duration", 0),
+            "transcription_time": result.get("transcription_time", 0)
         }
-        await nc.publish(WHISPER_SUBJECT, json.dumps(transcription_msg).encode("utf-8"))
+        await nc.publish(NATS_WHISPER_SUBJECT, json.dumps(transcription_msg).encode("utf-8"))
         log.info(f"Published transcription: '{text}'")
         
         # Проверяем на команды
@@ -130,7 +151,7 @@ async def main():
             # Отправляем команду
             cmd_result = command_result["result"]
             if "error" not in cmd_result:
-                await nc.publish(WHISPER_SUBJECT, json.dumps(cmd_result).encode("utf-8"))
+                await nc.publish(NATS_WHISPER_SUBJECT, json.dumps(cmd_result).encode("utf-8"))
                 log.info(f"Published command: {command_result['command']}")
     
     # Связываем ноды через callback

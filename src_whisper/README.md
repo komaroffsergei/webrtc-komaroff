@@ -48,8 +48,9 @@ src_whisper/
 ```bash
 # NATS
 NATS_URL=nats://localhost:4222
-AUDIO_SUBJ=audio.frames           # Входящий subject
-WHISPER_SUBJ=whisper.transcription # Исходящий subject
+NATS_AUDIO_SUBJECT=audio.frames            # Входящий subject
+NATS_WHISPER_SUBJECT=whisper.transcription # Исходящий subject
+NATS_LOGS_SUBJECT=whisper.logs             # Subject для логов
 
 # Whisper
 WHISPER_MODEL=models/whisper-medium-ru-fine-ct2

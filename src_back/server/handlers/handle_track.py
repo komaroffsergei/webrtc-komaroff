@@ -15,6 +15,13 @@ from ..utils.pc_lifecycle import attach_pc_lifecycle
 logger = logging.getLogger("handle_track")
 
 
+def _resolve_subject(env_key: str, default: str) -> str:
+    value = os.getenv(env_key, "").strip()
+    if not value:
+        return default
+    return value[:-1] if value.endswith(".") else value
+
+
 async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     nats_node = await nats_init()
     logger.info(f"on_track: received kind={track.kind}")
@@ -62,8 +69,8 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
         # Subscribe to whisper subject and forward to logs and SSE
         await nats_node.ensure_nc()
-        in_subject = os.getenv("AUDIO_SUBJ", "audio.frames")
-        whisper_subject = os.getenv("WHISPER_SUBJ", "whisper.transcription")
+        nats_whisper_subject = _resolve_subject("NATS_WHISPER_SUBJECT", "whisper.transcription")
+        nats_logs_subject = _resolve_subject("NATS_LOGS_SUBJECT", "whisper.logs")
 
         async def _whisper_cb(msg):
             try:
@@ -88,8 +95,26 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                 if msg_type == "transcription":
                     text = data.get("text", "").strip()
                     if text:
-                        await sse_log(app, f"Transcription: {text}", 
-                                     level="info", category="nats")
+                        audio_duration = data.get("audio_duration")
+                        transcription_time = data.get("transcription_time")
+                        segment_count = data.get("segments")
+                        details = []
+                        if isinstance(audio_duration, (int, float)):
+                            details.append(f"audio={audio_duration:.2f}s")
+                        if isinstance(transcription_time, (int, float)):
+                            details.append(f"time={transcription_time:.2f}s")
+                        if isinstance(segment_count, int):
+                            details.append(f"segments={segment_count}")
+                        details_suffix = f" ({', '.join(details)})" if details else ""
+                        await sse_log(
+                            app,
+                            f"Transcription: {text}{details_suffix}",
+                            level="info",
+                            category="nats",
+                            audio_duration=audio_duration,
+                            transcription_time=transcription_time,
+                            segments=segment_count
+                        )
                         
                         # Отправляем транскрипцию в чат
                         await sse_message(app, text, descr="transcription")
@@ -117,9 +142,36 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                 await sse_log(app, f"NATS: Whisper callback error - {str(e)}", 
                              level="error", category="nats")
 
-        await nats_node.nc.subscribe(whisper_subject, cb=_whisper_cb)
-        logger.info(f"Subscribed to whisper subject: {whisper_subject}")
-        await sse_log(app, f"NATS: Subscribed to {whisper_subject}", 
+        # Подписка на транскрипции и команды от Whisper
+        await nats_node.nc.subscribe(nats_whisper_subject, cb=_whisper_cb)
+        logger.info(f"Subscribed to whisper subject: {nats_whisper_subject}")
+        await sse_log(app, f"NATS: Subscribed to {nats_whisper_subject}", 
+                     level="info", category="nats")
+        
+        # Подписка на логи от Whisper сервиса
+        async def _whisper_logs_cb(msg):
+            try:
+                log_data = json.loads(msg.data.decode("utf-8"))
+                
+                # Отправляем лог через SSE
+                await sse_log(
+                    app,
+                    f"[Whisper] {log_data.get('message', '')}",
+                    level=log_data.get('level', 'info'),
+                    category='whisper',
+                    logger=log_data.get('logger', 'whisper'),
+                    module=log_data.get('module', ''),
+                    function=log_data.get('function', ''),
+                    line=log_data.get('line'),
+                    source_timestamp=log_data.get('timestamp')
+                )
+                
+            except Exception as e:
+                logger.warning(f"Error processing whisper log: {e}")
+        
+        await nats_node.nc.subscribe(nats_logs_subject, cb=_whisper_logs_cb)
+        logger.info(f"Subscribed to whisper logs: {nats_logs_subject}")
+        await sse_log(app, f"NATS: Subscribed to {nats_logs_subject}", 
                      level="info", category="nats")
 
         # Echo back mixed audio to the browser
@@ -136,9 +188,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 async def nats_init():
     nats_node = NatsNode()
     nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    raw_subj = os.getenv("AUDIO_SUBJ", "audio.frames")
-    nats_subject = raw_subj if not str(raw_subj).endswith(".") else f"{raw_subj}frames"
-    nats_durable = os.getenv("NATS_DURABLE", "debug_reader")
+    nats_subject = _resolve_subject("NATS_AUDIO_SUBJECT", "audio.frames")
     await nats_node.connect(
         nc_url=nats_url,
         subject=nats_subject

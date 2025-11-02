@@ -10,6 +10,7 @@ import nats
 from dotenv import load_dotenv
 
 from audio_buffer import AudioBuffer
+from nats_log_handler import NatsLogHandler
 from whisper_processor import WhisperProcessor
 from vad_processor import VADProcessor
 from voice_commands import CommandRegistry, CommandMatcher
@@ -25,10 +26,18 @@ logging.basicConfig(
 )
 log = logging.getLogger("whisper")
 
+
+def _resolve_subject(env_value: Optional[str], default: str) -> str:
+    subject = (env_value or "").strip()
+    if not subject:
+        subject = default
+    return subject[:-1] if subject.endswith(".") else subject
+
+
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-IN_SUBJ = os.getenv("AUDIO_SUBJ") or os.getenv("NATS_SUBJECT") or "audio.frames"
-IN_SUBJ = IN_SUBJ if not str(IN_SUBJ).endswith(".") else f"{IN_SUBJ}frames"
-OUT_SUBJ = os.getenv("WHISPER_SUBJ") or "whisper.transcription"
+NATS_AUDIO_SUBJECT = _resolve_subject(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames")
+NATS_WHISPER_SUBJECT = _resolve_subject(os.getenv("NATS_WHISPER_SUBJECT"), "whisper.transcription")
+NATS_LOGS_SUBJECT = _resolve_subject(os.getenv("NATS_LOGS_SUBJECT"), "whisper.logs")
 
 MODEL_PATH = os.getenv("WHISPER_MODEL", "models/whisper-medium-ru-fine-ct2")
 RECORDINGS_DIR = os.getenv("RECORDINGS_DIR", "recordings")
@@ -110,7 +119,15 @@ async def main():
         ping_interval=10,
     )
     log.info(f"Connected to NATS: {nc.connected_url.netloc}")
-    log.info(f"Listening: {IN_SUBJ}, Publishing: {OUT_SUBJ}")
+    log.info(f"Listening: {NATS_AUDIO_SUBJECT}, Publishing: {NATS_WHISPER_SUBJECT}")
+
+    # Настраиваем отправку логов в NATS
+    whisper_logger = logging.getLogger("whisper")
+    if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
+        nats_handler = NatsLogHandler(nc, NATS_LOGS_SUBJECT, level=logging.DEBUG)
+        nats_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
+        whisper_logger.addHandler(nats_handler)
+        log.info(f"NATS log handler enabled: subject={NATS_LOGS_SUBJECT}")
 
     async def process_buffer():
         """Обработать накопленный аудио буфер"""
@@ -196,12 +213,21 @@ async def main():
                     log.info(f"Saved full recording: {wav_path}")
             
             # Транскрибируем
-            log.info(f"Transcribing {len(audio_data)} bytes...")
+            bytes_per_sample = max(audio_buffer.sample_width * max(audio_buffer.channels, 1), 1)
+            audio_duration = len(audio_data) / (bytes_per_sample * max(audio_buffer.sample_rate, 1))
+            log.info(f"Transcribing audio: duration={audio_duration:.2f}s bytes={len(audio_data)}")
+            start_time = asyncio.get_event_loop().time()
             segments = whisper_processor.transcribe_audio(
                 audio_data,
                 sample_rate=audio_buffer.sample_rate,
                 channels=audio_buffer.channels,
                 sample_width=audio_buffer.sample_width
+            )
+            transcription_time = asyncio.get_event_loop().time() - start_time
+            segment_count = len(segments) if segments else 0
+            log.info(
+                f"Transcription finished: audio_duration={audio_duration:.2f}s "
+                f"wall_time={transcription_time:.2f}s segments={segment_count}"
             )
             
             if not segments:
@@ -217,9 +243,11 @@ async def main():
             transcription_msg = {
                 "type": "transcription",
                 "text": full_text,
-                "segments": len(segments)
+                "segments": len(segments),
+                "audio_duration": audio_duration,
+                "transcription_time": transcription_time
             }
-            await nc.publish(OUT_SUBJ, json.dumps(transcription_msg).encode("utf-8"))
+            await nc.publish(NATS_WHISPER_SUBJECT, json.dumps(transcription_msg).encode("utf-8"))
             
             # Проверяем на команды
             command_result = await command_matcher.process_transcription(full_text)
@@ -230,7 +258,7 @@ async def main():
                 # Отправляем результат команды
                 cmd_result = command_result["result"]
                 if "error" not in cmd_result:
-                    await nc.publish(OUT_SUBJ, json.dumps(cmd_result).encode("utf-8"))
+                    await nc.publish(NATS_WHISPER_SUBJECT, json.dumps(cmd_result).encode("utf-8"))
             else:
                 log.debug("No command matched")
             
@@ -330,7 +358,7 @@ async def main():
         # Добавляем фрейм в буфер
         audio_buffer.add_frame(audio, meta)
 
-    await nc.subscribe(IN_SUBJ, cb=handler)
+    await nc.subscribe(NATS_AUDIO_SUBJECT, cb=handler)
     log.info("Subscription established, ready to process audio")
 
     try:

@@ -20,12 +20,12 @@ class WhisperTranscriberNode(BaseNode):
     """
 
     def __init__(
-        self,
-        model_path: str = "models/whisper-medium-ru-fine-ct2",
-        device: str = "cpu",
-        compute_type: str = "int8",
-        language: str = "ru",
-        name: str = "whisper_transcriber"
+            self,
+            model_path: str = "models/whisper-medium-ru-fine-ct2",
+            device: str = "cpu",
+            compute_type: str = "int8",
+            language: str = "ru",
+            name: str = "whisper_transcriber"
     ):
         """
         Args:
@@ -85,6 +85,8 @@ class WhisperTranscriberNode(BaseNode):
             return
 
         try:
+            import time
+            start_time = time.time()
             self.logger.info(f"Transcribing phrase ({phrase.duration:.2f}s)")
 
             # Ресемплируем если нужно (Whisper ожидает 16kHz)
@@ -107,15 +109,21 @@ class WhisperTranscriberNode(BaseNode):
 
             # Объединяем текст
             full_text = " ".join(seg["text"] for seg in segments_list)
-
             if full_text.strip():
-                self.logger.info(f"Transcription: '{full_text}'")
+                transcription_time = time.time() - start_time
+                rt_factor = transcription_time / phrase.duration if phrase.duration else 0.0
+                self.logger.info(
+                    f"Transcription completed: '{full_text}' "
+                    f"(audio: {phrase.duration:.2f}s, transcription: {transcription_time:.2f}s, "
+                    f"RTF: {rt_factor:.2f}x)"
+                )
 
-                # Отправляем результат
                 await self.emit({
                     "text": full_text,
                     "segments": segments_list,
-                    "phrase": phrase
+                    "phrase": phrase,
+                    "transcription_time": transcription_time,
+                    "audio_duration": phrase.duration
                 })
             else:
                 self.logger.debug("Empty transcription")
@@ -126,10 +134,10 @@ class WhisperTranscriberNode(BaseNode):
     def _transcribe(self, audio) -> list:
         """
         Транскрибировать аудио (синхронно).
-
+ 
         Args:
             audio: numpy array (float32, 16kHz)
-
+ 
         Returns:
             list: список сегментов с текстом
         """
@@ -143,7 +151,7 @@ class WhisperTranscriberNode(BaseNode):
             condition_on_previous_text=False,
             # suppress_tokens=[",", ".", "!", "?", "…", ";", ":"]
         )
-
+ 
         results = []
         for segment in segments:
             results.append({
@@ -152,30 +160,30 @@ class WhisperTranscriberNode(BaseNode):
                 "end": segment.end,
                 "confidence": getattr(segment, 'avg_logprob', 0.0)
             })
-
+ 
         return results
-
+ 
     def _resample(self, audio, orig_sr: int, target_sr: int):
         """
         Ресемплировать аудио.
-
+ 
         Args:
             audio: numpy array
             orig_sr: исходная частота
             target_sr: целевая частота
-
+ 
         Returns:
             numpy array: ресемплированное аудио
         """
         import numpy as np
-
+ 
         if orig_sr == target_sr:
             return audio
-
+ 
         duration = len(audio) / orig_sr
         target_length = int(duration * target_sr)
-
+ 
         indices = np.linspace(0, len(audio) - 1, target_length)
         resampled = np.interp(indices, np.arange(len(audio)), audio)
-
+ 
         return resampled.astype(np.float32)

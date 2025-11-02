@@ -180,12 +180,12 @@ async def on_transcription(result: dict):
     text = result["text"]
     
     # Отправка транскрипции в NATS
-    await nc.publish(WHISPER_SUBJECT, ...)
+    await nc.publish(NATS_WHISPER_SUBJECT, ...)
     
     # Проверка команд
     command_result = await command_matcher.process_transcription(text)
     if command_result:
-        await nc.publish(WHISPER_SUBJECT, ...)
+        await nc.publish(NATS_WHISPER_SUBJECT, ...)
 ```
 
 ## Преимущества модульной архитектуры
@@ -262,8 +262,9 @@ noise_filter.set_callback(file_saver.process)
 ```bash
 # NATS
 NATS_URL=nats://localhost:4222
-AUDIO_SUBJ=audio.frames
-WHISPER_SUBJ=whisper.transcription
+NATS_AUDIO_SUBJECT=audio.frames
+NATS_WHISPER_SUBJECT=whisper.transcription
+NATS_LOGS_SUBJECT=whisper.logs
 
 # Whisper
 WHISPER_MODEL=models/whisper-medium-ru-fine-ct2
