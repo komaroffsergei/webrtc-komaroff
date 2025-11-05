@@ -1,0 +1,10 @@
+services:
+  src_whisper_ruby:
+    image: ${REGISTRY_HOST}/src_whisper_ruby/${CI_COMMIT_BRANCH}
+    build:
+      context: ../src
+      additional_contexts:
+        docker: ../docker
+      dockerfile: ../docker/ruby/Dockerfile
+    ports:
+      - "7000:7000"
