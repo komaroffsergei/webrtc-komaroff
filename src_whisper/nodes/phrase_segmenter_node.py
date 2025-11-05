@@ -10,6 +10,14 @@ from dataclasses import dataclass
 
 from .base_node import BaseNode
 
+try:
+    from utils.audio_utils import resample_audio
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from utils.audio_utils import resample_audio
+
 
 @dataclass
 class PhraseSegment:
@@ -169,7 +177,7 @@ class PhraseSegmenterNode(BaseNode):
             self.logger.debug(f"Checking buffer: {buffer_duration:.2f}s, {len(audio)} samples")
             
             if self.buffer_sample_rate != self.target_sample_rate:
-                audio = self._resample(audio, self.buffer_sample_rate, self.target_sample_rate)
+                audio = resample_audio(audio, self.buffer_sample_rate, self.target_sample_rate)
             
             vad_duration = len(audio) / self.target_sample_rate
             if vad_duration < 1.0:
@@ -265,15 +273,3 @@ class PhraseSegmenterNode(BaseNode):
             self.logger.error(f"Error in VAD get_timestamps: {e}", exc_info=True)
             return []
 
-    def _resample(self, audio: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
-        """Ресемплировать аудио."""
-        if orig_sr == target_sr:
-            return audio
-        
-        duration = len(audio) / orig_sr
-        target_length = int(duration * target_sr)
-        
-        indices = np.linspace(0, len(audio) - 1, target_length)
-        resampled = np.interp(indices, np.arange(len(audio)), audio)
-        
-        return resampled.astype(np.float32)

@@ -11,6 +11,14 @@ from faster_whisper import WhisperModel
 from .base_node import BaseNode
 from .phrase_segmenter_node import PhraseSegment
 
+try:
+    from utils.audio_utils import resample_audio
+except ImportError:
+    import sys
+    import os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from utils.audio_utils import resample_audio
+
 
 class WhisperTranscriberNode(BaseNode):
     """
@@ -97,7 +105,7 @@ class WhisperTranscriberNode(BaseNode):
             if phrase.sample_rate != 16000:
                 audio = await asyncio.get_event_loop().run_in_executor(
                     None,
-                    self._resample,
+                    resample_audio,
                     audio,
                     phrase.sample_rate,
                     16000
@@ -145,17 +153,13 @@ class WhisperTranscriberNode(BaseNode):
         Returns:
             list: список сегментов с текстом
         """
-        # VAD отключен - уже отработал в PhraseSegmenterNode
-
-
         segments, info = self.model.transcribe(
             audio,
             language=self.language,
             beam_size=5,
             without_timestamps=True,
-            vad_filter=False,  # Отключаем встроенный VAD
-            condition_on_previous_text=False,
-            # suppress_tokens=[",", ".", "!", "?", "…", ";", ":"]
+            vad_filter=False,
+            condition_on_previous_text=False
         )
  
         results = []
@@ -169,27 +173,3 @@ class WhisperTranscriberNode(BaseNode):
  
         return results
  
-    def _resample(self, audio, orig_sr: int, target_sr: int):
-        """
-        Ресемплировать аудио.
- 
-        Args:
-            audio: numpy array
-            orig_sr: исходная частота
-            target_sr: целевая частота
- 
-        Returns:
-            numpy array: ресемплированное аудио
-        """
-        import numpy as np
- 
-        if orig_sr == target_sr:
-            return audio
- 
-        duration = len(audio) / orig_sr
-        target_length = int(duration * target_sr)
- 
-        indices = np.linspace(0, len(audio) - 1, target_length)
-        resampled = np.interp(indices, np.arange(len(audio)), audio)
- 
-        return resampled.astype(np.float32)
