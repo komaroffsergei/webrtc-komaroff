@@ -8,6 +8,7 @@ import asyncio
 import logging
 import os
 import json
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Загружаем конфигурацию
@@ -80,12 +81,16 @@ async def main():
     
     # Настраиваем отправку логов в NATS
     from nats_log_handler import NatsLogHandler
+    from nats_logger import NatsLogger
     whisper_logger = logging.getLogger("whisper")
     if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
         nats_handler = NatsLogHandler(nc, NATS_LOGS_SUBJECT, level=logging.DEBUG)
         nats_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
         whisper_logger.addHandler(nats_handler)
         log.info("NATS log handler enabled")
+    
+    # Инициализируем унифицированный NATS логгер
+    nats_logger = NatsLogger(nc, NATS_LOGS_SUBJECT, service_name="whisper")
     
     # Инициализация системы команд
     command_registry = CommandRegistry()
@@ -130,14 +135,30 @@ async def main():
     async def on_transcription(result: dict):
         """Обработать транскрипцию и отправить в NATS."""
         text = result["text"]
+        segments = len(result["segments"])
+        audio_duration = result.get("audio_duration", 0)
+        transcription_time = result.get("transcription_time", 0)
+        
+        # Логируем транскрипцию через NatsLogger
+        start_timestamp = result.get("start_timestamp")
+        end_timestamp = datetime.utcnow().isoformat() + "Z"
+        
+        await nats_logger.log_transcription(
+            text=text,
+            segments=segments,
+            audio_duration=audio_duration,
+            transcription_time=transcription_time,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp
+        )
         
         # Отправляем транскрипцию
         transcription_msg = {
             "type": "transcription",
             "text": text,
-            "segments": len(result["segments"]),
-            "audio_duration": result.get("audio_duration", 0),
-            "transcription_time": result.get("transcription_time", 0)
+            "segments": segments,
+            "audio_duration": audio_duration,
+            "transcription_time": transcription_time
         }
         await nc.publish(NATS_WHISPER_SUBJECT, json.dumps(transcription_msg).encode("utf-8"))
         log.info(f"Published transcription: '{text}'")

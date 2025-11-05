@@ -224,33 +224,42 @@
                 
                 // Специальное форматирование для логов транскрипции Whisper
                 if (log.category === 'whisper' && message) {
+                    // Используем структурированные данные из NatsLogger, если доступны
                     if (message.includes('Transcription started:')) {
-                        const audioMatch = message.match(/audio_duration=([\d.]+)s/);
-                        if (audioMatch) {
-                            const audioDuration = parseFloat(audioMatch[1]);
+                        const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
+                        const audioBytes = log.data.audio_bytes || parseInt((message.match(/bytes=(\d+)/) || [])[1]);
+                        
+                        if (audioDuration) {
                             message = `Transcription STARTED | audio: ${audioDuration.toFixed(2)}s`;
+                            if (audioBytes) {
+                                message += ` | size: ${(audioBytes / 1024).toFixed(1)}KB`;
+                            }
                         }
                     } else if (message.includes('Transcription completed:')) {
-                        const audioMatch = message.match(/audio_duration=([\d.]+)s/);
-                        const transMatch = message.match(/transcription_time=([\d.]+)s/);
-                        const segmentsMatch = message.match(/segments=(\d+)/);
-                        const startMatch = message.match(/start=([\d\-:.TZ]+)/);
-                        const endMatch = message.match(/end=([\d\-:.TZ]+)/);
+                        // Приоритет структурированным данным из extra полей
+                        const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
+                        const transTime = log.data.transcription_time || parseFloat((message.match(/transcription_time=([\d.]+)s/) || [])[1]);
+                        const segments = log.data.segments || parseInt((message.match(/segments=(\d+)/) || [])[1]);
+                        const rtf = log.data.rtf;
+                        const startTimestamp = log.data.start || (message.match(/start=([\d\-:.TZ]+)/) || [])[1];
+                        const endTimestamp = log.data.end || (message.match(/end=([\d\-:.TZ]+)/) || [])[1];
+                        const text = log.data.text;
                         
-                        if (audioMatch && transMatch) {
-                            const audioDuration = parseFloat(audioMatch[1]);
-                            const transTime = parseFloat(transMatch[1]);
-                            const segments = segmentsMatch ? parseInt(segmentsMatch[1]) : 0;
-                            const rtf = audioDuration > 0 ? (transTime / audioDuration).toFixed(2) : '0.00';
+                        if (audioDuration && transTime) {
+                            const calculatedRtf = rtf || (audioDuration > 0 ? (transTime / audioDuration) : 0);
                             
                             let timeInfo = '';
-                            if (startMatch && endMatch) {
-                                const startTime = new Date(startMatch[1]).toLocaleTimeString();
-                                const endTime = new Date(endMatch[1]).toLocaleTimeString();
+                            if (startTimestamp && endTimestamp) {
+                                const startTime = new Date(startTimestamp).toLocaleTimeString();
+                                const endTime = new Date(endTimestamp).toLocaleTimeString();
                                 timeInfo = ` | ${startTime} -> ${endTime}`;
                             }
                             
-                            message = `Transcription COMPLETED | audio: ${audioDuration.toFixed(2)}s | time: ${transTime.toFixed(2)}s | RTF: ${rtf}x | segments: ${segments}${timeInfo}`;
+                            message = `Transcription COMPLETED | audio: ${audioDuration.toFixed(2)}s | time: ${transTime.toFixed(2)}s | RTF: ${calculatedRtf.toFixed(2)}x | segments: ${segments || 0}${timeInfo}`;
+                            
+                            if (text) {
+                                message += ` | text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`;
+                            }
                         }
                     }
                 }

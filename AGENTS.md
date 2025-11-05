@@ -34,6 +34,59 @@ await sse_log(app, 'WebRTC connection established', level='info', category='webr
 await sse_warning(app, 'mic_too_loud')
 ```
 
+## Унифицированное логирование через NATS (NatsLogger)
+
+### Инициализация и использование
+
+```python
+from nats_logger import NatsLogger
+
+# Создать логгер для вашего сервиса
+nats_logger = NatsLogger(
+    nc=nats_client,              # NATS клиент
+    subject="service.logs",      # NATS subject для логов
+    service_name="my_service"    # Имя вашего сервиса
+)
+
+# Базовые логи
+await nats_logger.log_info("Operation completed", category="system")
+await nats_logger.log_warning("High latency detected", category="audio", latency_ms=250)
+await nats_logger.log_error("Connection failed", category="nats", error_code=500)
+
+# Логирование транскрипции
+start_ts = await nats_logger.log_transcription_start(audio_duration=3.45, audio_bytes=331200)
+await nats_logger.log_transcription(
+    text="Hello world",
+    segments=2,
+    audio_duration=3.45,
+    transcription_time=1.23,
+    start_timestamp=start_ts,
+    end_timestamp=datetime.utcnow().isoformat() + "Z"
+)
+
+# Произвольные события с доп. полями
+await nats_logger.log_event(
+    event_type="connection",
+    message="WebRTC connected",
+    category="webrtc",
+    level="info",
+    peer_id="abc123",
+    codec="opus"
+)
+```
+
+### Преимущества NatsLogger
+
+- **Унифицированный формат** - все сервисы используют одну структуру
+- **Автоматическая передача в браузер** - логи отображаются в Debug Panel
+- **Структурированные данные** - легко парсить и фильтровать
+- **Дополнительные поля** - передавайте любые параметры через kwargs
+- **Специализированные методы** - для транскрипции, событий и т.д.
+
+### Документация
+
+См. `src_whisper/NATS_LOGGER_USAGE.md` для подробной документации и примеров.
+
 ### Обратная совместимость
 
 ```python

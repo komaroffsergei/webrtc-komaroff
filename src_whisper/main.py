@@ -3,6 +3,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime
 from typing import Tuple, Optional
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from dotenv import load_dotenv
 
 from audio_buffer import AudioBuffer
 from nats_log_handler import NatsLogHandler
+from nats_logger import NatsLogger
 from whisper_processor import WhisperProcessor
 from vad_processor import VADProcessor
 from voice_commands import CommandRegistry, CommandMatcher
@@ -128,6 +130,9 @@ async def main():
         nats_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
         whisper_logger.addHandler(nats_handler)
         log.info(f"NATS log handler enabled: subject={NATS_LOGS_SUBJECT}")
+    
+    # Инициализируем унифицированный NATS логгер
+    nats_logger = NatsLogger(nc, NATS_LOGS_SUBJECT, service_name="whisper")
 
     async def process_buffer():
         """Обработать накопленный аудио буфер"""
@@ -216,10 +221,11 @@ async def main():
             bytes_per_sample = max(audio_buffer.sample_width * max(audio_buffer.channels, 1), 1)
             audio_duration = len(audio_data) / (bytes_per_sample * max(audio_buffer.sample_rate, 1))
             
-            # Логируем начало транскрипции
-            from datetime import datetime
-            transcription_start_iso = datetime.utcnow().isoformat() + "Z"
-            log.info(f"Transcription started: audio_duration={audio_duration:.2f}s bytes={len(audio_data)}")
+            # Логируем начало транскрипции через NatsLogger
+            transcription_start_iso = await nats_logger.log_transcription_start(
+                audio_duration=audio_duration,
+                audio_bytes=len(audio_data)
+            )
             
             start_time = asyncio.get_event_loop().time()
             segments = whisper_processor.transcribe_audio(
@@ -229,14 +235,19 @@ async def main():
                 sample_width=audio_buffer.sample_width
             )
             transcription_time = asyncio.get_event_loop().time() - start_time
-            transcription_end_iso = datetime.utcnow().isoformat() + "Z"
             segment_count = len(segments) if segments else 0
             
-            # Логируем окончание транскрипции
-            log.info(
-                f"Transcription completed: audio_duration={audio_duration:.2f}s "
-                f"transcription_time={transcription_time:.2f}s segments={segment_count} "
-                f"start={transcription_start_iso} end={transcription_end_iso}"
+            # Получаем текст транскрипции
+            text = " ".join([seg["text"].strip() for seg in segments if seg.get("text")])
+            
+            # Логируем окончание транскрипции через NatsLogger
+            await nats_logger.log_transcription(
+                text=text,
+                segments=segment_count,
+                audio_duration=audio_duration,
+                transcription_time=transcription_time,
+                start_timestamp=transcription_start_iso,
+                end_timestamp=datetime.utcnow().isoformat() + "Z"
             )
             
             if not segments:

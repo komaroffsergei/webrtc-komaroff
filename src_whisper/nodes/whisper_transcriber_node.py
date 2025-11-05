@@ -86,7 +86,10 @@ class WhisperTranscriberNode(BaseNode):
 
         try:
             import time
+            from datetime import datetime
+            
             start_time = time.time()
+            start_timestamp = datetime.utcnow().isoformat() + "Z"
             self.logger.info(f"Transcribing phrase ({phrase.duration:.2f}s)")
 
             # Ресемплируем если нужно (Whisper ожидает 16kHz)
@@ -123,7 +126,8 @@ class WhisperTranscriberNode(BaseNode):
                     "segments": segments_list,
                     "phrase": phrase,
                     "transcription_time": transcription_time,
-                    "audio_duration": phrase.duration
+                    "audio_duration": phrase.duration,
+                    "start_timestamp": start_timestamp
                 })
             else:
                 self.logger.debug("Empty transcription")
@@ -142,6 +146,8 @@ class WhisperTranscriberNode(BaseNode):
             list: список сегментов с текстом
         """
         # VAD отключен - уже отработал в PhraseSegmenterNode
+
+
         segments, info = self.model.transcribe(
             audio,
             language=self.language,
