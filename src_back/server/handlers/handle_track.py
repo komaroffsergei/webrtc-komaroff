@@ -1,16 +1,26 @@
 import asyncio
+import json
 import logging
 import os
-import json
 from typing import Dict, Any
 
 from aiortc import RTCPeerConnection
-from ..processors import TrackSourceNode, BgmMixerNode, LossFillerNode, RecorderNode, EchoTrackNode, AudioMonitorNode
+from ..processors import (
+    TrackSourceNode,
+    BgmMixerNode,
+    LossFillerNode,
+    RecorderNode,
+    EchoTrackNode,
+    AudioMonitorNode,
+    NatsNode,
+    PhraseSegmenterNode,
+)
 from ..processors.graph import AudioGraph
-from ..processors.nats_node import NatsNode
 from ..utils.config import STATIC_DIR
-from .sse import sse_log, sse_message, sse_warning
 from ..utils.pc_lifecycle import attach_pc_lifecycle
+from ..voice_commands import CommandRegistry, CommandMatcher
+from ..commands import register_alert_command
+from .sse import sse_command, sse_log, sse_message, sse_warning
 
 logger = logging.getLogger("handle_track")
 
@@ -67,86 +77,94 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         nats_node.use_source(source)
         graph.add(nats_node)
 
-        # Subscribe to whisper subject and forward to logs and SSE
         await nats_node.ensure_nc()
         nats_whisper_subject = _resolve_subject("NATS_WHISPER_SUBJECT", "whisper.transcription")
         nats_logs_subject = _resolve_subject("NATS_LOGS_SUBJECT", "whisper.logs")
 
-        async def _whisper_cb(msg):
-            try:
-                # Whisper отправляет JSON напрямую
-                try:
-                    data = json.loads(msg.data.decode("utf-8"))
-                except Exception:
-                    # Fallback на старый формат (meta_len + meta + audio)
-                    raw_data = msg.data
-                    meta_len = int.from_bytes(raw_data[:4], "big") if len(raw_data) >= 4 else 0
-                    meta = {}
-                    if meta_len and 4 + meta_len <= len(raw_data):
-                        try:
-                            meta = json.loads(raw_data[4:4+meta_len].decode("utf-8"))
-                        except Exception:
-                            meta = {}
-                    data = meta
-                
-                msg_type = data.get("type", "unknown")
-                
-                # Обработка транскрипции
-                if msg_type == "transcription":
-                    text = data.get("text", "").strip()
-                    if text:
-                        audio_duration = data.get("audio_duration")
-                        transcription_time = data.get("transcription_time")
-                        segment_count = data.get("segments")
-                        details = []
-                        if isinstance(audio_duration, (int, float)):
-                            details.append(f"audio={audio_duration:.2f}s")
-                        if isinstance(transcription_time, (int, float)):
-                            details.append(f"time={transcription_time:.2f}s")
-                        if isinstance(segment_count, int):
-                            details.append(f"segments={segment_count}")
-                        details_suffix = f" ({', '.join(details)})" if details else ""
-                        await sse_log(
-                            app,
-                            f"Transcription: {text}{details_suffix}",
-                            level="info",
-                            category="nats",
-                            audio_duration=audio_duration,
-                            transcription_time=transcription_time,
-                            segments=segment_count
-                        )
-                        
-                        # Отправляем транскрипцию в чат
-                        await sse_message(app, text, descr="transcription")
-                
-                # Обработка команды от Whisper
-                elif msg_type == "command":
-                    method = data.get("method")
-                    params = data.get("params", {})
-                    
-                    if method:
-                        await sse_log(app, f"Voice command: {method}", 
-                                     level="info", category="nats")
-                        
-                        # Отправляем команду клиенту через SSE
-                        from ..handlers.sse import sse_command
-                        await sse_command(app, method, params)
-                
-                # Обработка других типов
-                else:
-                    text_line = f"[whisper] type={msg_type} data={data}"
-                    await sse_log(app, text_line, level="debug", category="nats")
-                
-            except Exception as e:
-                logger.warning(f"whisper cb error: {e}")
-                await sse_log(app, f"NATS: Whisper callback error - {str(e)}", 
-                             level="error", category="nats")
+        command_registry = CommandRegistry()
+        register_alert_command(command_registry)
+        command_matcher = CommandMatcher(command_registry)
 
-        # Подписка на транскрипции и команды от Whisper
-        await nats_node.nc.subscribe(nats_whisper_subject, cb=_whisper_cb)
-        logger.info(f"Subscribed to whisper subject: {nats_whisper_subject}")
-        await sse_log(app, f"NATS: Subscribed to {nats_whisper_subject}", 
-                     level="info", category="nats")
+        logger.info("Registered %d voice commands", len(command_registry.commands))
+
+        async def handle_transcription(data: Dict[str, Any]) -> None:
+            try:
+                text = str(data.get("text", "")).strip()
+                if not text:
+                    return
+
+                audio_duration = data.get("audio_duration")
+                transcription_time = data.get("transcription_time")
+                segment_count = data.get("segments")
+                details = []
+                if isinstance(audio_duration, (int, float)):
+                    details.append(f"audio={audio_duration:.2f}s")
+                if isinstance(transcription_time, (int, float)):
+                    details.append(f"time={transcription_time:.2f}s")
+                if isinstance(segment_count, int):
+                    details.append(f"segments={segment_count}")
+                details_suffix = f" ({', '.join(details)})" if details else ""
+
+                await sse_log(
+                    app,
+                    f"Transcription: {text}{details_suffix}",
+                    level="info",
+                    category="nats",
+                    audio_duration=audio_duration,
+                    transcription_time=transcription_time,
+                    segments=segment_count,
+                )
+                await sse_message(app, text, descr="transcription")
+
+                command_result = await command_matcher.process_transcription(text)
+                if command_result:
+                    await sse_log(
+                        app,
+                        f"Voice command: {command_result['command']}",
+                        level="info",
+                        category="nats",
+                    )
+                    cmd_payload = command_result["result"]
+                    if isinstance(cmd_payload, dict) and not cmd_payload.get("error"):
+                        if cmd_payload.get("type") == "command":
+                            await sse_command(
+                                app,
+                                cmd_payload.get("method"),
+                                cmd_payload.get("params", {}),
+                            )
+            except Exception as exc:
+                logger.warning("Transcription handling error: %s", exc, exc_info=True)
+
+        vad_sample_rate = int(os.getenv("VAD_SAMPLE_RATE", "16000"))
+        vad_min_speech = int(os.getenv("VAD_MIN_SPEECH_DURATION_MS", "250"))
+        vad_min_silence = int(os.getenv("VAD_MIN_SILENCE_DURATION_MS", "500"))
+        vad_max_speech = float(os.getenv("VAD_MAX_SPEECH_DURATION_S", "30.0"))
+        vad_speech_pad = int(os.getenv("VAD_SPEECH_PAD_MS", "30"))
+        vad_threshold = float(os.getenv("VAD_THRESHOLD", "0.8"))
+        vad_check_interval = float(os.getenv("VAD_BUFFER_CHECK_INTERVAL", "1.0"))
+
+        segmenter = graph.add(
+            PhraseSegmenterNode(
+                source,
+                nats_node.nc,
+                nats_whisper_subject,
+                handle_transcription,
+                sample_rate=vad_sample_rate,
+                min_speech_duration_ms=vad_min_speech,
+                min_silence_duration_ms=vad_min_silence,
+                max_speech_duration_s=vad_max_speech,
+                speech_pad_ms=vad_speech_pad,
+                threshold=vad_threshold,
+                buffer_check_interval_s=vad_check_interval,
+            )
+        )
+        logger.info("PhraseSegmenterNode configured for subject %s", nats_whisper_subject)
+        await sse_log(
+            app,
+            f"Whisper phrase pipeline ready ({nats_whisper_subject})",
+            level="info",
+            category="audio",
+        )
         
         # Подписка на логи от Whisper сервиса
         async def _whisper_logs_cb(msg):

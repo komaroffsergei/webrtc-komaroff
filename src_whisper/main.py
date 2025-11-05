@@ -1,215 +1,239 @@
 #!/usr/bin/env python3
 """
-Whisper Service - сервис транскрипции речи с использованием Whisper и Silero VAD
-
-Архитектура:
-    NATS → Raw Recorder → Phrase Segmenter → File Saver → Whisper Transcriber → Command Processor
-    
-Компоненты:
-    - NatsReceiverNode: прием аудио фреймов из NATS
-    - RawRecorderNode: запись сырого аудио для диагностики (опционально)
-    - PhraseSegmenterNode: сегментация на фразы с помощью Silero VAD
-    - FileSaverNode: сохранение фраз в WAV файлы (опционально)
-    - WhisperTranscriberNode: распознавание речи через faster-whisper
-    - Command Processor: обработка голосовых команд
+Whisper Service - минимальный сервис транскрипции фраз, полученных через NATS.
 """
 
 import asyncio
-import logging
-import os
 import json
+import logging
+import time
 from datetime import datetime
+from typing import Optional, Tuple, List
+
+import numpy as np
+import nats
 from dotenv import load_dotenv
+from faster_whisper import WhisperModel
+
+from config import ServiceConfig
+from nats_log_handler import NatsLogHandler
+from nats_logger import NatsLogger
+from utils.audio_utils import resample_audio
+
 
 load_dotenv()
-
-from nodes import (
-    NatsReceiverNode,
-    PhraseSegmenterNode,
-    FileSaverNode,
-    WhisperTranscriberNode,
-    RawRecorderNode
-)
-from voice_commands import CommandRegistry, CommandMatcher
-from commands.alert_command import register_alert_command
-from config import ServiceConfig
-
-# Загрузка конфигурации
-config = ServiceConfig.from_env()
-
-# Настройка логирования
-logging.basicConfig(
-    level=config.log_level,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-)
-log = logging.getLogger("whisper.main")
+logger = logging.getLogger("whisper.main")
 
 
-async def main():
-    """Точка входа в сервис транскрипции."""
-    log.info("=" * 70)
-    log.info("Whisper Service Starting")
-    log.info("=" * 70)
-    
-    # Инициализация NATS клиента
-    import nats
-    nc = await nats.connect(
-        servers=[config.nats.url],
-        max_reconnect_attempts=-1,
-        reconnect_time_wait=2
-    )
-    log.info(f"Connected to NATS: {nc.connected_url.netloc}")
-    log.info(f"Subjects: audio={config.nats.audio_subject}, whisper={config.nats.whisper_subject}, logs={config.nats.logs_subject}")
-    
-    # Настраиваем отправку логов в NATS
-    from nats_log_handler import NatsLogHandler
-    from nats_logger import NatsLogger
-    whisper_logger = logging.getLogger("whisper")
-    if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
-        nats_handler = NatsLogHandler(nc, config.nats.logs_subject, level=logging.DEBUG)
-        nats_handler.setFormatter(logging.Formatter('%(name)s: %(message)s'))
-        whisper_logger.addHandler(nats_handler)
-        log.info("NATS log handler enabled")
-    
-    # Инициализируем унифицированный NATS логгер
-    nats_logger = NatsLogger(nc, config.nats.logs_subject, service_name="whisper")
-    
-    # Регистрируем команды
-    command_registry = CommandRegistry()
-    register_alert_command(command_registry)
-    command_matcher = CommandMatcher(command_registry)
-    
-    log.info(f"Registered {len(command_registry.commands)} voice commands")
-    
-    # Создание нод обработки
-    nats_receiver = NatsReceiverNode(
-        nats_url=config.nats.url,
-        subject=config.nats.audio_subject
-    )
-    
-    raw_recorder = RawRecorderNode(
-        recordings_dir="recordings_raw",
-        max_duration_s=10.0,
-        enabled=False
-    )
-    
-    phrase_segmenter = PhraseSegmenterNode(
-        sample_rate=config.vad.sample_rate,
-        min_speech_duration_ms=config.vad.min_speech_duration_ms,
-        min_silence_duration_ms=config.vad.min_silence_duration_ms,
-        max_speech_duration_s=config.vad.max_speech_duration_s,
-        speech_pad_ms=config.vad.speech_pad_ms,
-        threshold=config.vad.threshold,
-        buffer_check_interval_s=config.vad.buffer_check_interval
-    )
-    
-    file_saver = FileSaverNode(
-        recordings_dir=config.whisper.recordings_dir,
-        enabled=config.whisper.save_recordings
-    )
-    
-    whisper_transcriber = WhisperTranscriberNode(
-        model_path=config.whisper.model_path
-    )
-    
-    # ===== НАСТРОЙКА CALLBACK ЦЕПОЧКИ =====
-    
-    # Callback для обработки результатов транскрипции
-    async def on_transcription(result: dict):
-        """Обработать транскрипцию и отправить в NATS."""
-        text = result["text"]
-        segments = len(result["segments"])
-        audio_duration = result.get("audio_duration", 0)
-        transcription_time = result.get("transcription_time", 0)
-        
-        # Логируем транскрипцию через NatsLogger
-        start_timestamp = result.get("start_timestamp")
-        end_timestamp = datetime.utcnow().isoformat() + "Z"
-        
-        await nats_logger.log_transcription(
-            text=text,
-            segments=segments,
-            audio_duration=audio_duration,
-            transcription_time=transcription_time,
-            start_timestamp=start_timestamp,
-            end_timestamp=end_timestamp
+class WhisperTranscriber:
+    def __init__(
+        self,
+        model_path: str,
+        device: str = "cpu",
+        compute_type: str = "int8",
+        language: str = "ru",
+    ):
+        self.model_path = model_path
+        self.device = device
+        self.compute_type = compute_type
+        self.language = language
+        self.model: Optional[WhisperModel] = None
+
+    async def load(self) -> None:
+        loop = asyncio.get_event_loop()
+        self.model = await loop.run_in_executor(None, self._load_model)
+        logger.info("Whisper model loaded from %s", self.model_path)
+
+    def _load_model(self) -> WhisperModel:
+        return WhisperModel(
+            self.model_path,
+            device=self.device,
+            compute_type=self.compute_type,
         )
-        
-        # Отправляем транскрипцию
-        transcription_msg = {
-            "type": "transcription",
-            "text": text,
-            "segments": segments,
-            "audio_duration": audio_duration,
-            "transcription_time": transcription_time
-        }
-        await nc.publish(config.nats.whisper_subject, json.dumps(transcription_msg).encode("utf-8"))
-        log.info(f"Published transcription: '{text}'")
-        
-        # Проверяем на команды
-        command_result = await command_matcher.process_transcription(text)
-        
-        if command_result:
-            log.info(f"Command detected: {command_result['command']}")
-            
-            # Отправляем команду
-            cmd_result = command_result["result"]
-            if "error" not in cmd_result:
-                await nc.publish(config.nats.whisper_subject, json.dumps(cmd_result).encode("utf-8"))
-                log.info(f"Published command: {command_result['command']}")
-    
-    # Связываем ноды через callback
-    # nats_receiver.set_callback(raw_recorder.process)
-    nats_receiver.set_callback(phrase_segmenter.process)
-    phrase_segmenter.set_callback(file_saver.process)
-    file_saver.set_callback(whisper_transcriber.process)
-    whisper_transcriber.set_callback(on_transcription)
-    
-    log.info("")
-    log.info("Pipeline configured:")
-    log.info("  NATS Receiver → Raw Recorder → Phrase Segmenter → File Saver → Whisper → Commands")
-    log.info("")
-    
-    # ===== ЗАПУСК НОД =====
-    
-    try:
-        # Запускаем ноды
-        await raw_recorder.start()
-        await phrase_segmenter.start()
-        await file_saver.start()
-        await whisper_transcriber.start()
-        await nats_receiver.start()  # Запускаем последним
-        
-        log.info("All nodes started successfully")
-        log.info("Listening for audio frames...")
-        log.info("")
-        
-        # Ждем бесконечно
+
+    async def transcribe(self, audio: np.ndarray, sample_rate: int) -> Tuple[str, List[dict], float]:
+        if self.model is None:
+            raise RuntimeError("Whisper model is not loaded")
+
+        loop = asyncio.get_event_loop()
+
+        if sample_rate != 16000:
+            audio = await loop.run_in_executor(
+                None,
+                resample_audio,
+                audio,
+                sample_rate,
+                16000,
+            )
+            sample_rate = 16000
+
+        start_time = time.time()
+        segments = await loop.run_in_executor(None, self._run_model, audio)
+        transcription_time = time.time() - start_time
+
+        text = " ".join(seg["text"] for seg in segments).strip()
+        return text, segments, transcription_time
+
+    def _run_model(self, audio: np.ndarray) -> List[dict]:
+        assert self.model is not None, "Model must be loaded before transcription"
+        segments, _ = self.model.transcribe(
+            audio,
+            language=self.language,
+            beam_size=5,
+            without_timestamps=True,
+            vad_filter=False,
+            condition_on_previous_text=False,
+        )
+        results = []
+        for segment in segments:
+            results.append(
+                {
+                    "text": segment.text.strip(),
+                    "start": segment.start,
+                    "end": segment.end,
+                    "confidence": getattr(segment, "avg_logprob", 0.0),
+                }
+            )
+        return results
+
+
+class WhisperService:
+    def __init__(self, config: ServiceConfig):
+        self.config = config
+        self.nc: Optional[nats.NATS] = None
+        self.transcriber = WhisperTranscriber(config.whisper.model_path)
+        self.nats_logger: Optional[NatsLogger] = None
+
+    async def run(self) -> None:
+        await self._connect_nats()
+        await self._setup_logging()
+        await self.transcriber.load()
+
+        subject = self.config.nats.whisper_subject
+        await self.nc.subscribe(subject, cb=self._on_phrase)
+        logger.info("Subscribed to phrases on %s", subject)
+
         while True:
             await asyncio.sleep(3600)
-            
-    except KeyboardInterrupt:
-        log.info("Shutting down...")
-    finally:
-        # Останавливаем ноды в обратном порядке
-        await nats_receiver.stop()
-        await whisper_transcriber.stop()
-        await file_saver.stop()
-        await phrase_segmenter.stop()
-        await raw_recorder.stop()
-        
-        # Закрываем NATS для публикации
+
+    async def _connect_nats(self) -> None:
+        urls = [u.strip() for u in str(self.config.nats.url).split(",") if u.strip()]
+        self.nc = await nats.connect(
+            servers=urls or [self.config.nats.url],
+            max_reconnect_attempts=-1,
+            reconnect_time_wait=2,
+            ping_interval=10,
+        )
+        logger.info("Connected to NATS: %s", self.nc.connected_url.netloc)
+
+    async def _setup_logging(self) -> None:
+        assert self.nc is not None
+        whisper_logger = logging.getLogger("whisper")
+        if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
+            handler = NatsLogHandler(self.nc, self.config.nats.logs_subject, level=logging.DEBUG)
+            handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
+            whisper_logger.addHandler(handler)
+            logger.info("NATS log handler attached")
+
+        self.nats_logger = NatsLogger(
+            self.nc,
+            self.config.nats.logs_subject,
+            service_name="whisper",
+        )
+
+    async def _on_phrase(self, msg):
+        assert self.nc is not None
+        phrase_id = None
         try:
-            await nc.drain()
-            await nc.close()
-        except Exception:
-            pass
-        
-        log.info("Shutdown complete")
+            data = msg.data
+            if len(data) < 4:
+                raise ValueError("Payload too short")
+
+            meta_len = int.from_bytes(data[:4], "big")
+            if len(data) < 4 + meta_len:
+                raise ValueError("Invalid metadata length")
+
+            meta_raw = data[4 : 4 + meta_len]
+            audio_bytes = data[4 + meta_len :]
+
+            meta = json.loads(meta_raw.decode("utf-8")) if meta_raw else {}
+            phrase_id = meta.get("phrase_id")
+            sample_rate = int(meta.get("sample_rate", 16000))
+            sample_width = int(meta.get("sample_width", 2))
+
+            if sample_width == 2:
+                audio_array = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+            elif sample_width == 4:
+                audio_array = np.frombuffer(audio_bytes, dtype=np.int32).astype(np.float32) / 2147483648.0
+            else:
+                raise ValueError(f"Unsupported sample width: {sample_width}")
+
+            if audio_array.size == 0:
+                raise ValueError("Empty audio payload")
+
+            audio_duration = audio_array.size / sample_rate if sample_rate else 0.0
+            start_timestamp = datetime.utcnow().isoformat() + "Z"
+
+            text, segments, transcription_time = await self.transcriber.transcribe(audio_array, sample_rate)
+
+            response = {
+                "type": "transcription",
+                "text": text,
+                "segments": len(segments),
+                "audio_duration": audio_duration,
+                "transcription_time": transcription_time,
+                "phrase_id": phrase_id,
+                "start_timestamp": start_timestamp,
+                "end_timestamp": datetime.utcnow().isoformat() + "Z",
+            }
+
+            if self.nats_logger:
+                await self.nats_logger.log_transcription(
+                    text=text,
+                    segments=len(segments),
+                    audio_duration=audio_duration,
+                    transcription_time=transcription_time,
+                    start_timestamp=start_timestamp,
+                    end_timestamp=response["end_timestamp"],
+                )
+
+            await self._reply(msg, response)
+            logger.info("Transcription sent for phrase %s", phrase_id or "unknown")
+
+        except Exception as exc:
+            logger.error("Failed to transcribe phrase %s: %s", phrase_id or "unknown", exc, exc_info=True)
+            await self._reply(
+                msg,
+                {
+                    "type": "transcription",
+                    "error": str(exc),
+                    "phrase_id": phrase_id,
+                },
+            )
+
+    async def _reply(self, msg, payload: dict) -> None:
+        assert self.nc is not None
+        body = json.dumps(payload).encode("utf-8")
+        if msg.reply:
+            await self.nc.publish(msg.reply, body)
+        else:
+            await self.nc.publish(self.config.nats.whisper_subject + ".result", body)
+
+
+async def main() -> None:
+    config = ServiceConfig.from_env()
+    logging.basicConfig(
+        level=config.log_level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+    service = WhisperService(config)
+    try:
+        await service.run()
+    except asyncio.CancelledError:
+        raise
+    except KeyboardInterrupt:
+        logger.info("Service interrupted, shutting down")
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(main())

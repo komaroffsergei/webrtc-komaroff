@@ -5,3 +5,5 @@ from .loss_filler_node import LossFillerNode
 from .bgm_mixer_node import BgmMixerNode
 from .blank_node import BlankNode
 from .audio_monitor_node import AudioMonitorNode
+from .nats_node import NatsNode
+from .phrase_segmenter_node import PhraseSegmenterNode
