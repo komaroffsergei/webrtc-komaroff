@@ -286,7 +286,7 @@ MAX_BUFFER_DURATION=60.0
 
 ```bash
 cd src_whisper
-python main_refactored.py
+python main.py
 ```
 
 ## Логи
