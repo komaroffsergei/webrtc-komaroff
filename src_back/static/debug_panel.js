@@ -35,6 +35,7 @@
         'webrtc': true,
         'nats': true,
         'audio': true,
+        'whisper': true,
         'general': true
     };
 
@@ -104,7 +105,7 @@
         categoryFilters.className = 'debug-filters';
         categoryFilters.innerHTML = '<span class="filter-label">Категория:</span>';
         
-        ['system', 'webrtc', 'nats', 'audio', 'general'].forEach(category => {
+        ['system', 'webrtc', 'nats', 'audio', 'whisper', 'general'].forEach(category => {
             const btn = document.createElement('button');
             btn.className = 'filter-btn filter-category active';
             btn.textContent = category;
@@ -219,7 +220,42 @@
             let content = '';
             
             if (log.type === 'log') {
-                content = `[${time}] [${log.level.toUpperCase()}] [${log.category}] ${log.data.message}`;
+                let message = log.data.message;
+                
+                // Специальное форматирование для логов транскрипции Whisper
+                if (log.category === 'whisper' && message) {
+                    if (message.includes('Transcription started:')) {
+                        const audioMatch = message.match(/audio_duration=([\d.]+)s/);
+                        if (audioMatch) {
+                            const audioDuration = parseFloat(audioMatch[1]);
+                            message = `Transcription STARTED | audio: ${audioDuration.toFixed(2)}s`;
+                        }
+                    } else if (message.includes('Transcription completed:')) {
+                        const audioMatch = message.match(/audio_duration=([\d.]+)s/);
+                        const transMatch = message.match(/transcription_time=([\d.]+)s/);
+                        const segmentsMatch = message.match(/segments=(\d+)/);
+                        const startMatch = message.match(/start=([\d\-:.TZ]+)/);
+                        const endMatch = message.match(/end=([\d\-:.TZ]+)/);
+                        
+                        if (audioMatch && transMatch) {
+                            const audioDuration = parseFloat(audioMatch[1]);
+                            const transTime = parseFloat(transMatch[1]);
+                            const segments = segmentsMatch ? parseInt(segmentsMatch[1]) : 0;
+                            const rtf = audioDuration > 0 ? (transTime / audioDuration).toFixed(2) : '0.00';
+                            
+                            let timeInfo = '';
+                            if (startMatch && endMatch) {
+                                const startTime = new Date(startMatch[1]).toLocaleTimeString();
+                                const endTime = new Date(endMatch[1]).toLocaleTimeString();
+                                timeInfo = ` | ${startTime} -> ${endTime}`;
+                            }
+                            
+                            message = `Transcription COMPLETED | audio: ${audioDuration.toFixed(2)}s | time: ${transTime.toFixed(2)}s | RTF: ${rtf}x | segments: ${segments}${timeInfo}`;
+                        }
+                    }
+                }
+                
+                content = `[${time}] [${log.level.toUpperCase()}] [${log.category}] ${message}`;
             } else if (log.type === 'command') {
                 content = `[${time}] [COMMAND] ${log.data.method} ${JSON.stringify(log.data.params || {})}`;
             } else if (log.type === 'message') {
