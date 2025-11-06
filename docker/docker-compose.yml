@@ -33,4 +33,4 @@ services:
       - "9000:9000"
 
 volumes:
-  silero_vad_cache:
+  silero_vad_cache: {}
