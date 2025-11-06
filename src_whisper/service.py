@@ -69,6 +69,7 @@ class WhisperService:
 
     async def _handle_phrase(self, msg: Msg) -> None:
         try:
+            await self._emit_info_log(msg="Зацепил фразу")
             packet = PhrasePacket.from_bytes(msg.data)
         except PhrasePacketError as exc:
             logger.error("Failed to parse phrase: %s", exc)
@@ -79,11 +80,14 @@ class WhisperService:
             await self._reply_with_error(msg, str(exc))
             return
 
-        start_timestamp = datetime.utcnow().isoformat() + "Z"
+        start_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
+        await self._emit_info_log(msg=f"Начинаю транскрипцию в {start_timestamp}")
         try:
             result = await self.transcriber.transcribe(packet.audio, packet.sample_rate)
-            payload = self._build_response(packet, result, start_timestamp)
+            end_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
+            payload = self._build_response(packet, result, start_timestamp, end_timestamp)
+            await self._emit_info_log(msg=f"Закончил транскрипцию в {payload['end_timestamp']}")
             await self._emit_transcription_log(result, start_timestamp, payload["end_timestamp"])
             await self._reply(msg, payload)
             logger.info("Transcription sent for phrase %s", packet.phrase_id or "unknown")
@@ -103,8 +107,16 @@ class WhisperService:
             end_timestamp=end_ts,
         )
 
-    def _build_response(self, packet: PhrasePacket, result, start_ts: str) -> dict:
-        end_timestamp = datetime.utcnow().isoformat() + "Z"
+    async def _emit_info_log(self, msg: str) -> None:
+        if not self.nats_logger or not msg:
+            return
+        await self.nats_logger.log_info(
+            msg,
+            category="transcription",
+        )
+
+    def _build_response(self, packet: PhrasePacket, result, start_ts: str, end_timestamp) -> dict:
+
         return {
             "type": "transcription",
             "phrase_id": packet.phrase_id,
