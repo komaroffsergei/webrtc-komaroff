@@ -1,38 +1,41 @@
-require 'sequel'
-require 'sinatra'
-require 'stack-service-base'
+# frozen_string_literal: true
 
-StackServiceBase.rack_setup self
+require "json"
 
-DB ||= Sequel.connect ENV.fetch('DB_URL')
-
-# require Models ...
-# Dir["#{__dir__}/models/*"].each { require_relative _1 }
-
-get '/', &-> { slim :index }
-
-get '/api/foo' do
-  content_type :json
-  {status: 'Ok'}.to_json
+begin
+  require "stack-service-base"
+  StackServiceBase.rack_setup(self)
+rescue LoadError
+  warn "[whisper_ruby] stack-service-base not available, continuing without it"
 end
 
-post '/api/create' do
-  _form_data = JSON request.body.read, symbolize_names: true
+require_relative "lib/whisper_ruby/service"
 
-  # Model.create _form_data
+unless defined?(WhisperRuby::SERVICE_INSTANCE)
+  autostart = if ENV.key?("WHISPER_RUBY_AUTOSTART")
+                ENV["WHISPER_RUBY_AUTOSTART"].to_s.downcase == "true"
+              else
+                ENV["APP_ENV"].to_s != "test"
+              end
 
-  content_type :json
-  {message: 'Created successfully'}.to_json
-end
-
-
-helpers do
-  def download(url)
-    response = HTTParty.get(url)
-    response.body
-
-    halt 400, { message: 'Invalid input data', errors: errors }.to_json unless errors.empty?
+  if autostart
+    WhisperRuby::SERVICE_INSTANCE = WhisperRuby::Service.new
+    WhisperRuby::SERVICE_INSTANCE.start
   end
 end
 
-run Sinatra::Application
+class HealthApp
+  STATUS_OK = JSON.dump(status: "ok")
+  NOT_FOUND = JSON.dump(error: "not_found")
+
+  def call(env)
+    case env["PATH_INFO"]
+    when "/healthcheck"
+      [200, {"Content-Type" => "application/json"}, [STATUS_OK]]
+    else
+      [404, {"Content-Type" => "application/json"}, [NOT_FOUND]]
+    end
+  end
+end
+
+run HealthApp.new

@@ -12,6 +12,7 @@ gem 'rackup', '~> 2.2.1'
 gem 'falcon'
 
 gem 'stack-service-base'
+gem 'ostruct'
 
 group :test do
   gem 'sqlite3'
@@ -27,3 +28,5 @@ group :test do
   # gem 'simplecov-cobertura'
   gem 'yard'
 end
+
+gem "whispercpp", "~> 1.3"

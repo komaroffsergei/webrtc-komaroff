@@ -17,3 +17,16 @@ coverage
 /src_whisper/.venv/*
 /src_whisper/recordings/
 /src_whisper/recordings_raw/
+/src_whisper_ruby/src/recordings/
+/src_whisper_ruby/src/models/
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/
+/src_whisper_ruby/src/models/
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/config.json
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/model.bin
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/preprocessor_config.json
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/tokenizer_config.json
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/vocab.json
+/src_whisper_ruby/src/models/whisper-medium-ru-fine-ct2/vocabulary.json
+/src_whisper_ruby/src/models/ggml-medium.bin
+/src_whisper_ruby/src/models/ggml-small.bin

@@ -1,0 +1,18 @@
+AllCops:
+  NewCops: enable
+
+Layout/LineLength:
+  Enabled: false
+
+Style/MutableConstant:
+  Enabled: false
+
+Layout/HashAlignment:
+  Enabled: false
+
+Style/TrailingCommaInHashLiteral:
+  Enabled: false
+
+Style/NumericPredicate:
+  Enabled: false
+
