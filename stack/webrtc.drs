@@ -10,7 +10,7 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
       NATS_LOGS_SUBJECT: 'voice_chat_logs'
 end
 
-Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-whisper/master', ports: 9000,
+Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-whisper/main', ports: 9000,
         ingress: { host: 'webrtc3.*' } do
    env NATS_URL: NATS_URL,
       NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
