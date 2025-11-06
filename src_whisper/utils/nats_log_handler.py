@@ -50,17 +50,25 @@ class NatsLogHandler(logging.Handler):
             
             message = json.dumps(log_entry).encode("utf-8")
             
+            # Получить event loop
             if self.loop is None:
                 try:
-                    self.loop = asyncio.get_event_loop()
+                    self.loop = asyncio.get_running_loop()
                 except RuntimeError:
+                    # Нет running loop - пропускаем
                     return
             
+            # Проверить что loop работает
             if self.loop and self.loop.is_running():
-                asyncio.create_task(self._async_publish(message))
+                # Создать task в правильном loop
+                asyncio.run_coroutine_threadsafe(
+                    self._async_publish(message),
+                    self.loop
+                )
                 
         except Exception:
-            self.handleError(record)
+            # Тихо игнорируем ошибки логирования
+            pass
 
     async def _async_publish(self, message: bytes) -> None:
         """

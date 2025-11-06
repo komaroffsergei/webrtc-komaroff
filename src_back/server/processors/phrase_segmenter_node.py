@@ -1,18 +1,25 @@
 import asyncio
 import json
 import logging
+import os
 import uuid
 from dataclasses import dataclass
-from typing import Awaitable, Callable, Optional, List
+from pathlib import Path
+from typing import Awaitable, Callable, List, Optional
 
 import numpy as np
-import torch
 from av import AudioFrame
 from nats import NATS
 from nats.errors import TimeoutError as NatsTimeoutError
 
 from .base import ConsumerNode
 from ..utils.audio_utils import resample_audio
+from ..utils.silero_onnx_vad import (
+    DEFAULT_SILERO_VAD_URL,
+    SileroOnnxVAD,
+    ensure_or_download_model,
+    get_speech_timestamps as silero_get_speech_timestamps,
+)
 
 
 logger = logging.getLogger("audio.PhraseSegmenterNode")
@@ -67,8 +74,8 @@ class PhraseSegmenterNode(ConsumerNode):
         self.buffer: List[np.ndarray] = []
         self.buffer_sample_rate = sample_rate
 
-        self.vad_model = None
-        self.get_speech_timestamps = None
+        self.vad_model: Optional[SileroOnnxVAD] = None
+        self.get_speech_timestamps = silero_get_speech_timestamps
 
         self._check_in_progress = False
         self._pending_tasks: set[asyncio.Task] = set()
@@ -112,19 +119,31 @@ class PhraseSegmenterNode(ConsumerNode):
     async def _load_silero_vad(self) -> None:
         loop = asyncio.get_event_loop()
 
-        def _load():
-            model, utils = torch.hub.load(
-                repo_or_dir="snakers4/silero-vad",
-                model="silero_vad",
-                force_reload=False,
-                onnx=False,
-            )
-            return model, utils[0]
+        def _resolve_model_path() -> str:
+            configured = os.getenv("SILERO_VAD_MODEL_PATH")
+            if configured:
+                return configured
 
-        model, get_speech_timestamps = await loop.run_in_executor(None, _load)
-        self.vad_model = model
-        self.get_speech_timestamps = get_speech_timestamps
-        logger.info("Silero VAD model loaded")
+            dir_candidate = os.getenv("SILERO_VAD_DIR")
+            if dir_candidate:
+                return os.path.join(dir_candidate, "silero_vad.onnx")
+
+            project_root = Path(__file__).resolve().parents[3]
+            return str(project_root / "models" / "silero_vad.onnx")
+
+        def _load():
+            model_path = _resolve_model_path()
+            auto_download = os.getenv("SILERO_VAD_AUTO_DOWNLOAD", "1").lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+            model_url = os.getenv("SILERO_VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
+            ensure_or_download_model(model_path, download=auto_download, url=model_url)
+            return SileroOnnxVAD(model_path)
+
+        self.vad_model = await loop.run_in_executor(None, _load)
+        logger.info("Silero VAD ONNX model loaded from %s", self.vad_model.model_path)
 
     async def _check_buffer_async(self) -> None:
         if self._check_in_progress:
@@ -149,13 +168,11 @@ class PhraseSegmenterNode(ConsumerNode):
             if len(audio) / self.target_sample_rate < 1.0:
                 return
 
-            audio_tensor = torch.from_numpy(audio)
-
             loop = asyncio.get_event_loop()
             timestamps = await loop.run_in_executor(
                 None,
                 self._get_timestamps,
-                audio_tensor,
+                audio,
             )
 
             if not timestamps:
@@ -193,10 +210,12 @@ class PhraseSegmenterNode(ConsumerNode):
         except Exception as exc:
             logger.error("Error checking buffer: %s", exc, exc_info=True)
 
-    def _get_timestamps(self, audio_tensor):
+    def _get_timestamps(self, audio_array: np.ndarray):
         try:
+            if self.vad_model is None:
+                raise RuntimeError("VAD model is not loaded")
             return self.get_speech_timestamps(
-                audio_tensor,
+                audio_array,
                 self.vad_model,
                 sampling_rate=self.target_sample_rate,
                 min_speech_duration_ms=self.min_speech_duration_ms,

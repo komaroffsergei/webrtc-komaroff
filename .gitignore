@@ -31,3 +31,4 @@ coverage
 /src_whisper_ruby/src/models/ggml-medium.bin
 /src_whisper_ruby/src/models/ggml-small.bin
 /src_whisper_ruby/
+/models/

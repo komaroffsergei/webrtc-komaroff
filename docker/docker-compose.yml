@@ -4,8 +4,11 @@ services:
     build:
       context: ../src_back
       dockerfile: ../docker/python/Dockerfile
+      target: base
     ports:
       - "8000:8000"
+    volumes:
+      - silero_vad_cache:/opt/silero_vad
 #    environment:
 #      - NATS_URL=${NATS_URL}
     depends_on:
@@ -23,7 +26,11 @@ services:
       #      additional_contexts:
       #        docker: ../docker
       dockerfile: ../docker/python/Dockerfile
+      target: whisper
     depends_on:
       - audio_nats
     ports:
       - "9000:9000"
+
+volumes:
+  silero_vad_cache:

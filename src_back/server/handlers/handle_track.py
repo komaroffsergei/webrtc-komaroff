@@ -51,8 +51,8 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         ))
 
         # Callback для отправки предупреждений об уровне звука
-        async def audio_warning_callback(warning_type: str):
-            await sse_warning(app, warning_type)
+        # async def audio_warning_callback(warning_type: str):
+        #     await sse_warning(app, warning_type)
 
         # Нода мониторинга аудио (встраивается в граф)
         # monitor = graph.add(AudioMonitorNode(

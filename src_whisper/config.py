@@ -44,8 +44,19 @@ class WhisperConfig:
     @classmethod
     def from_env(cls) -> "WhisperConfig":
         """Создать конфигурацию из переменных окружения."""
+        # Если задан WHISPER_MODEL_NAME, строим путь к модели в cache
+        model_name = os.getenv("WHISPER_MODEL_NAME")
+        if model_name:
+            # Используем ./models для локальной разработки, /app/models для Docker
+            default_models_dir = "./models" if not os.path.exists("/app") else "/app/models"
+            models_dir = os.getenv("WHISPER_MODELS_DIR", default_models_dir)
+            model_path = f"{models_dir}/{model_name}"
+        else:
+            # Иначе используем WHISPER_MODEL или default
+            model_path = os.getenv("WHISPER_MODEL", "medium")
+        
         return cls(
-            model_path=os.getenv("WHISPER_MODEL", "models/whisper-medium-ru-fine-ct2"),
+            model_path=model_path,
             recordings_dir=os.getenv("RECORDINGS_DIR", "recordings"),
             save_recordings=os.getenv("SAVE_RECORDINGS", "true").lower() == "true"
         )

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from dataclasses import dataclass
 from typing import List, Sequence
@@ -13,6 +14,9 @@ import numpy as np
 from faster_whisper import WhisperModel
 
 from utils.audio_utils import resample_audio
+from utils.model_downloader import ensure_model_available
+
+logger = logging.getLogger("whisper.transcriber")
 
 
 @dataclass
@@ -46,11 +50,24 @@ class WhisperTranscriber:
         self._model = await loop.run_in_executor(None, self._load_model)
 
     def _load_model(self) -> WhisperModel:
-        return WhisperModel(
-            self.model_path,
+        """
+        Загрузить модель Whisper.
+        Автоматически скачает модель если она отсутствует.
+        """
+        logger.info(f"Loading Whisper model from {self.model_path}")
+        
+        # Убедиться что модель доступна (скачать если нужно)
+        actual_model_path = ensure_model_available(self.model_path)
+        
+        logger.info(f"Loading model from {actual_model_path}")
+        model = WhisperModel(
+            actual_model_path,
             device=self.device,
             compute_type=self.compute_type,
         )
+        
+        logger.info("Model loaded successfully")
+        return model
 
     async def transcribe(self, audio: np.ndarray, sample_rate: int) -> TranscriptionResult:
         if self._model is None:
