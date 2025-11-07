@@ -2,7 +2,8 @@ FROM ruby:3.4.5-slim-bookworm AS base
 
 RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
      libsqlite3-dev libssl-dev libgeos-dev libyaml-dev cmake libgomp1 \
-     && rm -rf /var/lib/apt/lists/*
+     && rm -rf /var/lib/apt/lists/* \
+     && test -e /usr/lib/x86_64-linux-gnu/libgomp.so.1
 
 RUN curl -fsSL https://deb.nodesource.com/setup_21.x | bash - && \
     apt-get install -y nodejs && npm i -g yarn
@@ -35,7 +36,8 @@ RUN rm -rf node_modules
 FROM ruby:3.4.5-slim-bookworm AS deploy
 RUN apt update && apt install --fix-missing -y bash curl libpq-dev openssh-client \
       sqlite3 libssl-dev libgeos-dev libyaml-0-2 libgomp1 \
-     && rm -rf /var/lib/apt/lists/*
+     && rm -rf /var/lib/apt/lists/* \
+     && test -e /usr/lib/x86_64-linux-gnu/libgomp.so.1
 
 RUN echo 'gem: --no-document' >> ~/.gemrc
 COPY --from=base /usr/local/bundle /usr/local/bundle
