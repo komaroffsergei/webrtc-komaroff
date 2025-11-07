@@ -177,7 +177,7 @@ module WhisperRuby
     end
 
     def reply(msg, payload)
-      data = JSON.generate(payload)
+      data = JSON.generate(ensure_utf8(payload))
 
       if msg.reply && !msg.reply.empty?
         publish(msg.reply, data)
@@ -314,6 +314,22 @@ module WhisperRuby
           category: "whisper",
           **payload
         )
+      end
+    end
+
+    def ensure_utf8(value)
+      case value
+      when String
+        str = value.dup
+        str = str.force_encoding(Encoding::UTF_8)
+        str.encode!(Encoding::UTF_8, invalid: :replace, undef: :replace)
+        str
+      when Hash
+        value.transform_values { |v| ensure_utf8(v) }
+      when Array
+        value.map { |v| ensure_utf8(v) }
+      else
+        value
       end
     end
 
