@@ -14,8 +14,8 @@ import nats
 from nats.aio.msg import Msg
 
 from config import ServiceConfig
-from src_whisper.utils.nats_log_handler import NatsLogHandler
-from src_whisper.utils.nats_logger import NatsLogger
+from utils.nats_log_handler import NatsLogHandler
+from utils.nats_logger import NatsLogger
 from phrases import PhrasePacket, PhrasePacketError
 from transcriber import WhisperTranscriber
 
