@@ -35,8 +35,8 @@ module WhisperRuby
     def ensure_cpu_mode!
       return if gpu_allowed?
 
-      CPU_FORCE_ENV.each { |var| force_env(var, "1") }
-      GPU_DISABLE_ENV.each { |var| force_env(var, "0") }
+      CPU_FORCE_ENV.each { |var| ensure_env(var, "1") }
+      GPU_DISABLE_ENV.each { |var| ensure_env(var, "0") }
     end
 
     def gpu_allowed?
@@ -51,6 +51,13 @@ module WhisperRuby
       return false if value.nil?
 
       %w[1 true yes on].include?(value.to_s.strip.downcase)
+    end
+
+    def ensure_env(var, value)
+      current = ENV[var]
+      return if current && !current.strip.empty?
+
+      ENV[var] = value
     end
   end
 end
