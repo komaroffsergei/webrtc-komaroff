@@ -9,7 +9,7 @@ import json
 import logging
 import traceback
 from datetime import datetime
-from typing import Optional
+from typing import Awaitable, Optional
 
 import nats
 from nats.aio.msg import Msg
@@ -31,6 +31,7 @@ class WhisperService:
         self.nc: Optional[nats.NATS] = None
         self.transcriber = WhisperTranscriber(config.whisper.model_path)
         self.nats_logger: Optional[NatsLogger] = None
+        self._log_tasks: set[asyncio.Task[None]] = set()
 
     async def run(self) -> None:
         await self._connect()
@@ -73,44 +74,64 @@ class WhisperService:
         packet: PhrasePacket | None = None
         try:
             packet = PhrasePacket.from_bytes(msg.data)
-            await self._log_phrase_received(packet)
+            self._schedule_log(self._log_phrase_received(packet), "phrase_received")
         except PhrasePacketError as exc:
             logger.error("Failed to parse phrase: %s", exc)
-            await self._log_error(
-                event="phrase_parse_failed",
-                exc=exc,
-                payload_size=len(msg.data),
+            self._schedule_log(
+                self._log_error(
+                    event="phrase_parse_failed",
+                    exc=exc,
+                    payload_size=len(msg.data),
+                ),
+                "phrase_parse_failed",
             )
             await self._reply_with_error(msg, str(exc))
             return
         except Exception as exc:  # pragma: no cover
             logger.exception("Unexpected phrase parsing error")
-            await self._log_error(
-                event="phrase_receive_error",
-                exc=exc,
-                payload_size=len(msg.data),
+            self._schedule_log(
+                self._log_error(
+                    event="phrase_receive_error",
+                    exc=exc,
+                    payload_size=len(msg.data),
+                ),
+                "phrase_receive_error",
             )
             await self._reply_with_error(msg, str(exc))
             return
 
         start_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
-        await self._log_transcription_start(packet, start_timestamp)
+        self._schedule_log(
+            self._log_transcription_start(packet, start_timestamp),
+            "transcription_started",
+        )
         try:
             result = await self.transcriber.transcribe(packet.audio, packet.sample_rate)
             end_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
             payload = self._build_response(packet, result, start_timestamp, end_timestamp)
-            await self._log_transcription_complete(packet, result, start_timestamp, payload["end_timestamp"])
+            self._schedule_log(
+                self._log_transcription_complete(
+                    packet,
+                    result,
+                    start_timestamp,
+                    payload["end_timestamp"],
+                ),
+                "transcription_completed",
+            )
             await self._reply(msg, payload)
             logger.info("Transcription sent for phrase %s", packet.phrase_id or "unknown")
         except Exception as exc:
             logger.exception("Transcription failed")
-            await self._log_error(
-                event="transcription_failed",
-                exc=exc,
-                phrase_id=packet.phrase_id,
-                sample_rate=packet.sample_rate,
-                audio_duration=packet.duration,
+            self._schedule_log(
+                self._log_error(
+                    event="transcription_failed",
+                    exc=exc,
+                    phrase_id=packet.phrase_id,
+                    sample_rate=packet.sample_rate,
+                    audio_duration=packet.duration,
+                ),
+                "transcription_failed",
             )
             await self._reply_with_error(msg, str(exc), packet.phrase_id)
 
@@ -220,3 +241,21 @@ class WhisperService:
                 "phrase_id": phrase_id,
             },
         )
+
+    def _schedule_log(self, coro: Awaitable[None] | None, context: str) -> None:
+        if coro is None:
+            return
+        task = asyncio.create_task(coro, name=f"log:{context}")
+        self._log_tasks.add(task)
+
+        def _on_done(t: asyncio.Task[None], label: str) -> None:
+            self._log_tasks.discard(t)
+            try:
+                exc = t.exception()
+            except Exception:  # pragma: no cover
+                logger.exception("Failed to fetch exception from log task %s", label)
+                return
+            if exc:
+                logger.warning("Log task %s failed: %s", label, exc)
+
+        task.add_done_callback(lambda t, lbl=context: _on_done(t, lbl))

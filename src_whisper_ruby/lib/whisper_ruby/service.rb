@@ -3,6 +3,7 @@
 require "json"
 require "logger"
 require "time"
+require "thread"
 
 require "nats/io/client"
 
@@ -24,6 +25,8 @@ module WhisperRuby
       @model_manager = ModelManager.new(logger: @logger)
       @nats_logger = nil
       @model_paths = nil
+      @log_queue = Queue.new
+      @log_worker = start_log_worker
     end
 
     def start
@@ -45,6 +48,7 @@ module WhisperRuby
       raise
     ensure
       @running = false
+      stop_log_worker
     end
 
     def running?
@@ -202,15 +206,53 @@ module WhisperRuby
     def emit_transcription_log(packet, result, start_ts, end_ts)
       return unless @nats_logger && result.text && !result.text.empty?
 
-      @nats_logger.log_transcription(
-        text: result.text,
-        segments: result.segments.length,
-        audio_duration: result.audio_duration,
-        transcription_time: result.transcription_time,
-        start_timestamp: start_ts,
-        end_timestamp: end_ts,
-        phrase_id: packet.phrase_id
-      )
+      submit_log do
+        @nats_logger.log_transcription(
+          text: result.text,
+          segments: result.segments.length,
+          audio_duration: result.audio_duration,
+          transcription_time: result.transcription_time,
+          start_timestamp: start_ts,
+          end_timestamp: end_ts,
+          phrase_id: packet.phrase_id
+        )
+      end
+    end
+
+    def submit_log(&block)
+      return unless @log_queue && block
+
+      @log_queue << block
+    rescue StandardError => e
+      @logger.warn("Failed to enqueue log task: #{e}")
+      begin
+        block.call
+      rescue StandardError => inner
+        @logger.warn("Fallback log execution failed: #{inner}")
+      end
+    end
+
+    def start_log_worker
+      Thread.new do
+        loop do
+          job = @log_queue.pop
+          break if job.equal?(:stop)
+          job.call
+        rescue StandardError => e
+          @logger.warn("Log worker error: #{e}")
+        end
+      end.tap { |thr| thr.report_on_exception = false }
+    end
+
+    def stop_log_worker
+      return unless @log_worker
+
+      @log_queue << :stop
+      @log_worker.join(1)
+    rescue StandardError => e
+      @logger.warn("Failed to stop log worker: #{e}")
+    ensure
+      @log_worker = nil
     end
 
     def timestamp_now
@@ -220,29 +262,33 @@ module WhisperRuby
     def log_phrase_received(packet)
       return unless @nats_logger && packet
 
-      @nats_logger.log_event(
-        event: "phrase_received",
-        message: "Получена фраза из NATS",
-        category: "transcription",
-        phrase_id: packet.phrase_id,
-        sample_rate: packet.sample_rate,
-        audio_duration: packet.duration.round(3),
-        audio_samples: packet.audio.length,
-        metadata: packet.metadata
-      )
+      submit_log do
+        @nats_logger.log_event(
+          event: "phrase_received",
+          message: "Получена фраза из NATS",
+          category: "transcription",
+          phrase_id: packet.phrase_id,
+          sample_rate: packet.sample_rate,
+          audio_duration: packet.duration.round(3),
+          audio_samples: packet.audio.length,
+          metadata: packet.metadata
+        )
+      end
     end
 
     def log_transcription_start(packet, start_ts)
       return unless @nats_logger && packet
 
-      @nats_logger.log_transcription_start(
-        audio_duration: packet.duration,
-        audio_samples: packet.audio.length,
-        sample_rate: packet.sample_rate,
-        phrase_id: packet.phrase_id,
-        start_timestamp: start_ts,
-        metadata: packet.metadata
-      )
+      submit_log do
+        @nats_logger.log_transcription_start(
+          audio_duration: packet.duration,
+          audio_samples: packet.audio.length,
+          sample_rate: packet.sample_rate,
+          phrase_id: packet.phrase_id,
+          start_timestamp: start_ts,
+          metadata: packet.metadata
+        )
+      end
     end
 
     def log_transcription_error(event, error, packet:, extra: nil)
@@ -262,11 +308,13 @@ module WhisperRuby
       end
       payload.merge!(extra) if extra
 
-      @nats_logger.log_error(
-        "#{event}: #{error.message}",
-        category: "whisper",
-        **payload
-      )
+      submit_log do
+        @nats_logger.log_error(
+          "#{event}: #{error.message}",
+          category: "whisper",
+          **payload
+        )
+      end
     end
 
     def connected_server_uri
