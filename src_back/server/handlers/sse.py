@@ -7,6 +7,8 @@ from datetime import datetime
 
 logger = logging.getLogger("sse")
 
+DEFAULT_SERVICE_NAME = "src_server"
+
 
 async def sse_handler(request: web.Request):
     """
@@ -74,6 +76,9 @@ async def sse_broadcast(app, message: dict):
     if "uid" not in message:
         message["uid"] = str(uuid.uuid4())
     
+    if not message.get("service"):
+        message["service"] = DEFAULT_SERVICE_NAME
+
     for q in list(app.get("sse_clients", [])):
         try:
             q.put_nowait(message)
@@ -88,7 +93,7 @@ async def sse_broadcast(app, message: dict):
             pass
 
 
-async def sse_command(app, method: str, params=None, uid: str = None):
+async def sse_command(app, method: str, params=None, uid: str = None, service: str = None):
     """
     Отправить команду клиенту.
     
@@ -108,14 +113,15 @@ async def sse_command(app, method: str, params=None, uid: str = None):
         "type": "command",
         "method": method,
         "params": params,
-        "uid": uid
+        "uid": uid,
+        "service": service or DEFAULT_SERVICE_NAME
     })
     
     logger.debug(f"SSE command sent: method={method}, uid={uid}")
     return uid
 
 
-async def sse_message(app, text: str, descr: str = "send", uid: str = None, **extra):
+async def sse_message(app, text: str, descr: str = "send", uid: str = None, service: str = None, **extra):
     """
     Отправить текстовое сообщение клиенту.
     
@@ -132,11 +138,14 @@ async def sse_message(app, text: str, descr: str = "send", uid: str = None, **ex
     if uid is None:
         uid = str(uuid.uuid4())
     
+    extra_service = extra.pop("service", None)
+
     message = {
         "type": "message",
         "descr": descr,
         "uid": uid,
-        "text": text
+        "text": text,
+        "service": service or extra_service or DEFAULT_SERVICE_NAME
     }
     message.update(extra)
     
@@ -146,7 +155,7 @@ async def sse_message(app, text: str, descr: str = "send", uid: str = None, **ex
     return uid
 
 
-async def sse_log(app, message: str, level: str = "info", category: str = "general", **extra):
+async def sse_log(app, message: str, level: str = "info", category: str = "general", service: str = None, **extra):
     """
     Отправить лог-сообщение клиенту для отладочного окна.
     
@@ -162,12 +171,15 @@ async def sse_log(app, message: str, level: str = "info", category: str = "gener
     """
     uid = str(uuid.uuid4())
     
+    extra_service = extra.pop("service", None)
+
     log_entry = {
         "type": "log",
         "level": level,
         "category": category,
         "message": message,
-        "uid": uid
+        "uid": uid,
+        "service": service or extra_service or DEFAULT_SERVICE_NAME
     }
     log_entry.update(extra)
     
@@ -176,7 +188,7 @@ async def sse_log(app, message: str, level: str = "info", category: str = "gener
     return uid
 
 
-async def sse_warning(app, descr: str, uid: str = None):
+async def sse_warning(app, descr: str, uid: str = None, service: str = None):
     """
     Отправить предупреждение клиенту.
     
@@ -194,7 +206,8 @@ async def sse_warning(app, descr: str, uid: str = None):
     await sse_broadcast(app, {
         "type": "warning",
         "descr": descr,
-        "uid": uid
+        "uid": uid,
+        "service": service or DEFAULT_SERVICE_NAME
     })
     
     logger.debug(f"SSE warning sent: descr={descr}, uid={uid}")

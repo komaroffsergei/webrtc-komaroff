@@ -92,6 +92,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                 text = str(data.get("text", "")).strip()
                 if not text:
                     return
+                service_name = data.get("service") or "src_whisper"
 
                 audio_duration = data.get("audio_duration")
                 transcription_time = data.get("transcription_time")
@@ -110,11 +111,12 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                     f"Transcription: {text}{details_suffix}",
                     level="info",
                     category="nats",
+                    service=service_name,
                     audio_duration=audio_duration,
                     transcription_time=transcription_time,
                     segments=segment_count,
                 )
-                await sse_message(app, text, descr="transcription")
+                await sse_message(app, text, descr="transcription", service=service_name)
 
                 command_result = await command_matcher.process_transcription(text)
                 if command_result:
@@ -170,20 +172,29 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         async def _whisper_logs_cb(msg):
             try:
                 log_data = json.loads(msg.data.decode("utf-8"))
-                
-                # Отправляем лог через SSE
+                service_name = log_data.get('service') or 'src_whisper'
+                category = log_data.get('category') or 'whisper'
+                message_text = log_data.get('message', '')
+
+                sse_kwargs = {
+                    "logger": log_data.get('logger', 'whisper'),
+                    "module": log_data.get('module', ''),
+                    "function": log_data.get('function', ''),
+                    "line": log_data.get('line'),
+                    "source_timestamp": log_data.get('timestamp'),
+                }
+                if log_data.get('timestamp'):
+                    sse_kwargs["timestamp"] = log_data.get('timestamp')
+
                 await sse_log(
                     app,
-                    f"[Whisper] {log_data.get('message', '')}",
+                    message_text,
                     level=log_data.get('level', 'info'),
-                    category='whisper',
-                    logger=log_data.get('logger', 'whisper'),
-                    module=log_data.get('module', ''),
-                    function=log_data.get('function', ''),
-                    line=log_data.get('line'),
-                    source_timestamp=log_data.get('timestamp')
+                    category=category,
+                    service=service_name,
+                    **sse_kwargs,
                 )
-                
+
             except Exception as e:
                 logger.warning(f"Error processing whisper log: {e}")
         

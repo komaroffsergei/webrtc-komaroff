@@ -160,6 +160,8 @@ module WhisperRuby
     def build_payload(packet, result, start_ts, end_ts)
       {
         type: "transcription",
+        service: config.service_name,
+        timestamp: end_ts,
         phrase_id: packet.phrase_id,
         text: result.text,
         segments: result.segments.length,

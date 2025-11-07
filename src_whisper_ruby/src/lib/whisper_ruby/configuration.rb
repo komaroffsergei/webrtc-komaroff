@@ -4,6 +4,15 @@ require "etc"
 
 module WhisperRuby
   DEFAULT_SERVICE_NAME = "src_whisper_ruby"
+  SERVICE_NAME_ALIASES = {
+    "server" => "src_server",
+    "webrtc-server" => "src_server",
+    "src_server" => "src_server",
+    "whisper" => "src_whisper",
+    "src_whisper" => "src_whisper",
+    "whisper_ruby" => "src_whisper_ruby",
+    "src_whisper_ruby" => "src_whisper_ruby"
+  }.freeze
 
   class ServiceConfig
     attr_reader :nats, :whisper, :log_level, :service_name
@@ -20,8 +29,16 @@ module WhisperRuby
         nats: NatsConfig.from_env,
         whisper: WhisperConfig.from_env,
         log_level: (ENV["LOG_LEVEL"] || "INFO").upcase,
-        service_name: (ENV["SERVICE_NAME"] || DEFAULT_SERVICE_NAME).strip
+        service_name: normalized_service_name(ENV["SERVICE_NAME"])
       )
+    end
+
+    def self.normalized_service_name(raw_name)
+      key = raw_name.to_s.strip
+      return DEFAULT_SERVICE_NAME if key.empty?
+
+      mapped = SERVICE_NAME_ALIASES[key.downcase]
+      mapped || DEFAULT_SERVICE_NAME
     end
   end
 

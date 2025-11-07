@@ -10,7 +10,7 @@ module WhisperRuby
     def initialize(nats_client, subject:, service_name:)
       @nats = nats_client
       @subject = subject
-      @service_name = service_name
+      @service_name = service_name.to_s.strip.empty? ? DEFAULT_SERVICE_NAME : service_name
       @mutex = Mutex.new
     end
 
@@ -55,13 +55,11 @@ module WhisperRuby
     def publish(level, message, category:, extra:)
       return unless @nats && @nats.connected?
 
-      tagged_message = LogTag.apply(message)
-
       payload = {
         type: "log",
         level: level,
         category: category,
-        message: tagged_message,
+        message: message,
         service: @service_name,
         timestamp: Time.now.utc.iso8601(3)
       }

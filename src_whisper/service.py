@@ -21,6 +21,7 @@ from transcriber import WhisperTranscriber
 
 
 logger = logging.getLogger("whisper.service")
+SERVICE_NAME = "src_whisper"
 
 
 class WhisperService:
@@ -64,7 +65,7 @@ class WhisperService:
         self.nats_logger = NatsLogger(
             self.nc,
             self.config.nats.logs_subject,
-            service_name="whisper",
+            service_name=SERVICE_NAME,
         )
 
     async def _handle_phrase(self, msg: Msg) -> None:
@@ -119,6 +120,8 @@ class WhisperService:
 
         return {
             "type": "transcription",
+            "service": SERVICE_NAME,
+            "timestamp": end_timestamp,
             "phrase_id": packet.phrase_id,
             "text": result.text,
             "segments": len(result.segments),

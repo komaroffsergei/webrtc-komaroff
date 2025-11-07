@@ -117,22 +117,16 @@
         debugPanel.appendChild(categoryFilters);
         
         // Кнопка очистки
-        const controls = document.createElement('div');
-        controls.className = 'debug-controls';
-        
-        clearButton = document.createElement('button');
-        clearButton.className = 'clear-btn';
-        clearButton.textContent = 'Очистить';
-        clearButton.onclick = clearLogs;
-        controls.appendChild(clearButton);
-        
-        const exportButton = document.createElement('button');
-        exportButton.className = 'export-btn';
-        exportButton.textContent = 'Экспорт';
-        exportButton.onclick = exportLogs;
-        controls.appendChild(exportButton);
-        
-        debugPanel.appendChild(controls);
+        // const controls = document.createElement('div');
+        // controls.className = 'debug-controls';
+        //
+        // clearButton = document.createElement('button');
+        // clearButton.className = 'clear-btn';
+        // clearButton.textContent = 'Очистить';
+        // clearButton.onclick = clearLogs;
+        // controls.appendChild(clearButton);
+        //
+        // debugPanel.appendChild(controls);
         
         // Контейнер для логов
         logContainer = document.createElement('div');
@@ -174,12 +168,15 @@
 
     function addLog(event) {
         const timestamp = event.timestamp || new Date().toISOString();
+        const serviceName = event.service || 'src_server';
+        event.service = serviceName;
         const logEntry = {
             timestamp,
             type: event.type || 'unknown',
             level: event.level || 'info',
             category: event.category || 'general',
             uid: event.uid,
+            service: serviceName,
             data: event
         };
         
@@ -216,6 +213,8 @@
             logEl.className = `debug-log-entry log-${log.type} log-level-${log.level}`;
             
             const time = new Date(log.timestamp).toLocaleTimeString();
+            const serviceTag = log.service || log.data?.service || 'src_server';
+            const prefix = `[${time}] [${serviceTag}]`;
             
             let content = '';
             
@@ -264,15 +263,15 @@
                     }
                 }
                 
-                content = `[${time}] [${log.level.toUpperCase()}] [${log.category}] ${message}`;
+                content = `${prefix} [${log.level.toUpperCase()}] [${log.category}] ${message}`;
             } else if (log.type === 'command') {
-                content = `[${time}] [COMMAND] ${log.data.method} ${JSON.stringify(log.data.params || {})}`;
+                content = `${prefix} [COMMAND] ${log.data.method} ${JSON.stringify(log.data.params || {})}`;
             } else if (log.type === 'message') {
-                content = `[${time}] [MESSAGE] [${log.data.descr}] ${log.data.text}`;
+                content = `${prefix} [MESSAGE] [${log.data.descr}] ${log.data.text}`;
             } else if (log.type === 'warning') {
-                content = `[${time}] [WARNING] ${log.data.descr}`;
+                content = `${prefix} [WARNING] ${log.data.descr}`;
             } else {
-                content = `[${time}] ${JSON.stringify(log.data)}`;
+                content = `${prefix} ${JSON.stringify(log.data)}`;
             }
             
             logEl.textContent = content;
@@ -308,18 +307,6 @@
         renderLogs();
     }
 
-    function exportLogs() {
-        const dataStr = JSON.stringify(logs, null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `sse-logs-${Date.now()}.json`;
-        link.click();
-        
-        URL.revokeObjectURL(url);
-    }
 
     function getStats() {
         const stats = {
@@ -352,7 +339,6 @@
         init,
         addLog,
         clearLogs,
-        exportLogs,
         getStats,
         togglePanel
     });

@@ -266,6 +266,6 @@ class PhraseSegmenterNode(ConsumerNode):
                 await self.on_transcription(data)
 
         except NatsTimeoutError:
-            logger.error("Whisper request timed out for phrase %s", phrase.phrase_id)
+            logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
         except Exception as exc:
-            logger.error("Failed to process phrase %s: %s", phrase.phrase_id, exc, exc_info=True)
+            logger.error("Failed[src_whisper] to process phrase %s: %s", phrase.phrase_id, exc, exc_info=True)
