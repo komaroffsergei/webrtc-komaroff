@@ -7,6 +7,8 @@ RUN echo 'gem: --no-document' >> ~/.gemrc
 
 WORKDIR /app
 
+ENV BUNDLE_BUILD__WHISPERCPP="--disable-ggml-cuda --disable-ggml-openblas"
+
 COPY Gemfile* /app/
 
 RUN bundle install --jobs $(nproc) --retry=3 && \
@@ -16,6 +18,16 @@ COPY . /app
 
 ENV RACK_ENV=production NODE_ENV=production
 RUN rake -T | grep 'rake build' && rake build || echo 'no build task'
+
+ENV WHISPER_MODEL_NAME=medium \
+    WHISPER_VAD_MODEL_NAME=silero-v5.1.2 \
+    WHISPER_MODELS_DIR=/app/models
+
+RUN mkdir -p ${WHISPER_MODELS_DIR}
+RUN bundle exec ruby scripts/download_model.rb \
+      --model ${WHISPER_MODEL_NAME} \
+      --vad-model ${WHISPER_VAD_MODEL_NAME} \
+      --models-dir ${WHISPER_MODELS_DIR}
 
 # used in .gitlab-ci.yml Tests.
 FROM base AS tests
@@ -27,6 +39,7 @@ RUN apt update && apt install --fix-missing -y bash curl libssl-dev bash curl wg
      && rm -rf /var/lib/apt/lists/*
 
 COPY --from=base /usr/local/bundle /usr/local/bundle
+COPY --from=base /app/models /app/models
 
 # Force start & wait test Stage
 # COPY --from=tests /app/src/spec/results /app/src/spec/results
@@ -36,7 +49,10 @@ COPY . /app
 ENV RUBY_YJIT_ENABLE=1 \
     SERVER_ENV=production \
     RACK_ENV=production \
-    PORT=7000
+    PORT=7000 \
+    WHISPER_MODEL_NAME=medium \
+    WHISPER_VAD_MODEL_NAME=silero-v5.1.2 \
+    WHISPER_MODELS_DIR=/app/models
 
 WORKDIR /app
 

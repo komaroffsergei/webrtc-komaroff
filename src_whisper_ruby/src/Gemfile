@@ -6,6 +6,9 @@ gem 'sassc'
 gem 'async'
 gem 'sequel'
 gem 'pg'
+gem 'dotenv'
+gem 'nats'
+gem 'whispercpp'
 
 gem 'rack', '~> 3.1.13'
 gem 'rackup', '~> 2.2.1'
@@ -28,5 +31,3 @@ group :test do
   # gem 'simplecov-cobertura'
   gem 'yard'
 end
-
-gem "whispercpp", "~> 1.3"

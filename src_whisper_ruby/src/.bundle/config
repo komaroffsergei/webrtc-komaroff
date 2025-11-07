@@ -1,2 +1,3 @@
 ---
-BUNDLE_BUILD__WHISPERCPP: "--disable-ggml-cuda --enable-ggml-blas --with-opt-lib=/usr/lib/x86_64-linux-gnu --with-opt-include=/usr/include/openblas"
+BUNDLE_PATH: "vendor/bundle"
+BUNDLE_BUILD__WHISPERCPP: "--disable-ggml-cuda --disable-ggml-openblas"
