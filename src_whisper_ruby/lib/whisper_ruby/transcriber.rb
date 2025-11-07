@@ -1,8 +1,64 @@
 # frozen_string_literal: true
 
-ENV["GGML_CUDA"] ||= "0"
-ENV["GGML_USE_CUDA"] ||= "0"
-ENV["GGML_NO_GPU"] ||= "1"
+module WhisperRuby; end unless defined?(WhisperRuby)
+
+module WhisperRuby
+  module EnvControls
+    CPU_FORCE_ENV = %w[
+      WHISPERCPP_FORCE_CPU
+      WHISPER_FORCE_CPU
+      WHISPERCPP_DISABLE_GPU
+      WHISPER_NO_GPU
+      GGML_NO_GPU
+    ].freeze
+
+    GPU_DISABLE_ENV = %w[
+      WHISPERCPP_USE_GPU
+      WHISPERCPP_ENABLE_GPU
+      WHISPER_USE_GPU
+      GGML_USE_GPU
+      GGML_USE_CUDA
+      GGML_CUDA
+    ].freeze
+
+    GPU_ENABLE_OVERRIDES = (
+      GPU_DISABLE_ENV + %w[
+        WHISPER_ENABLE_GPU
+        WHISPERCPP_ENABLE_GPU
+        WHISPERCPP_FORCE_GPU
+        WHISPER_FORCE_GPU
+      ]
+    ).uniq.freeze
+
+    module_function
+
+    def ensure_cpu_mode!
+      return if gpu_allowed?
+
+      CPU_FORCE_ENV.each { |var| ensure_env(var, "1") }
+      GPU_DISABLE_ENV.each { |var| ensure_env(var, "0") }
+    end
+
+    def gpu_allowed?
+      GPU_ENABLE_OVERRIDES.any? { |var| truthy?(ENV[var]) }
+    end
+
+    def ensure_env(var, value)
+      current = ENV[var]
+      return if current && !current.strip.empty?
+
+      ENV[var] = value
+    end
+
+    def truthy?(value)
+      return false if value.nil?
+
+      %w[1 true yes on].include?(value.to_s.strip.downcase)
+    end
+  end
+end
+
+WhisperRuby::EnvControls.ensure_cpu_mode!
 
 require "whisper"
 
