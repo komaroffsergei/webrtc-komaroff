@@ -32,5 +32,30 @@ services:
     ports:
       - "9000:9000"
 
+  webrtc-server-whisper-ruby:
+    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-ruby/${CI_COMMIT_BRANCH}
+    build:
+      context: ../src_whisper_ruby
+      dockerfile: ../docker/ruby/Dockerfile
+      args:
+        APP_PATH: src
+      target: deploy
+    environment:
+      SERVICE_NAME: src_whisper_ruby
+      NATS_URL: ${NATS_URL:-nats://audio_nats:4222}
+      NATS_WHISPER_SUBJECT: ${NATS_WHISPER_SUBJECT:-whisper.transcription}
+      NATS_LOGS_SUBJECT: ${NATS_LOGS_SUBJECT:-whisper.logs}
+      WHISPER_MODEL_NAME: ${WHISPER_MODEL_NAME:-medium}
+      WHISPER_VAD_MODEL_NAME: ${WHISPER_VAD_MODEL_NAME:-silero-v5.1.2}
+      WHISPER_MODELS_DIR: /app/models
+      PORT: ${WHISPER_RUBY_PORT:-7000}
+    volumes:
+      - whisper_ruby_models:/app/models
+    depends_on:
+      - audio_nats
+    ports:
+      - "${WHISPER_RUBY_PORT:-7000}:7000"
+
 volumes:
   silero_vad_cache: {}
+  whisper_ruby_models: {}

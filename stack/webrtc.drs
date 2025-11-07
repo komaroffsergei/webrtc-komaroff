@@ -21,6 +21,19 @@ Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-w
    volume name: 'wisper_models', target: '/app/server/models'
 end
 
+Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-komaroff-whisper-ruby/main', ports: 7000,
+        ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
+   env NATS_URL: NATS_URL,
+      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
+      NATS_LOGS_SUBJECT: 'voice_chat_logs',
+      SERVICE_NAME: 'src_whisper_ruby',
+      WHISPER_MODEL_NAME: 'medium',
+      WHISPER_VAD_MODEL_NAME: 'silero-v5.1.2',
+      WHISPER_MODELS_DIR: '/app/models',
+      PORT: 7000
+   volume name: 'whisper_ruby_models', target: '/app/models'
+end
+
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do
