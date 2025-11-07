@@ -1,7 +1,5 @@
 FROM ruby:3.4.5-slim-bookworm AS base
 
-ARG APP_PATH=src_whisper_ruby/src
-
 RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
      libsqlite3-dev libssl-dev libgeos-dev libyaml-dev cmake \
      && rm -rf /var/lib/apt/lists/*

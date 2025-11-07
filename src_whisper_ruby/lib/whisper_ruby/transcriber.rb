@@ -156,7 +156,7 @@ module WhisperRuby
       @logger.info("Audio stats before VAD retry (#{stats})")
     end
 
-    def build_params(vad_enabled: false)
+    def build_params(vad_enabled: true)
       params = Whisper::Params.new(
         language: @config.language,
         translate: @config.translate,

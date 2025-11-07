@@ -37,8 +37,6 @@ services:
     build:
       context: ../src_whisper_ruby
       dockerfile: ../docker/ruby/Dockerfile
-      args:
-        APP_PATH: src
       target: deploy
     environment:
       SERVICE_NAME: src_whisper_ruby

@@ -17,7 +17,7 @@ coverage
 /src_whisper/.venv/*
 /src_whisper/recordings/
 /src_whisper/recordings_raw/
-/src_whisper_ruby/src/recordings/
-/src_whisper_ruby/src/models/
+/src_whisper_ruby/recordings/
+/src_whisper_ruby/models/
 /models/
-/src_whisper_ruby/src/.bundle/
+/src_whisper_ruby/.bundle/
