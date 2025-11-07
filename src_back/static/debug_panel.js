@@ -44,6 +44,109 @@
         attachEventListeners();
     }
 
+    function toNumber(value) {
+        if (typeof value === 'number' && Number.isFinite(value)) {
+            return value;
+        }
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function formatSeconds(value) {
+        const num = toNumber(value);
+        if (num === null) {
+            return null;
+        }
+        return `${num.toFixed(2)}s`;
+    }
+
+    function formatNumber(value) {
+        const num = toNumber(value);
+        if (num === null) {
+            return null;
+        }
+        return num.toLocaleString();
+    }
+
+    function truncateText(text, limit = 80) {
+        if (!text) {
+            return '';
+        }
+        return text.length > limit ? `${text.slice(0, limit)}…` : text;
+    }
+
+    function describeWhisperEvent(eventType, data) {
+        if (!eventType || !data) {
+            return null;
+        }
+        const phraseId = data.phrase_id || '—';
+        const duration = formatSeconds(data.audio_duration);
+        const transTime = formatSeconds(data.transcription_time);
+        const start = data.start || data.start_timestamp;
+        const end = data.end || data.end_timestamp;
+        const sr = formatNumber(data.sample_rate);
+        const samples = formatNumber(data.audio_samples);
+        const textPreview = data.text ? `"${truncateText(data.text, 80)}"` : null;
+
+        switch (eventType) {
+            case 'phrase_received': {
+                let message = `Phrase RECEIVED [${phraseId}]`;
+                if (duration) {
+                    message += ` | audio: ${duration}`;
+                }
+                if (sr) {
+                    message += ` | sr: ${sr} Hz`;
+                }
+                if (samples) {
+                    message += ` | samples: ${samples}`;
+                }
+                return message;
+            }
+            case 'transcription_started': {
+                let message = `Transcription STARTED [${phraseId}]`;
+                if (duration) {
+                    message += ` | audio: ${duration}`;
+                }
+                if (start) {
+                    message += ` | start: ${new Date(start).toLocaleTimeString()}`;
+                }
+                return message;
+            }
+            case 'transcription_completed': {
+                let message = `Transcription COMPLETED [${phraseId}]`;
+                if (duration) {
+                    message += ` | audio: ${duration}`;
+                }
+                if (transTime) {
+                    message += ` | time: ${transTime}`;
+                }
+                const rtf = toNumber(data.rtf ?? (data.audio_duration && data.transcription_time ? data.transcription_time / data.audio_duration : null));
+                if (rtf !== null) {
+                    message += ` | RTF: ${rtf.toFixed(2)}x`;
+                }
+                if (typeof data.segments === 'number') {
+                    message += ` | segments: ${data.segments}`;
+                }
+                if (start && end) {
+                    message += ` | ${new Date(start).toLocaleTimeString()} → ${new Date(end).toLocaleTimeString()}`;
+                }
+                if (textPreview) {
+                    message += ` | text: ${textPreview}`;
+                }
+                return message;
+            }
+            default: {
+                if (eventType.includes('error') || eventType.includes('failed')) {
+                    const errorType = data.error_type || 'Error';
+                    const errorMsg = data.error_message || data.message;
+                    const errPhrase = data.phrase_id || phraseId;
+                    return `Transcription ERROR [${errPhrase}] ${errorType}: ${errorMsg}`;
+                }
+                return null;
+            }
+        }
+    }
+
     function createDebugPanel() {
         // Создаем контейнер отладки
         debugPanel = document.createElement('div');
@@ -220,44 +323,50 @@
             
             if (log.type === 'log') {
                 let message = log.data.message;
+                const eventType = log.data.event;
                 
                 // Специальное форматирование для логов транскрипции Whisper
-                if (log.category === 'whisper' && message) {
-                    // Используем структурированные данные из NatsLogger, если доступны
-                    if (message.includes('Transcription started:')) {
-                        const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
-                        const audioBytes = log.data.audio_bytes || parseInt((message.match(/bytes=(\d+)/) || [])[1]);
-                        
-                        if (audioDuration) {
-                            message = `Transcription STARTED | audio: ${audioDuration.toFixed(2)}s`;
-                            if (audioBytes) {
-                                message += ` | size: ${(audioBytes / 1024).toFixed(1)}KB`;
+                if (log.category === 'whisper') {
+                    const eventMessage = describeWhisperEvent(eventType, log.data);
+                    if (eventMessage) {
+                        message = eventMessage;
+                    } else if (message) {
+                        // Используем структурированные данные из NatsLogger, если доступны (обратная совместимость)
+                        if (message.includes('Transcription started:')) {
+                            const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
+                            const audioBytes = log.data.audio_bytes || parseInt((message.match(/bytes=(\d+)/) || [])[1], 10);
+
+                            if (audioDuration) {
+                                message = `Transcription STARTED | audio: ${Number(audioDuration).toFixed(2)}s`;
+                                if (audioBytes) {
+                                    message += ` | size: ${(audioBytes / 1024).toFixed(1)}KB`;
+                                }
                             }
-                        }
-                    } else if (message.includes('Transcription completed:')) {
-                        // Приоритет структурированным данным из extra полей
-                        const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
-                        const transTime = log.data.transcription_time || parseFloat((message.match(/transcription_time=([\d.]+)s/) || [])[1]);
-                        const segments = log.data.segments || parseInt((message.match(/segments=(\d+)/) || [])[1]);
-                        const rtf = log.data.rtf;
-                        const startTimestamp = log.data.start || (message.match(/start=([\d\-:.TZ]+)/) || [])[1];
-                        const endTimestamp = log.data.end || (message.match(/end=([\d\-:.TZ]+)/) || [])[1];
-                        const text = log.data.text;
-                        
-                        if (audioDuration && transTime) {
-                            const calculatedRtf = rtf || (audioDuration > 0 ? (transTime / audioDuration) : 0);
-                            
-                            let timeInfo = '';
-                            if (startTimestamp && endTimestamp) {
-                                const startTime = new Date(startTimestamp).toLocaleTimeString();
-                                const endTime = new Date(endTimestamp).toLocaleTimeString();
-                                timeInfo = ` | ${startTime} -> ${endTime}`;
-                            }
-                            
-                            message = `Transcription COMPLETED | audio: ${audioDuration.toFixed(2)}s | time: ${transTime.toFixed(2)}s | RTF: ${calculatedRtf.toFixed(2)}x | segments: ${segments || 0}${timeInfo}`;
-                            
-                            if (text) {
-                                message += ` | text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`;
+                        } else if (message.includes('Transcription completed:')) {
+                            // Приоритет структурированным данным из extra полей
+                            const audioDuration = log.data.audio_duration || parseFloat((message.match(/audio_duration=([\d.]+)s/) || [])[1]);
+                            const transTime = log.data.transcription_time || parseFloat((message.match(/transcription_time=([\d.]+)s/) || [])[1]);
+                            const segments = log.data.segments || parseInt((message.match(/segments=(\d+)/) || [])[1], 10);
+                            const rtf = log.data.rtf;
+                            const startTimestamp = log.data.start || (message.match(/start=([\d\-:.TZ]+)/) || [])[1];
+                            const endTimestamp = log.data.end || (message.match(/end=([\d\-:.TZ]+)/) || [])[1];
+                            const text = log.data.text;
+
+                            if (audioDuration && transTime) {
+                                const calculatedRtf = rtf || (audioDuration > 0 ? (transTime / audioDuration) : 0);
+
+                                let timeInfo = '';
+                                if (startTimestamp && endTimestamp) {
+                                    const startTime = new Date(startTimestamp).toLocaleTimeString();
+                                    const endTime = new Date(endTimestamp).toLocaleTimeString();
+                                    timeInfo = ` | ${startTime} -> ${endTime}`;
+                                }
+
+                                message = `Transcription COMPLETED | audio: ${Number(audioDuration).toFixed(2)}s | time: ${Number(transTime).toFixed(2)}s | RTF: ${Number(calculatedRtf).toFixed(2)}x | segments: ${segments || 0}${timeInfo}`;
+
+                                if (text) {
+                                    message += ` | text: "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}"`;
+                                }
                             }
                         }
                     }

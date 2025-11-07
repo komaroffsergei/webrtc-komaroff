@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import traceback
 from datetime import datetime
 from typing import Optional
 
@@ -69,34 +70,51 @@ class WhisperService:
         )
 
     async def _handle_phrase(self, msg: Msg) -> None:
+        packet: PhrasePacket | None = None
         try:
-            await self._emit_info_log(msg="Зацепил фразу")
             packet = PhrasePacket.from_bytes(msg.data)
+            await self._log_phrase_received(packet)
         except PhrasePacketError as exc:
             logger.error("Failed to parse phrase: %s", exc)
+            await self._log_error(
+                event="phrase_parse_failed",
+                exc=exc,
+                payload_size=len(msg.data),
+            )
             await self._reply_with_error(msg, str(exc))
             return
         except Exception as exc:  # pragma: no cover
             logger.exception("Unexpected phrase parsing error")
+            await self._log_error(
+                event="phrase_receive_error",
+                exc=exc,
+                payload_size=len(msg.data),
+            )
             await self._reply_with_error(msg, str(exc))
             return
 
         start_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
 
-        await self._emit_info_log(msg=f"Начинаю транскрипцию в {start_timestamp}")
+        await self._log_transcription_start(packet, start_timestamp)
         try:
             result = await self.transcriber.transcribe(packet.audio, packet.sample_rate)
             end_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
             payload = self._build_response(packet, result, start_timestamp, end_timestamp)
-            await self._emit_info_log(msg=f"Закончил транскрипцию в {payload['end_timestamp']}")
-            await self._emit_transcription_log(result, start_timestamp, payload["end_timestamp"])
+            await self._log_transcription_complete(packet, result, start_timestamp, payload["end_timestamp"])
             await self._reply(msg, payload)
             logger.info("Transcription sent for phrase %s", packet.phrase_id or "unknown")
         except Exception as exc:
             logger.exception("Transcription failed")
+            await self._log_error(
+                event="transcription_failed",
+                exc=exc,
+                phrase_id=packet.phrase_id,
+                sample_rate=packet.sample_rate,
+                audio_duration=packet.duration,
+            )
             await self._reply_with_error(msg, str(exc), packet.phrase_id)
 
-    async def _emit_transcription_log(self, result, start_ts: str, end_ts: str) -> None:
+    async def _emit_transcription_log(self, packet: PhrasePacket, result, start_ts: str, end_ts: str) -> None:
         if not self.nats_logger or not result.text:
             return
         await self.nats_logger.log_transcription(
@@ -106,14 +124,68 @@ class WhisperService:
             transcription_time=result.transcription_time,
             start_timestamp=start_ts,
             end_timestamp=end_ts,
+            phrase_id=packet.phrase_id,
         )
 
-    async def _emit_info_log(self, msg: str) -> None:
-        if not self.nats_logger or not msg:
+    async def _log_phrase_received(self, packet: PhrasePacket) -> None:
+        if not self.nats_logger:
             return
-        await self.nats_logger.log_info(
-            msg,
+        await self.nats_logger.log_event(
+            event_type="phrase_received",
+            message="Получена фраза из NATS",
             category="transcription",
+            phrase_id=packet.phrase_id,
+            sample_rate=packet.sample_rate,
+            audio_duration=round(packet.duration, 3),
+            audio_samples=int(packet.audio.size),
+            metadata=packet.metadata,
+        )
+
+    async def _log_transcription_start(self, packet: PhrasePacket, start_timestamp: str) -> None:
+        if not self.nats_logger:
+            return
+        await self.nats_logger.log_transcription_start(
+            audio_duration=packet.duration,
+            audio_samples=int(packet.audio.size),
+            sample_rate=packet.sample_rate,
+            phrase_id=packet.phrase_id,
+            start_timestamp=start_timestamp,
+            metadata=packet.metadata,
+        )
+
+    async def _log_transcription_complete(
+        self,
+        packet: PhrasePacket,
+        result,
+        start_ts: str,
+        end_ts: str,
+    ) -> None:
+        await self._emit_transcription_log(packet, result, start_ts, end_ts)
+
+    async def _log_error(
+        self,
+        *,
+        event: str,
+        exc: Exception,
+        phrase_id: str | None = None,
+        **extra,
+    ) -> None:
+        if not self.nats_logger:
+            return
+        payload = {
+            "event": event,
+            "error_type": type(exc).__name__,
+            "error_message": str(exc),
+            "stacktrace": traceback.format_exc(),
+        }
+        if phrase_id:
+            payload["phrase_id"] = phrase_id
+        if extra:
+            payload.update(extra)
+        await self.nats_logger.log_error(
+            f"{event}: {exc}",
+            category="whisper",
+            **payload,
         )
 
     def _build_response(self, packet: PhrasePacket, result, start_ts: str, end_timestamp) -> dict:

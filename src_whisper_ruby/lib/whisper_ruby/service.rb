@@ -102,7 +102,6 @@ module WhisperRuby
     def subscribe_to_phrases
       subject = config.nats.whisper_subject
       @nats_client.subscribe(subject) do |msg|
-        @nats_logger&.log_info("Получил фразу", category: "transcription")
         enqueue_message(msg)
       end
       @nats_client.flush
@@ -137,23 +136,24 @@ module WhisperRuby
 
     def process_message(msg)
       packet = nil
-      start_ts = timestamp_now
       packet = PhrasePacket.from_bytes(msg.data)
-
-      info_log("Начинаю транскрипцию", start_ts)
+      log_phrase_received(packet)
+      start_ts = timestamp_now
+      log_transcription_start(packet, start_ts)
       result = @transcriber.transcribe(packet)
       end_ts = timestamp_now
 
       payload = build_payload(packet, result, start_ts, end_ts)
-      info_log("Закончил транскрипцию", end_ts)
-      emit_transcription_log(result, start_ts, end_ts)
+      emit_transcription_log(packet, result, start_ts, end_ts)
       reply(msg, payload)
       @logger.info("Transcription done for #{packet.phrase_id || 'unknown'}")
     rescue PhrasePacketError => e
       @logger.error("Failed to parse phrase: #{e}")
+      log_transcription_error("phrase_parse_failed", e, packet: nil, extra: {payload_size: msg.data&.bytesize})
       reply_with_error(msg, e.message)
     rescue StandardError => e
       @logger.error("Transcription failed: #{e}")
+      log_transcription_error("transcription_failed", e, packet: packet)
       reply_with_error(msg, e.message, packet&.phrase_id)
     end
 
@@ -199,7 +199,7 @@ module WhisperRuby
       end
     end
 
-    def emit_transcription_log(result, start_ts, end_ts)
+    def emit_transcription_log(packet, result, start_ts, end_ts)
       return unless @nats_logger && result.text && !result.text.empty?
 
       @nats_logger.log_transcription(
@@ -208,18 +208,65 @@ module WhisperRuby
         audio_duration: result.audio_duration,
         transcription_time: result.transcription_time,
         start_timestamp: start_ts,
-        end_timestamp: end_ts
+        end_timestamp: end_ts,
+        phrase_id: packet.phrase_id
       )
-    end
-
-    def info_log(message, timestamp)
-      return unless @nats_logger
-
-      @nats_logger.log_info(message, category: "transcription", event_timestamp: timestamp)
     end
 
     def timestamp_now
       Time.now.utc.strftime("%Y-%m-%dT%H:%M:%S.%L")
+    end
+
+    def log_phrase_received(packet)
+      return unless @nats_logger && packet
+
+      @nats_logger.log_event(
+        event: "phrase_received",
+        message: "Получена фраза из NATS",
+        category: "transcription",
+        phrase_id: packet.phrase_id,
+        sample_rate: packet.sample_rate,
+        audio_duration: packet.duration.round(3),
+        audio_samples: packet.audio.length,
+        metadata: packet.metadata
+      )
+    end
+
+    def log_transcription_start(packet, start_ts)
+      return unless @nats_logger && packet
+
+      @nats_logger.log_transcription_start(
+        audio_duration: packet.duration,
+        audio_samples: packet.audio.length,
+        sample_rate: packet.sample_rate,
+        phrase_id: packet.phrase_id,
+        start_timestamp: start_ts,
+        metadata: packet.metadata
+      )
+    end
+
+    def log_transcription_error(event, error, packet:, extra: nil)
+      return unless @nats_logger
+
+      payload = {
+        event: event,
+        error_type: error.class.name,
+        error_message: error.message,
+        stacktrace: Array(error.backtrace).join("\n")
+      }
+      if packet
+        payload[:phrase_id] = packet.phrase_id if packet.phrase_id
+        payload[:sample_rate] = packet.sample_rate
+        payload[:audio_duration] = packet.duration
+        payload[:metadata] = packet.metadata
+      end
+      payload.merge!(extra) if extra
+
+      @nats_logger.log_error(
+        "#{event}: #{error.message}",
+        category: "whisper",
+        **payload
+      )
     end
 
     def connected_server_uri

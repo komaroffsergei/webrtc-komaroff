@@ -37,13 +37,21 @@
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        const line = msg && (msg.text || JSON.stringify(msg));
-        console.log('[whisper log]', line);
-        // if (window.AppLog) {
-        //   AppLog.emit('[sse]', msg);
-        //   if (line) AppLog.emit('[whisper]', line);
-        // }
-      } catch {}
+        if (window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
+          window.DebugPanel.addLog(msg);
+        }
+        if (window.AppLog && typeof window.AppLog.emit === 'function') {
+          AppLog.emit('[sse]', msg);
+        }
+        if (msg?.type === 'log' && msg?.message) {
+          console.log('[SSE]', msg.service || 'src_server', msg.message, msg);
+        }
+      } catch(err) {
+        console.warn('Failed to handle SSE message', err);
+      }
+    };
+    es.onerror = (err) => {
+      console.warn('SSE connection error', err);
     };
   } catch(e) { console.warn('SSE init failed', e); }
   let sender = null;

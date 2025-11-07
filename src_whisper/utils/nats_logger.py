@@ -114,7 +114,9 @@ class NatsLogger:
         audio_duration: float,
         transcription_time: float,
         start_timestamp: Optional[str] = None,
-        end_timestamp: Optional[str] = None
+        end_timestamp: Optional[str] = None,
+        phrase_id: Optional[str] = None,
+        event_type: str = "transcription_completed",
     ) -> None:
         """
         Специализированный метод для логирования транскрипции.
@@ -134,8 +136,11 @@ class NatsLogger:
             "segments": segments,
             "audio_duration": audio_duration,
             "transcription_time": transcription_time,
-            "rtf": round(rtf, 2)
+            "rtf": round(rtf, 2),
+            "event": event_type,
         }
+        if phrase_id:
+            extra["phrase_id"] = phrase_id
         
         if start_timestamp:
             extra["start"] = start_timestamp
@@ -155,34 +160,46 @@ class NatsLogger:
     async def log_transcription_start(
         self,
         audio_duration: float,
-        audio_bytes: int
+        audio_samples: int,
+        sample_rate: int,
+        phrase_id: Optional[str] = None,
+        start_timestamp: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Логировать начало транскрипции.
         
         Args:
             audio_duration: Длительность аудио (секунды)
-            audio_bytes: Размер аудио данных (байты)
+            audio_samples: Количество сэмплов в аудио
+            sample_rate: Частота дискретизации входного аудио
+            phrase_id: Идентификатор фразы (если есть)
+            start_timestamp: Готовый timestamp (ISO). Если не указан, будет создан автоматически.
+            metadata: Дополнительные метаданные фразы для отображения в логах
         
         Returns:
             ISO timestamp начала транскрипции
         """
-        start_timestamp = datetime.utcnow().isoformat() + "Z"
-        
-        message = f"Transcription started: audio_duration={audio_duration:.2f}s bytes={audio_bytes}"
-        
-        await self._publish_log(
-            "info",
-            message,
-            "whisper",
-            {
-                "audio_duration": audio_duration,
-                "audio_bytes": audio_bytes,
-                "start": start_timestamp
-            }
+        ts = start_timestamp or datetime.utcnow().isoformat() + "Z"
+        payload: Dict[str, Any] = {
+            "audio_duration": audio_duration,
+            "audio_samples": audio_samples,
+            "sample_rate": sample_rate,
+            "start": ts,
+            "event": "transcription_started",
+        }
+        if phrase_id:
+            payload["phrase_id"] = phrase_id
+        if metadata:
+            payload["metadata"] = metadata
+
+        message = (
+            f"Transcription started: audio_duration={audio_duration:.2f}s "
+            f"samples={audio_samples} sample_rate={sample_rate}"
         )
-        
-        return start_timestamp
+
+        await self._publish_log("info", message, "whisper", payload)
+        return ts
     
     async def log_event(
         self,
@@ -196,13 +213,13 @@ class NatsLogger:
         Логировать произвольное событие с дополнительными полями.
         
         Args:
-            event_type: Тип события (например, "connection", "error", "metric")
+            event_type: Тип события (будет записан в поле 'event')
             message: Описание события
             category: Категория события
             level: Уровень важности
             **kwargs: Произвольные дополнительные поля
         """
-        extra = {"event_type": event_type}
+        extra = {"event": event_type}
         if kwargs:
             extra.update(kwargs)
         

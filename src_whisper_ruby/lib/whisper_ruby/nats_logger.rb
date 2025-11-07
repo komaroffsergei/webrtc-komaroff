@@ -26,7 +26,34 @@ module WhisperRuby
       publish("error", message, category: category, extra: extra)
     end
 
-    def log_transcription(text:, segments:, audio_duration:, transcription_time:, start_timestamp:, end_timestamp:)
+    def log_event(event:, message:, category: "system", level: "info", **extra)
+      extra[:event] = event
+      publish(level, message, category: category, extra: extra)
+    end
+
+    def log_transcription_start(audio_duration:, audio_samples:, sample_rate:, phrase_id: nil, start_timestamp: nil, metadata: nil)
+      ts = start_timestamp || Time.now.utc.iso8601(3)
+      extra = {
+        audio_duration: audio_duration,
+        audio_samples: audio_samples,
+        sample_rate: sample_rate,
+        start: ts,
+        event: "transcription_started"
+      }
+      extra[:phrase_id] = phrase_id if phrase_id
+      extra[:metadata] = metadata if metadata
+
+      message = format(
+        "Transcription started: audio=%.2fs samples=%d sample_rate=%d",
+        audio_duration.to_f,
+        audio_samples.to_i,
+        sample_rate.to_i
+      )
+      publish("info", message, category: "whisper", extra: extra)
+      ts
+    end
+
+    def log_transcription(text:, segments:, audio_duration:, transcription_time:, start_timestamp:, end_timestamp:, phrase_id: nil, event: "transcription_completed")
       rtf = if audio_duration.to_f.positive? && transcription_time.to_f.positive?
               transcription_time.to_f / audio_duration.to_f
             else
@@ -40,8 +67,10 @@ module WhisperRuby
         transcription_time: transcription_time,
         rtf: rtf.round(2),
         start: start_timestamp,
-        end: end_timestamp
+        end: end_timestamp,
+        event: event
       }
+      extra[:phrase_id] = phrase_id if phrase_id
       publish(
         "info",
         "Transcription completed: audio=#{audio_duration.round(2)}s text=#{text}s time=#{transcription_time.round(2)}s segments=#{segments}",
