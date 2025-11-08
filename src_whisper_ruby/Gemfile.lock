@@ -427,7 +427,7 @@ GEM
     sqlite3 (2.8.0-x86_64-darwin)
     sqlite3 (2.8.0-x86_64-linux-gnu)
     sqlite3 (2.8.0-x86_64-linux-musl)
-    stack-service-base (0.0.55)
+    stack-service-base (0.0.56)
       async
       debug
       dotenv

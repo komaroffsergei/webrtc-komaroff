@@ -89,9 +89,11 @@ get '/healthcheck' do
   }.to_json
 end
 
-def worker_state
-  return "disabled" unless @service_thread
-  @service_thread.alive? ? "running" : "stopped"
+helpers do
+  def worker_state
+    return "disabled" unless @service_thread
+    @service_thread.alive? ? "running" : "stopped"
+  end
 end
 
 run Sinatra::Application
