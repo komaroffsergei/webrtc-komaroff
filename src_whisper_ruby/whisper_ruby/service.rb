@@ -13,20 +13,15 @@ module WhisperRuby
   class Service
     attr_reader :config
 
-    def initialize(config:, logger: Logger.new($stdout))
+    def initialize(config:, nats_client: )
       @config = config
-      @logger = logger
-      @nats_client = NATS::IO::Client.new
-      @nats_mutex = Mutex.new
+      @nats_client = nats_client
       @queue = SizedQueue.new(config.whisper.max_queue_size)
       @workers = []
       @running = false
-      @transcriber = Transcriber.new(config: config.whisper, logger: @logger)
-      @model_manager = ModelManager.new(logger: @logger)
-      @nats_logger = nil
+      @transcriber = Transcriber.new config: config.whisper
+      @model_manager = ModelManager.new
       @model_paths = nil
-      @log_queue = Queue.new
-      @log_worker = start_log_worker
     end
 
     def start
@@ -39,12 +34,12 @@ module WhisperRuby
       start_workers
       subscribe_to_phrases
 
-      @logger.info("WhisperRuby service is ready (subject=#{config.nats.whisper_subject})")
+      LOGGER.info "WhisperRuby service is ready (subject=#{config.nats.whisper_subject})"
       loop do
         sleep 5
       end
     rescue StandardError => e
-      @logger.error("Service crashed: #{e}")
+      LOGGER.exception "Service crashed:", e
       raise
     ensure
       @running = false
@@ -65,58 +60,18 @@ module WhisperRuby
       )
     end
 
-    def connect_nats
-      servers = config.nats.url.split(",").map(&:strip).reject(&:empty?)
-      options = {
-        servers: servers.empty? ? [config.nats.url] : servers,
-        reconnect_time_wait: 2,
-        max_reconnect_attempts: -1,
-        name: config.nats.connection_name
-      }
-
-      @nats_client.on_error do |err|
-        @logger.error("NATS error: #{err}")
-      end
-
-      @nats_client.on_disconnect do |error|
-        if error
-          @logger.warn("Disconnected from NATS: #{error}")
-        else
-          @logger.warn("Disconnected from NATS")
-        end
-      end
-
-      @nats_client.on_reconnect do
-        @logger.info("Reconnected to NATS: #{connected_server_uri}")
-      end
-
-      @nats_client.connect(options)
-      @logger.info("Connected to NATS #{connected_server_uri}")
-    end
-
-    def setup_nats_logging
-      @nats_logger = NatsLogger.new(
-        @nats_client,
-        subject: config.nats.logs_subject,
-        service_name: config.service_name
-      )
-      @nats_logger.log_info("WhisperRuby logger ready", category: "system")
-    end
-
     def subscribe_to_phrases
-      subject = config.nats.whisper_subject
-      @nats_client.subscribe(subject) do |msg|
-        enqueue_message(msg)
+      Thread.new do
+        @nats_client.loop_sub config.nats.whisper_subject { |msg| enqueue_message(msg) }
       end
-      @nats_client.flush
-      @logger.info("Subscribed to #{subject}")
+      LOGGER.info("Subscribed to #{subject}")
     end
 
     def enqueue_message(msg)
       received = ReceivedMessage.new(subject: msg.subject, reply: msg.reply, data: msg.data)
       @queue.push(received)
     rescue ThreadError
-      @logger.warn("Dropping message due to full queue")
+      LOGGER.warn("Dropping message due to full queue")
     end
 
     def start_workers
@@ -134,7 +89,7 @@ module WhisperRuby
         msg = @queue.pop
         process_message(msg)
       rescue StandardError => e
-        @logger.error("Worker #{worker_id} error: #{e}")
+        LOGGER.error("Worker #{worker_id} error: #{e}")
       end
     end
 
@@ -150,13 +105,13 @@ module WhisperRuby
       payload = build_payload(packet, result, start_ts, end_ts)
       emit_transcription_log(packet, result, start_ts, end_ts)
       reply(msg, payload)
-      @logger.info("Transcription done for #{packet.phrase_id || 'unknown'}")
+      LOGGER.info("Transcription done for #{packet.phrase_id || 'unknown'}")
     rescue PhrasePacketError => e
-      @logger.error("Failed to parse phrase: #{e}")
+      LOGGER.error("Failed to parse phrase: #{e}")
       log_transcription_error("phrase_parse_failed", e, packet: nil, extra: {payload_size: msg.data&.bytesize})
       reply_with_error(msg, e.message)
     rescue StandardError => e
-      @logger.error("Transcription failed: #{e}")
+      LOGGER.error("Transcription failed: #{e}")
       log_transcription_error("transcription_failed", e, packet: packet)
       reply_with_error(msg, e.message, packet&.phrase_id)
     end
@@ -224,11 +179,11 @@ module WhisperRuby
 
       @log_queue << block
     rescue StandardError => e
-      @logger.warn("Failed to enqueue log task: #{e}")
+      LOGGER.warn("Failed to enqueue log task: #{e}")
       begin
         block.call
       rescue StandardError => inner
-        @logger.warn("Fallback log execution failed: #{inner}")
+        LOGGER.warn("Fallback log execution failed: #{inner}")
       end
     end
 
@@ -239,7 +194,7 @@ module WhisperRuby
           break if job.equal?(:stop)
           job.call
         rescue StandardError => e
-          @logger.warn("Log worker error: #{e}")
+          LOGGER.warn("Log worker error: #{e}")
         end
       end.tap { |thr| thr.report_on_exception = false }
     end
@@ -250,7 +205,7 @@ module WhisperRuby
       @log_queue << :stop
       @log_worker.join(1)
     rescue StandardError => e
-      @logger.warn("Failed to stop log worker: #{e}")
+      LOGGER.warn("Failed to stop log worker: #{e}")
     ensure
       @log_worker = nil
     end

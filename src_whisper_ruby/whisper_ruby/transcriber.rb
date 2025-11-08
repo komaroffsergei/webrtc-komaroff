@@ -85,7 +85,7 @@ module WhisperRuby
           @log_hooked = true
         end
       rescue StandardError => e
-        logger.warn("Failed to log whisper backend info: #{e}")
+        logger.warn "Failed to log whisper backend info: #{e}"
       end
 
       private
@@ -93,28 +93,26 @@ module WhisperRuby
       def log_whisper_backend(logger)
         system_info = Whisper.system_info_str.to_s.strip
         if system_info.empty?
-          logger.info("WhisperCPP initialized")
+          logger.info "WhisperCPP initialized"
           return
         end
 
         if system_info.include?("CUDA") || system_info.include?("GPU")
-          logger.info("WhisperCPP system info: #{system_info}")
+          logger.info "WhisperCPP system info: #{system_info}"
         else
-          logger.info("WhisperCPP running in CPU-only mode (info: #{system_info})")
+          logger.info "WhisperCPP running in CPU-only mode (info: #{system_info})"
         end
       end
     end
 
-    def initialize(config:, logger:)
+    def initialize(config:)
       @config = config
-      @logger = logger
       @model_path = nil
       @vad_model_path = nil
       @thread_key = :"whisper_ctx_#{object_id}"
       @thread_contexts = {}
       @thread_contexts_mutex = Mutex.new
       @loaded = false
-      self.class.ensure_log_hook(@logger)
     end
 
     def load!(model_path:, vad_model_path:)
@@ -123,7 +121,7 @@ module WhisperRuby
       @model_path = model_path
       @vad_model_path = vad_model_path
       @loaded = true
-      @logger.info("Whisper transcriber prepared (model=#{@model_path}, vad=#{@vad_model_path})")
+      LOGGER.info "Whisper transcriber prepared (model=#{@model_path}, vad=#{@vad_model_path})"
     end
 
     def transcribe(packet)
@@ -150,7 +148,7 @@ module WhisperRuby
           duration: packet.duration,
           samples: audio.length
         )
-        @logger.warn("No speech detected by Whisper VAD, retrying without VAD (#{context_info})")
+        LOGGER.warn "No speech detected by Whisper VAD, retrying without VAD (#{context_info})"
         run_model(context, params_no_vad, audio)
         segments = collect_segments(context)
       end
@@ -182,7 +180,7 @@ module WhisperRuby
       @thread_contexts_mutex.synchronize do
         @thread_contexts[Thread.current.object_id] = new_ctx
       end
-      @logger.debug("Initialized whisper context for worker thread #{Thread.current.object_id}")
+      LOGGER.debug "Initialized whisper context for worker thread #{Thread.current.object_id}"
       new_ctx
     end
 
@@ -213,7 +211,7 @@ module WhisperRuby
         max: max_amp.round(5),
         rms: rms.round(5)
       )
-      @logger.info("Audio stats before VAD retry (#{stats})")
+      LOGGER.info "Audio stats before VAD retry (#{stats})"
     end
 
     def build_params(vad_enabled: true)

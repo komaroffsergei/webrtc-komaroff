@@ -11,10 +11,6 @@ module WhisperRuby
     ASR_BASE_URL = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main"
     VAD_BASE_URL = "https://huggingface.co/ggml-org/whisper-vad/resolve/main"
 
-    def initialize(logger:)
-      @logger = logger
-    end
-
     def ensure_all(whisper_config)
       asr_path = ensure_model(
         target_path: whisper_config.resolved_model_reference,
@@ -47,7 +43,7 @@ module WhisperRuby
 
     def download_file(url, destination)
       tmp_path = "#{destination}.download"
-      @logger.info("Downloading model #{File.basename(destination)}")
+      LOGGER.info "Downloading model #{File.basename(destination)}"
 
       fetch_with_redirects(URI(url)) do |response|
         File.open(tmp_path, "wb") do |file|
@@ -58,7 +54,7 @@ module WhisperRuby
       end
 
       FileUtils.mv(tmp_path, destination)
-      @logger.info("Model stored at #{destination}")
+      LOGGER.info "Model stored at #{destination}"
       destination
     ensure
       FileUtils.rm_f(tmp_path) if tmp_path && File.exist?(tmp_path)
