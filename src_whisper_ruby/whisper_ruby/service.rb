@@ -13,9 +13,9 @@ module WhisperRuby
   class Service
     attr_reader :config
 
-    def initialize(config:, nats_client: )
+    def initialize(config:, nats_client: nil)
       @config = config
-      @nats_client = nats_client
+      @nats_client = nats_client || NATSClient.new(config.nats.url)
       @queue = SizedQueue.new(config.whisper.max_queue_size)
       @workers = []
       @running = false
