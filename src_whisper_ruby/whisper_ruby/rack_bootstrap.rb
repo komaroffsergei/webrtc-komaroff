@@ -2,7 +2,7 @@
 
 require_relative "model_manager"
 require_relative "phrase_packet"
-require_relative "audio_utils"
+require_relative "../utils/audio_utils"
 require_relative "transcriber"
 require_relative "service"
 require_relative "nats_client"

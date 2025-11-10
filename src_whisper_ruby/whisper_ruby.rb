@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "whisper_ruby/logging"
-require_relative "whisper_ruby/audio_utils"
+require_relative "whisper_ruby/tils"
 require_relative "whisper_ruby/model_manager"
 require_relative "whisper_ruby/nats_client"
 require_relative "whisper_ruby/nats_logger"

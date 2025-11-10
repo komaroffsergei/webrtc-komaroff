@@ -25,7 +25,7 @@ module WhisperRuby
       @nats_mutex = Mutex.new
       @log_queue = Queue.new
       @log_worker = nil
-      @nats_logger = nil
+      @nats_logging_enabled = false
     end
 
     def start
@@ -34,7 +34,7 @@ module WhisperRuby
       @running = true
       ensure_models_and_transcriber
       connect_nats
-      setup_nats_logging
+      configure_nats_logging
       start_workers
       subscribe_to_phrases
       @log_worker ||= start_log_worker
@@ -70,16 +70,17 @@ module WhisperRuby
       @nats_client
     end
 
-    def setup_nats_logging
-      logger_class = WhisperRuby.const_defined?(:NatsLogger) ? WhisperRuby::NatsLogger : nil
-      return unless logger_class
-      return unless @nats_client.respond_to?(:publish)
+    def configure_nats_logging
+      return unless @nats_client.respond_to?(:configure_logging)
 
-      @nats_logger = logger_class.new(
-        @nats_client,
+      @nats_client.configure_logging(
         subject: config.nats.logs_subject,
         service_name: config.service_name
       )
+      @nats_logging_enabled = true
+    rescue StandardError => e
+      LOGGER.warn("Failed to configure NATS logging: #{e}")
+      @nats_logging_enabled = false
     end
 
     def subscribe_to_phrases
@@ -185,10 +186,10 @@ module WhisperRuby
     end
 
     def emit_transcription_log(packet, result, start_ts, end_ts)
-      return unless @nats_logger && result.text && !result.text.empty?
+      return unless logging_enabled? && result.text && !result.text.empty?
 
       submit_log do
-        @nats_logger.log_transcription(
+        @nats_client.log_transcription(
           text: result.text,
           segments: result.segments.length,
           audio_duration: result.audio_duration,
@@ -241,10 +242,10 @@ module WhisperRuby
     end
 
     def log_phrase_received(packet)
-      return unless @nats_logger && packet
+      return unless logging_enabled? && packet
 
       submit_log do
-        @nats_logger.log_event(
+        @nats_client.log_event(
           event: "phrase_received",
           message: "Получена фраза из NATS",
           category: "transcription",
@@ -258,10 +259,10 @@ module WhisperRuby
     end
 
     def log_transcription_start(packet, start_ts)
-      return unless @nats_logger && packet
+      return unless logging_enabled? && packet
 
       submit_log do
-        @nats_logger.log_transcription_start(
+        @nats_client.log_transcription_start(
           audio_duration: packet.duration,
           audio_samples: packet.audio.length,
           sample_rate: packet.sample_rate,
@@ -273,7 +274,7 @@ module WhisperRuby
     end
 
     def log_transcription_error(event, error, packet:, extra: nil)
-      return unless @nats_logger
+      return unless logging_enabled?
 
       payload = {
         event: event,
@@ -290,12 +291,16 @@ module WhisperRuby
       payload.merge!(extra) if extra
 
       submit_log do
-        @nats_logger.log_error(
+        @nats_client.log_error(
           "#{event}: #{error.message}",
           category: "whisper",
           **payload
         )
       end
+    end
+
+    def logging_enabled?
+      @nats_logging_enabled
     end
 
     def ensure_utf8(value)
