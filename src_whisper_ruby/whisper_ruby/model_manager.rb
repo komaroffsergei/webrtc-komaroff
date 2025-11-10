@@ -43,7 +43,8 @@ module WhisperRuby
 
     def download_file(url, destination)
       tmp_path = "#{destination}.download"
-      LOGGER.info "Downloading model #{File.basename(destination)}"
+      local_logger = defined?(LOGGER) ? LOGGER : nil
+      local_logger&.info "Downloading model #{File.basename(destination)}"
 
       fetch_with_redirects(URI(url)) do |response|
         File.open(tmp_path, "wb") do |file|
@@ -54,7 +55,7 @@ module WhisperRuby
       end
 
       FileUtils.mv(tmp_path, destination)
-      LOGGER.info "Model stored at #{destination}"
+      local_logger&.info "Model stored at #{destination}"
       destination
     ensure
       FileUtils.rm_f(tmp_path) if tmp_path && File.exist?(tmp_path)

@@ -58,7 +58,8 @@ whisper_config = OpenStruct.new(
   models_dir: models_dir,
   vad_model_path: ENV["WHISPER_VAD_MODEL_PATH"],
   vad_model_name: ENV["WHISPER_VAD_MODEL_NAME"] || "silero-v5.1.2",
-  force_download: truthy?(ENV["WHISPER_FORCE_DOWNLOAD"])
+  force_download: truthy?(ENV["WHISPER_FORCE_DOWNLOAD"]),
+  logger: logger
 )
 
 whisper_config.define_singleton_method(:resolved_model_reference) do
@@ -73,7 +74,7 @@ whisper_config.define_singleton_method(:resolved_vad_reference) do
   File.join(models_dir, default_vad_filename((vad_model_name || "silero-v5.1.2").to_s))
 end
 
-manager = WhisperRuby::ModelManager.new(logger: logger)
+manager = WhisperRuby::ModelManager.new()
 paths = manager.ensure_all(whisper_config)
 
 logger.info("ASR model ready at #{paths.asr}")
