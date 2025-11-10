@@ -23,24 +23,26 @@ class NATSClient
   end
 
   def publish(subj, message)
-    ack = @nats.publish subj, message.to_json
-    LOGGER.info "PUBLISHED ack: #{ack}"
+    payload = message.is_a?(String) ? message : message.to_json
+    @nats.publish subj, payload
   end
 
-  def loop_sub( subject, params = {})
-    pull_subscription = @nats.pull_subscribe subject
-
-    loop do
-      msgs = pull_subscription.fetch 1 #, timeout: 1
-      msgs.each do |msg|
-        # meta = msg.metadata
-        msg.in_progress
-        yield msg
-        msg.ack_sync # :ack, :ack_sync, :nak, :term
-      end
+  def loop_sub(subject)
+    @nats.subscribe(subject) do |msg|
+      yield msg
     end
-  ensure
-    pull_subscription.unsubscribe
   end
+
 
 end
+  def connected?
+    @nats&.connected?
+  end
+
+  def connected_server
+    @nats&.uri
+  end
+
+  def uri
+    @nats&.uri
+  end

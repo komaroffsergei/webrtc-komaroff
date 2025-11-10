@@ -22,6 +22,10 @@ module WhisperRuby
       @transcriber = Transcriber.new config: config.whisper
       @model_manager = ModelManager.new
       @model_paths = nil
+      @nats_mutex = Mutex.new
+      @log_queue = Queue.new
+      @log_worker = nil
+      @nats_logger = nil
     end
 
     def start
@@ -33,6 +37,7 @@ module WhisperRuby
       setup_nats_logging
       start_workers
       subscribe_to_phrases
+      @log_worker ||= start_log_worker
 
       LOGGER.info "WhisperRuby service is ready (subject=#{config.nats.whisper_subject})"
       loop do
@@ -60,11 +65,32 @@ module WhisperRuby
       )
     end
 
+    def connect_nats
+      # NATSClient handles connection internally on initialization.
+      @nats_client
+    end
+
+    def setup_nats_logging
+      logger_class = WhisperRuby.const_defined?(:NatsLogger) ? WhisperRuby::NatsLogger : nil
+      return unless logger_class
+      return unless @nats_client.respond_to?(:publish)
+
+      @nats_logger = logger_class.new(
+        @nats_client,
+        subject: config.nats.logs_subject,
+        service_name: config.service_name
+      )
+    end
+
     def subscribe_to_phrases
       Thread.new do
-        @nats_client.loop_sub config.nats.whisper_subject { |msg| enqueue_message(msg) }
+        @nats_client.loop_sub config.nats.whisper_subject do |msg|
+          enqueue_message(msg)
+        rescue StandardError => e
+          LOGGER.error("NATS loop error: #{e}")
+        end
       end
-      LOGGER.info("Subscribed to #{subject}")
+      LOGGER.info("Subscribed to #{config.nats.whisper_subject}")
     end
 
     def enqueue_message(msg)
@@ -289,7 +315,15 @@ module WhisperRuby
     end
 
     def connected_server_uri
-      @nats_client.connected_server&.to_s || "unknown"
+      return "unknown" unless @nats_client
+
+      if @nats_client.respond_to?(:connected_server)
+        @nats_client.connected_server.to_s
+      elsif @nats_client.respond_to?(:uri)
+        @nats_client.uri.to_s
+      else
+        "unknown"
+      end
     end
   end
 end
