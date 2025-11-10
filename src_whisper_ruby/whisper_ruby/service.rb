@@ -43,6 +43,7 @@ module WhisperRuby
     def start
       return if @running
 
+      LOGGER.info("Service starting (subject=#{config.nats.whisper_subject})")
       @running = true
       ensure_models_and_transcriber
       connect_nats
@@ -53,7 +54,7 @@ module WhisperRuby
       wait_for_shutdown
       self
     rescue StandardError => e
-      LOGGER.exception "Service crashed:", e
+      LOGGER.error("Service crashed: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
       raise
     ensure
       @running = false
@@ -81,19 +82,23 @@ module WhisperRuby
     end
 
     def ensure_models_and_transcriber
+      LOGGER.info("Ensuring models and loading transcriber")
       @model_paths = @model_manager.ensure_all(config.whisper)
       @transcriber.load!(
         model_path: @model_paths.asr,
         vad_model_path: @model_paths.vad
       )
+      LOGGER.info("Transcriber loaded (asr=#{@model_paths.asr}, vad=#{@model_paths.vad})")
     end
 
     def connect_nats
       # NATSClient handles connection internally on initialization.
+      LOGGER.info("Using NATS connection #{@nats_client.uri}")
       @nats_client
     end
 
     def configure_nats_logging
+      LOGGER.info("Configuring NATS logging subject=#{config.nats.logs_subject}")
       @transcription_logger.configure(
         subject: config.nats.logs_subject,
         service_name: config.service_name
@@ -102,23 +107,30 @@ module WhisperRuby
 
     def subscribe_to_phrases
       @subscription_sid = @nats_client.loop_sub(config.nats.whisper_subject) do |msg|
+        LOGGER.info("Received NATS message subject=#{msg.subject} reply=#{msg.reply} size=#{msg.data&.bytesize}")
         enqueue_message(msg)
       rescue StandardError => e
-        LOGGER.error("NATS loop error: #{e}")
+        LOGGER.error("NATS loop error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+      rescue Exception => e
+        LOGGER.fatal("NATS loop fatal error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+        raise
       end
       LOGGER.info("Subscribed to #{config.nats.whisper_subject}")
     end
 
     def enqueue_message(msg)
       received = ReceivedMessage.new(subject: msg.subject, reply: msg.reply, data: msg.data)
+      LOGGER.info("Enqueuing message subject=#{received.subject} reply=#{received.reply} size=#{received.data&.bytesize}")
       @worker_pool.submit(received)
     end
 
     def start_workers
+      LOGGER.info("Starting worker pool")
       @worker_pool.start
     end
 
     def stop_workers
+      LOGGER.info("Stopping worker pool")
       @worker_pool.stop
     end
 

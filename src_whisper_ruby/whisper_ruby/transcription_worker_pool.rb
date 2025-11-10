@@ -16,6 +16,7 @@ module WhisperRuby
     def start
       return unless @workers.empty?
 
+      LOGGER.info("Initializing worker pool (threads=#{@worker_count}, queue_size=#{@queue.max})")
       @worker_count.times do |index|
         thread = Thread.new { worker_loop(index) }
         thread.name = "transcriber-#{index}" if thread.respond_to?(:name=)
@@ -33,6 +34,7 @@ module WhisperRuby
     def stop
       return if @workers.empty?
 
+      LOGGER.info("Stopping worker pool (active_threads=#{@workers.count(&:alive?)})")
       @workers.size.times { enqueue_stop_signal }
       @workers.each { |thread| thread.join(1) }
       @workers.clear
@@ -41,14 +43,20 @@ module WhisperRuby
     private
 
     def worker_loop(worker_id)
+      LOGGER.info("Worker #{worker_id} started (thread=#{Thread.current.object_id})")
       loop do
         msg = @queue.pop
         break if msg.equal?(STOP_TOKEN)
 
+        LOGGER.info("Worker #{worker_id} processing subject=#{msg.subject} reply=#{msg.reply}")
         @processor.process(msg)
       rescue StandardError => e
-        LOGGER.error("Worker #{worker_id} error: #{e}")
+        LOGGER.error("Worker #{worker_id} error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+      rescue Exception => e
+        LOGGER.fatal("Worker #{worker_id} fatal error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+        raise
       end
+      LOGGER.info("Worker #{worker_id} exiting")
     end
 
     def enqueue_stop_signal
