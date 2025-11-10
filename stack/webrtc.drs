@@ -10,16 +10,6 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
       NATS_LOGS_SUBJECT: 'voice_chat_logs'
 end
 
-Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper/main', ports: 9000,
-        ingress: { host: 'webrtc-komaroff-whisper.*' } do
-   env NATS_URL: NATS_URL,
-      NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
-      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
-      NATS_LOGS_SUBJECT: 'voice_chat_logs',
-      WHISPER_MODEL_NAME: 'medium',
-      WHISPER_MODELS_DIR: '/app/models'
-   volume name: 'wisper_models', target: '/app/server/models'
-end
 
 Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-ruby/main', ports: 7000,
         ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
