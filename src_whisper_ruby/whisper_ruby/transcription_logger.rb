@@ -1,16 +1,9 @@
 # frozen_string_literal: true
 
-require "thread"
-
 module WhisperRuby
   class TranscriptionLogger
-    DEFAULT_QUEUE_SIZE = 128
-    STOP_TOKEN = :stop
-
-    def initialize(nats_client:, queue_size: DEFAULT_QUEUE_SIZE)
+    def initialize(nats_client:)
       @nats_client = nats_client
-      @queue = SizedQueue.new(queue_size)
-      @worker = nil
       @enabled = false
     end
 
@@ -19,7 +12,6 @@ module WhisperRuby
 
       @nats_client.configure_logging(subject: subject, service_name: service_name)
       @enabled = true
-      start_worker
     rescue StandardError => e
       LOGGER.warn("Failed to configure NATS logging: #{e}")
       @enabled = false
@@ -30,11 +22,21 @@ module WhisperRuby
     end
 
     def phrase_received(packet)
-      return unless enabled? && packet
+      return unless packet
+      message = format(
+        "Phrase %s received (%d samples @ %dHz, duration %.2fs)",
+        packet.phrase_id || "unknown",
+        packet.audio.length,
+        packet.sample_rate,
+        packet.duration
+      )
+      LOGGER.info(message)
 
-      log_async(:event, {
+      return unless enabled?
+
+      deliver(:event, {
         event: "phrase_received",
-        message: "Phrase received from NATS",
+        message: message,
         category: "transcription",
         phrase_id: packet.phrase_id,
         sample_rate: packet.sample_rate,
@@ -45,9 +47,17 @@ module WhisperRuby
     end
 
     def transcription_start(packet, start_ts)
-      return unless enabled? && packet
+      return unless packet
+      message = format(
+        "Transcription started for %s (duration %.2fs)",
+        packet.phrase_id || "unknown",
+        packet.duration
+      )
+      LOGGER.info(message)
 
-      log_async(:transcription_start, {
+      return unless enabled?
+
+      deliver(:transcription_start, {
         audio_duration: packet.duration,
         audio_samples: packet.audio.length,
         sample_rate: packet.sample_rate,
@@ -58,10 +68,19 @@ module WhisperRuby
     end
 
     def transcription_complete(packet, result, start_ts, end_ts)
-      return unless enabled?
       return if result.text.to_s.empty?
 
-      log_async(:transcription, {
+      message = format(
+        "Transcription completed for %s (segments=%d, duration %.2fs)",
+        packet.phrase_id || "unknown",
+        result.segments.length,
+        packet.duration
+      )
+      LOGGER.info(message)
+
+      return unless enabled?
+
+      deliver(:transcription, {
         text: result.text,
         segments: result.segments.length,
         audio_duration: result.audio_duration,
@@ -73,8 +92,6 @@ module WhisperRuby
     end
 
     def transcription_error(event, error, packet:, extra: nil)
-      return unless enabled?
-
       payload = {
         event: event,
         error_type: error.class.name,
@@ -89,54 +106,28 @@ module WhisperRuby
       end
       payload.merge!(extra) if extra
 
-      log_async(:error, {
-        message: "#{event}: #{error.message}",
+      error_message = "#{event}: #{error.message}"
+      LOGGER.error(error_message)
+
+      return unless enabled?
+
+      deliver(:error, {
+        message: error_message,
         category: "whisper",
         extra: payload
       })
     end
 
     def shutdown
-      return unless @worker
-
-      push([STOP_TOKEN, nil])
-      @worker.join(1)
-    rescue StandardError => e
-      LOGGER.warn("Failed to stop log worker: #{e}")
-    ensure
-      @worker = nil
+      @enabled = false
     end
 
     private
 
-    def start_worker
-      return @worker if @worker&.alive?
-
-      @worker = Thread.new do
-        loop do
-          action, payload = @queue.pop
-          break if action == STOP_TOKEN
-          dispatch_log(action, payload)
-        rescue StandardError => e
-          LOGGER.warn("Log worker error: #{e}")
-        end
-      end.tap { |thr| thr.report_on_exception = false }
-    end
-
-    def log_async(action, payload)
-      start_worker
-      push([action, payload])
-    end
-
-    def push(payload)
-      @queue.push(payload, true)
-    rescue ThreadError
-      begin
-        @queue.pop(true)
-      rescue ThreadError
-        sleep 0.01
-      end
-      retry
+    def deliver(action, payload)
+      dispatch_log(action, payload)
+    rescue StandardError => e
+      LOGGER.warn("Failed to dispatch log action #{action}: #{e}")
     end
 
     def dispatch_log(action, payload)

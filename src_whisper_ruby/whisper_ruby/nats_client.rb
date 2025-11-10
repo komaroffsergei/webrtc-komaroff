@@ -5,6 +5,8 @@ require "json"
 require "time"
 require "thread"
 
+require_relative "../utils/text_utils"
+
 ENV["NATS_RECONNECT"] = "true"
 # ENV['NATS_VERBOSE'] = 'true'
 ENV["NATS_RECONNECT_TIME_WAIT"] = "2"
@@ -162,26 +164,11 @@ class NATSClient
     }
     payload.merge!(extra.compact) if extra && !extra.empty?
 
-    data = JSON.generate(ensure_utf8(payload))
+    data = JSON.generate(TextUtils.ensure_utf8(payload))
     @log_mutex.synchronize do
       publish(subj, data)
     end
   rescue StandardError => e
     warn("Failed to publish log to NATS: #{e}")
-  end
-
-  def ensure_utf8(value)
-    case value
-    when String
-      str = value.dup.force_encoding(Encoding::UTF_8)
-      str.encode!(Encoding::UTF_8, invalid: :replace, undef: :replace)
-      str
-    when Hash
-      value.transform_values { |v| ensure_utf8(v) }
-    when Array
-      value.map { |v| ensure_utf8(v) }
-    else
-      value
-    end
   end
 end

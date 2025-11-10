@@ -1,7 +1,7 @@
 # frozen_string_literal: true
-
+#
+require "logger"
 require_relative "model_manager"
-require_relative "phrase_packet"
 require_relative "../utils/audio_utils"
 require_relative "transcriber"
 require_relative "service"

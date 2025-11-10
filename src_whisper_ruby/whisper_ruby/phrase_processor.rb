@@ -3,6 +3,10 @@
 require "json"
 require "time"
 
+require_relative "../utils/audio_utils"
+require_relative "../utils/text_utils"
+require_relative "../utils/transcription_response"
+
 module WhisperRuby
   class PhraseProcessor
     def initialize(transcriber:, logger:, config:, nats_client:)
@@ -14,14 +18,20 @@ module WhisperRuby
 
     def process(msg)
       packet = nil
-      packet = PhrasePacket.from_bytes(msg.data)
+      packet = AudioUtils.parse_phrase_packet(msg.data)
       @logger.phrase_received(packet)
       start_ts = timestamp_now
       @logger.transcription_start(packet, start_ts)
       result = @transcriber.transcribe(packet)
       end_ts = timestamp_now
 
-      payload = build_payload(packet, result, start_ts, end_ts)
+      payload = TranscriptionResponse.success(
+        config: @config,
+        packet: packet,
+        result: result,
+        start_ts: start_ts,
+        end_ts: end_ts
+      )
       @logger.transcription_complete(packet, result, start_ts, end_ts)
       reply(msg, payload)
       LOGGER.info("Transcription done for #{packet.phrase_id || 'unknown'}")
@@ -42,56 +52,15 @@ module WhisperRuby
 
     private
 
-    def build_payload(packet, result, start_ts, end_ts)
-      {
-        type: "transcription",
-        service: @config.service_name,
-        timestamp: end_ts,
-        phrase_id: packet.phrase_id,
-        text: result.text,
-        segments: result.segments.length,
-        audio_duration: result.audio_duration,
-        transcription_time: result.transcription_time,
-        start_timestamp: start_ts,
-        end_timestamp: end_ts
-      }
-    end
-
     def reply(msg, payload)
-      data = JSON.generate(ensure_utf8(payload))
+      data = JSON.generate(TextUtils.ensure_utf8(payload))
       destination = msg.reply && !msg.reply.empty? ? msg.reply : "#{@config.nats.whisper_subject}.result"
-      publish(destination, data)
+      @nats_client.publish(destination, data)
     end
 
     def reply_with_error(msg, error, phrase_id = nil)
-      reply(
-        msg,
-        {
-          type: "transcription",
-          error: error,
-          phrase_id: phrase_id
-        }
-      )
-    end
-
-    def publish(subject, data)
-      @nats_client.publish(subject, data)
-    end
-
-    def ensure_utf8(value)
-      case value
-      when String
-        str = value.dup
-        str = str.force_encoding(Encoding::UTF_8)
-        str.encode!(Encoding::UTF_8, invalid: :replace, undef: :replace)
-        str
-      when Hash
-        value.transform_values { |v| ensure_utf8(v) }
-      when Array
-        value.map { |v| ensure_utf8(v) }
-      else
-        value
-      end
+      payload = TranscriptionResponse.error(error: error, phrase_id: phrase_id)
+      reply(msg, payload)
     end
 
     def timestamp_now
