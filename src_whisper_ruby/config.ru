@@ -78,7 +78,7 @@ configure do
     force_download: truthy?(ENV["WHISPER_FORCE_DOWNLOAD"]),
     translate: truthy?(ENV["WHISPER_TRANSLATE"]),
     n_threads: ENV.fetch("WHISPER_THREADS", Etc.nprocessors).to_i,
-    temperature: ENV.fetch("WHISPER_TEMPERATURE", "0.0").to_i,
+    temperature: ENV.fetch("WHISPER_TEMPERATURE", "0.2").to_f,
     temperature_inc: ENV.fetch("WHISPER_TEMPERATURE_INC", "0.2").to_f
   }
 
