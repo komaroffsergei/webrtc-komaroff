@@ -19,18 +19,18 @@ services:
     command: ["-js"]
 
 
-#  webrtc-server-whisper:
-#    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper/${CI_COMMIT_BRANCH}
-#    build:
-#      context: ../src_whisper
-#      #      additional_contexts:
-#      #        docker: ../docker
-#      dockerfile: ../docker/python/Dockerfile
-#      target: whisper
-#    depends_on:
-#      - audio_nats
-#    ports:
-#      - "9000:9000"
+  webrtc-server-whisper:
+    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper/${CI_COMMIT_BRANCH}
+    build:
+      context: ../src_whisper
+      #      additional_contexts:
+      #        docker: ../docker
+      dockerfile: ../docker/python/Dockerfile
+      target: whisper
+    depends_on:
+      - audio_nats
+    ports:
+      - "9000:9000"
 
   webrtc-server-whisper-ruby:
     image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-ruby/${CI_COMMIT_BRANCH}
