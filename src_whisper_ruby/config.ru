@@ -1,5 +1,10 @@
 require "sinatra"
 require "json"
+
+unless ENV["RUBYOPT"].to_s.include?("ruby-debug-ide")
+  ENV["RUBYOPT"] = [ENV["RUBYOPT"], "ruby-debug-ide"].compact.join(" ").strip
+end
+
 require "stack-service-base"
 require_relative "whisper_ruby/rack_bootstrap"
 
