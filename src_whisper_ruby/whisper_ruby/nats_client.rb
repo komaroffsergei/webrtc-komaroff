@@ -32,6 +32,7 @@ class NATSClient
   def publish(subj, message)
     payload = message.is_a?(String) ? message : message.to_json
     @nats.publish(subj, payload)
+    flush_connection
   end
 
   def loop_sub(subject, &block)
@@ -164,11 +165,19 @@ class NATSClient
     }
     payload.merge!(extra.compact) if extra && !extra.empty?
 
-    data = JSON.generate(TextUtils.ensure_utf8(payload))
+    data = JSON.generate(WhisperRuby::TextUtils.ensure_utf8(payload))
     @log_mutex.synchronize do
       publish(subj, data)
     end
   rescue StandardError => e
     warn("Failed to publish log to NATS: #{e}")
+  end
+
+  def flush_connection
+    return unless @nats.respond_to?(:flush)
+
+    @nats.flush
+  rescue StandardError => e
+    LOGGER.warn("NATS flush failed: #{e}") if defined?(LOGGER)
   end
 end
