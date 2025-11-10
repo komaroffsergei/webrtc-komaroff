@@ -5,8 +5,7 @@ require "bundler/setup"
 require "optparse"
 require "logger"
 
-$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
-require "whisper_ruby"
+$LOAD_PATH.unshift(File.expand_path("../whisper_ruby", __dir__))
 
 options = {
   model: ENV["WHISPER_MODEL_NAME"],
