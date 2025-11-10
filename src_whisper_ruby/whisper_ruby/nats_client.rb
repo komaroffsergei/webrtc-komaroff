@@ -36,6 +36,14 @@ class NATSClient
     @nats.subscribe(subject, &block)
   end
 
+  def unsubscribe(sid)
+    return unless sid
+
+    if @nats.respond_to?(:unsubscribe, true)
+      @nats.__send__(:unsubscribe, sid)
+    end
+  end
+
   def connected?
     @nats&.connected?
   end

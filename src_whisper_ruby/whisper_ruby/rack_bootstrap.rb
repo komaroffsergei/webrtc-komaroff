@@ -47,6 +47,13 @@ module WhisperRuby
       init_nats_client
       state.service = WhisperRuby::Service.new(config: RackConfig.build_service_config)
       state.thread = Thread.new { run_service(state) }
+      at_exit do
+        begin
+          state.service&.stop
+        rescue StandardError => e
+          warn("Failed to stop WhisperRuby service: #{e}")
+        end
+      end
       state
     end
 
