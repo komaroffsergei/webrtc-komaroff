@@ -3,9 +3,9 @@ NATS Log Handler - обработчик для отправки логов Pytho
 Использует logging.Handler для интеграции с стандартной системой логирования.
 """
 
-import logging
-import json
 import asyncio
+import json
+import logging
 from datetime import datetime
 
 
@@ -15,7 +15,7 @@ class NatsLogHandler(logging.Handler):
     Автоматически форматирует и отправляет логи в указанный subject.
     """
 
-    def __init__(self, nats_client, subject: str, level=logging.INFO):
+    def __init__(self, nats_client, subject: str, service_name: str, level=logging.INFO):
         """
         Args:
             nats_client: NATS клиент (nats.aio.client.Client)
@@ -25,6 +25,7 @@ class NatsLogHandler(logging.Handler):
         super().__init__(level)
         self.nats_client = nats_client
         self.subject = subject
+        self.service_name = service_name
         self.loop = None
 
     def emit(self, record: logging.LogRecord) -> None:
@@ -35,19 +36,18 @@ class NatsLogHandler(logging.Handler):
             record: логируемая запись
         """
         try:
-            log_entry = {
-                "timestamp": datetime.utcnow().isoformat() + "Z",
-                "level": record.levelname.lower(),
-                "logger": record.name,
-                "message": record.getMessage(),
-                "module": record.module,
-                "function": record.funcName,
-                "line": record.lineno
-            }
-            
+            message_text = record.getMessage()
             if record.exc_info:
-                log_entry["exception"] = self.format(record)
-            
+                exc_text = self.formatException(record.exc_info)
+                message_text = f"{message_text} | {exc_text}"
+
+            log_entry = {
+                "time": datetime.utcnow().isoformat() + "Z",
+                "service": self.service_name,
+                "type": record.levelname.lower(),
+                "message": message_text,
+            }
+
             message = json.dumps(log_entry).encode("utf-8")
             
             # Получить event loop

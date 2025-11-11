@@ -59,6 +59,16 @@
             return;
         }
 
+        const isSimpleLog = message &&
+            typeof message === 'object' &&
+            Object.keys(message).length === 4 &&
+            'time' in message && 'service' in message && 'type' in message && 'message' in message;
+
+        if (isSimpleLog && window.DebugPanel) {
+            window.DebugPanel.addLog(message);
+            return;
+        }
+
         const { type, descr, method, params, uid, text } = message;
 
         switch (type) {
@@ -82,13 +92,6 @@
                     window.WarningUI.showWarning(descr, uid);
                 }
                 break;
-
-            case 'log':
-                if (descr && window.DebugPanel) {
-                    window.DebugPanel.addLog(message);
-                }
-                break;
-
 
             default:
                 logger.debug(`[CommandHandler] Unhandled message type: ${type}`);

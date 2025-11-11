@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from aiohttp import web
 import asyncio
 import json
@@ -60,33 +62,34 @@ async def sse_handler(request: web.Request):
 async def _send_welcome_log(app):
     """Отправить приветственное сообщение после небольшой задержки"""
     await asyncio.sleep(0.1)
-    await sse_log(app, "SSE connection established", level="info", category="system")
+    await sse_log(app, "SSE connection established", level="info")
 
 
-async def sse_broadcast(app, message: dict):
+async def sse_broadcast(app, message: dict, ensure_meta: bool = True):
     """
     Базовая функция отправки SSE сообщений всем подключенным клиентам.
     Используется внутренне специализированными функциями.
     """
-    # Добавляем timestamp если его нет
-    if "timestamp" not in message:
-        message["timestamp"] = datetime.utcnow().isoformat() + "Z"
-    
-    # Добавляем uid если его нет
-    if "uid" not in message:
-        message["uid"] = str(uuid.uuid4())
-    
-    if not message.get("service"):
-        message["service"] = DEFAULT_SERVICE_NAME
+    payload = dict(message)
+
+    if ensure_meta:
+        if "timestamp" not in payload:
+            payload["timestamp"] = datetime.utcnow().isoformat() + "Z"
+        
+        if "uid" not in payload:
+            payload["uid"] = str(uuid.uuid4())
+        
+        if not payload.get("service"):
+            payload["service"] = DEFAULT_SERVICE_NAME
 
     for q in list(app.get("sse_clients", [])):
         try:
-            q.put_nowait(message)
+            q.put_nowait(payload)
         except asyncio.QueueFull:
             # Drop oldest message if queue is full
             try:
                 q.get_nowait()
-                q.put_nowait(message)
+                q.put_nowait(payload)
             except Exception:
                 pass
         except Exception:
@@ -155,37 +158,18 @@ async def sse_message(app, text: str, descr: str = "send", uid: str = None, serv
     return uid
 
 
-async def sse_log(app, message: str, level: str = "info", category: str = "general", service: str = None, **extra):
+async def sse_log(app, message: str, level: str = "info", service: str = None, *, log_time: str | None = None):
     """
-    Отправить лог-сообщение клиенту для отладочного окна.
-    
-    Args:
-        app: aiohttp application
-        message: текст лога
-        level: уровень логирования ('debug', 'info', 'warning', 'error')
-        category: категория лога ('system', 'webrtc', 'nats', 'audio', 'general')
-        **extra: дополнительные поля
-    
-    Returns:
-        str: uid лога
+    Отправить лог-сообщение клиенту для отладочного окна в упрощенном формате.
     """
-    uid = str(uuid.uuid4())
-    
-    extra_service = extra.pop("service", None)
-
     log_entry = {
-        "type": "log",
-        "level": level,
-        "category": category,
+        "time": log_time or datetime.utcnow().isoformat() + "Z",
+        "service": service or DEFAULT_SERVICE_NAME,
+        "type": level,
         "message": message,
-        "uid": uid,
-        "service": service or extra_service or DEFAULT_SERVICE_NAME
     }
-    log_entry.update(extra)
-    
-    await sse_broadcast(app, log_entry)
-    
-    return uid
+
+    await sse_broadcast(app, log_entry, ensure_meta=False)
 
 
 async def sse_warning(app, descr: str, uid: str = None, service: str = None):

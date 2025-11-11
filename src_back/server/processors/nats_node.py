@@ -47,8 +47,11 @@ class NatsNode(ConsumerNode):
             # Отправляем лог о подключении если есть app
             if hasattr(self, '_app'):
                 from ..handlers.sse import sse_log
-                await sse_log(self._app, f"NATS connected: {self.nc.connected_url.netloc}", 
-                            level="info", category="nats")
+                await sse_log(
+                    self._app,
+                    f"NATS connected: {self.nc.connected_url.netloc}",
+                    level="info",
+                )
         
         # JetStream support removed: ensure only core NATS connection
         return self.nc

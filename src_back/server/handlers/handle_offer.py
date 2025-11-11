@@ -41,15 +41,20 @@ async def handle_offer_connect(request, params):
     pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
     request.app["pcs"] = pcs
     pcs.add(pc)
-    
-    await sse_log(request.app, f"WebRTC: Creating peer connection (total active: {len(pcs)})", 
-                  level="info", category="webrtc")
+    await sse_log(
+        request.app,
+        f"WebRTC: Creating peer connection (total active: {len(pcs)})",
+        level="info",
+    )
     
     echo_ref = {"node": None}
     @pc.on("track")
     async def on_track(track):
-        await sse_log(request.app, f"WebRTC: Track received, kind={track.kind}", 
-                      level="info", category="webrtc")
+        await sse_log(
+            request.app,
+            f"WebRTC: Track received, kind={track.kind}",
+            level="info",
+        )
         await handle_track(
             track, 
             pc, 
@@ -60,13 +65,15 @@ async def handle_offer_connect(request, params):
 
     try:
         resp = await establish_connection(pc, offer)
-        await sse_log(request.app, "WebRTC: Connection established successfully", 
-                      level="info", category="webrtc")
+        await sse_log(request.app, "WebRTC: Connection established successfully", level="info")
         return resp, None
     except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
-        await sse_log(request.app, f"WebRTC: Connection failed - {str(e)}", 
-                      level="error", category="webrtc")
+        await sse_log(
+            request.app,
+            f"WebRTC: Connection failed - {str(e)}",
+            level="error",
+        )
         try:
             await audio_transceiver.sender.replaceTrack(None)
         except Exception:

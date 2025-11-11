@@ -1,3 +1,4 @@
+require "stack-service-base"
 require "sinatra"
 require "json"
 require_relative "whisper_ruby/model_manager"
@@ -7,46 +8,39 @@ require_relative "whisper_ruby/service"
 require_relative "whisper_ruby/nats_client"
 require_relative "whisper_ruby/rack_config"
 
-SERVICE_NAME = ENV["STACK_SERVICE_NAME"]
-AUDIO_NATS_URL = ENV.fetch("NATS_URL")
-NATS_WHISPER_SUBJECT = ENV.fetch("NATS_WHISPER_SUBJECT", "whisper.transcription")
-NATS_LOGS_SUBJECT = ENV.fetch("NATS_LOGS_SUBJECT", "whisper.logs")
-
-
-LOGGER.formatter = proc do |severity, datetime, progname, msg|
-  timestamp = datetime.utc.iso8601(3)
-  prog = progname ? "#{progname}: " : ""
-  "[#{timestamp}] #{severity} #{prog}#{msg}\n"
-end
+STATE = { service: nil, thread: nil, boot_error: nil }
 
 StackServiceBase.rack_setup(self)
 
-configure do |cong|
-  cong.set nats_client = NATSClient.new(AUDIO_NATS_URL)
-  cong.set service = WhisperRuby::Service.new(config: RackConfig.build_service_config)
+configure do
+  config = WhisperRuby::RackConfig.build_service_config
+  nats_client = NATSClient.new(config.nats.url, {}, service_name: config.service_name)
+  STATE[:service] = WhisperRuby::Service.new(config:, nats_client:)
+  STATE[:boot_error] = nil
 
-  state.thread = Thread.new do
-    state.service.start
-  rescue StandardError => e
-    state.boot_error = e
-    LOGGER.exception "Service stopped:", e
+  STATE[:thread] = Thread.new do
+    STATE[:service].start
+  rescue => e
+    STATE[:boot_error] = e
+    LOGGER.error("Service stopped: #{e.message}")
   end
 
   at_exit do
-    state.service&.stop
-  rescue StandardError => e
-    warn("Failed to stop WhisperRuby service: #{e}")
+    STATE[:service]&.stop
+    STATE[:thread]&.join(5)
   end
 end
 
 get "/healthcheck" do
-  thread.alive? ? "running" : "stopped"
-  boot_error.nil?
-
-  state = WhisperRuby::RackBootstrap.state
+  healthy = STATE[:boot_error].nil? && STATE[:service]&.running?
   content_type :json
-  status(state.healthy? ? 200 : 503)
-  state.payload.to_json
+  status(healthy ? 200 : 503)
+  {
+    status: healthy ? "ok" : "error",
+    service: STATE[:service]&.config&.service_name,
+    thread_alive: STATE[:thread]&.alive?,
+    boot_error: STATE[:boot_error]&.message
+  }.compact.to_json
 end
 
 run Sinatra::Application

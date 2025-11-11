@@ -83,7 +83,7 @@ module WhisperRuby
   end
 end
 
-WhisperRuby::EnvControls.ensure_cpu_mode!
+# WhisperRuby::EnvControls.ensure_cpu_mode!
 
 require "whisper"
 
