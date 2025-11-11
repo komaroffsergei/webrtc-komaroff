@@ -17,9 +17,9 @@ module WhisperRuby
   class Service
     attr_reader :config
 
-    def initialize(config:, nats_client: nil)
+    def initialize(config:, nats_client:)
       @config = config
-      @nats_client = nats_client || NATSClient.new(config.nats.url)
+      @nats_client = nats_client
       @running = false
       @transcriber = Transcriber.new config: config.whisper
       @model_manager = ModelManager.new

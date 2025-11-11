@@ -10,140 +10,91 @@ module WhisperRuby
     def configure(subject:)
       return unless @nats_client.respond_to?(:configure_logging)
 
-      @nats_client.configure_logging(subject: subject, service_name: ENV['STACK_SERVICE_NAME'] || 'undefined_service' )
+      @nats_client.configure_logging(subject: subject)
       @enabled = true
-    rescue StandardError => e
-      LOGGER.warn("Failed to configure NATS logging: #{e}")
-      @enabled = false
     end
 
-    def enabled?
-      @enabled
-    end
+    def enabled? = @enabled
 
     def phrase_received(packet)
-      return unless packet
-      message = format(
-        "Phrase %s received (%d samples @ %dHz, duration %.2fs)",
-        packet.phrase_id || "unknown",
-        packet.audio.length,
-        packet.sample_rate,
-        packet.duration
+      return unless active?(packet)
+
+      publish(
+        message: format(
+          "Phrase %s received samples=%d sr=%dHz duration=%.2fs",
+          packet.phrase_id || "unknown",
+          packet.audio.length,
+          packet.sample_rate,
+          packet.duration
+        )
       )
-      LOGGER.info(message)
-
-      return unless enabled?
-
-      deliver(:event, {
-        event: "phrase_received",
-        message: message,
-        category: "transcription",
-        phrase_id: packet.phrase_id,
-        sample_rate: packet.sample_rate,
-        audio_duration: packet.duration.round(3),
-        audio_samples: packet.audio.length,
-        metadata: packet.metadata
-      })
     end
 
     def transcription_start(packet, start_ts)
-      return unless packet
-      message = format(
-        "Transcription started for %s (duration %.2fs)",
-        packet.phrase_id || "unknown",
-        packet.duration
+      return unless active?(packet)
+
+      publish(
+        message: format(
+          "Transcription started for %s duration=%.2fs start=%s",
+          packet.phrase_id || "unknown",
+          packet.duration,
+          start_ts
+        )
       )
-      LOGGER.info(message)
-
-      return unless enabled?
-
-      deliver(:transcription_start, {
-        audio_duration: packet.duration,
-        audio_samples: packet.audio.length,
-        sample_rate: packet.sample_rate,
-        phrase_id: packet.phrase_id,
-        start_timestamp: start_ts,
-        metadata: packet.metadata
-      })
     end
 
     def transcription_complete(packet, result, start_ts, end_ts)
       return if result.text.to_s.empty?
-
-      message = format(
-        "Transcription completed for %s (segments=%d, duration %.2fs)",
-        packet.phrase_id || "unknown",
-        result.segments.length,
-        packet.duration
-      )
-      LOGGER.info(message)
-
       return unless enabled?
 
-      deliver(:transcription, {
-        text: result.text,
-        segments: result.segments.length,
-        audio_duration: result.audio_duration,
-        transcription_time: result.transcription_time,
-        start_timestamp: start_ts,
-        end_timestamp: end_ts,
-        phrase_id: packet.phrase_id
-      })
+      publish(
+        message: format(
+          "Transcription completed for %s segments=%d audio=%.2fs time=%.2fs %s->%s text=\"%s\"",
+          packet.phrase_id || "unknown",
+          result.segments.length,
+          result.audio_duration,
+          result.transcription_time,
+          start_ts,
+          end_ts,
+          shorten_text(result.text)
+        )
+      )
     end
 
     def transcription_error(event, error, packet:, extra: nil)
-      payload = {
-        event: event,
-        error_type: error.class.name,
-        error_message: error.message,
-        stacktrace: Array(error.backtrace).join("\n")
-      }
+      details = [
+        "#{event}",
+        "#{error.class}: #{error.message}"
+      ]
       if packet
-        payload[:phrase_id] = packet.phrase_id if packet.phrase_id
-        payload[:sample_rate] = packet.sample_rate
-        payload[:audio_duration] = packet.duration
-        payload[:metadata] = packet.metadata
+        details << "phrase_id=#{packet.phrase_id}" if packet.phrase_id
+        details << "sr=#{packet.sample_rate}"
+        details << format("duration=%.2fs", packet.duration) if packet.duration
       end
-      payload.merge!(extra) if extra
+      details << extra.inspect if extra
 
-      error_message = "#{event}: #{error.message}"
-      LOGGER.error(error_message)
-
-      return unless enabled?
-
-      deliver(:error, {
-        message: error_message,
-        category: "whisper",
-        extra: payload
-      })
+      publish(
+        message: "#{details.compact.join(' ')} | #{Array(error.backtrace).join(' >> ')}",
+        type: "error"
+      )
     end
 
-    def shutdown
-      @enabled = false
-    end
+    def shutdown = @enabled = false
 
     private
 
-    def deliver(action, payload)
-      dispatch_log(action, payload)
-    rescue StandardError => e
-      LOGGER.warn("Failed to dispatch log action #{action}: #{e}")
+    def active?(packet) = enabled? && packet
+
+    def publish(message:, type: "info")
+      return unless enabled?
+      @nats_client.log(message:, type:)
     end
 
-    def dispatch_log(action, payload)
-      case action
-      when :transcription
-        @nats_client.log_transcription(**payload)
-      when :transcription_start
-        @nats_client.log_transcription_start(**payload)
-      when :event
-        @nats_client.log_event(**payload)
-      when :error
-        extra = payload.fetch(:extra, {})
-        @nats_client.log_error(payload.fetch(:message), category: payload.fetch(:category, "general"), **extra)
-      else
-        LOGGER.debug("Unhandled log action: #{action}")
-      end
+    def shorten_text(text)
+      normalized = text.to_s.strip.gsub(/\s+/, ' ')
+      return normalized if normalized.length <= 120
+
+      "#{normalized[0, 117]}..."
     end
   end
 end

@@ -35,8 +35,7 @@ def _resolve_subject(env_key: str, default: str) -> str:
 async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     nats_node = await nats_init()
     logger.info(f"on_track: received kind={track.kind}")
-    await sse_log(app, f"Audio track processing started, kind={track.kind}", 
-                  level="info", category="audio")
+    await sse_log(app, f"Audio track processing started, kind={track.kind}", level="info")
     
     if track.kind == "audio":
         graph = AudioGraph()
@@ -110,11 +109,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                     app,
                     f"Transcription: {text}{details_suffix}",
                     level="info",
-                    category="nats",
                     service=service_name,
-                    audio_duration=audio_duration,
-                    transcription_time=transcription_time,
-                    segments=segment_count,
                 )
                 await sse_message(app, text, descr="transcription", service=service_name)
 
@@ -124,7 +119,6 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                         app,
                         f"Voice command: {command_result['command']}",
                         level="info",
-                        category="nats",
                     )
                     cmd_payload = command_result["result"]
                     if isinstance(cmd_payload, dict) and not cmd_payload.get("error"):
@@ -165,7 +159,6 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             app,
             f"Whisper phrase pipeline ready ({nats_whisper_subject})",
             level="info",
-            category="audio",
         )
         
         # Подписка на логи от Whisper сервиса
@@ -173,26 +166,14 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             try:
                 log_data = json.loads(msg.data.decode("utf-8"))
                 service_name = log_data.get('service') or 'src_whisper'
-                category = log_data.get('category') or 'whisper'
                 message_text = log_data.get('message', '')
-
-                sse_kwargs = {
-                    "logger": log_data.get('logger', 'whisper'),
-                    "module": log_data.get('module', ''),
-                    "function": log_data.get('function', ''),
-                    "line": log_data.get('line'),
-                    "source_timestamp": log_data.get('timestamp'),
-                }
-                if log_data.get('timestamp'):
-                    sse_kwargs["timestamp"] = log_data.get('timestamp')
 
                 await sse_log(
                     app,
                     message_text,
-                    level=log_data.get('level', 'info'),
-                    category=category,
+                    level=log_data.get('type', 'info'),
                     service=service_name,
-                    **sse_kwargs,
+                    log_time=log_data.get('time'),
                 )
 
             except Exception as e:
@@ -200,8 +181,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         
         await nats_node.nc.subscribe(nats_logs_subject, cb=_whisper_logs_cb)
         logger.info(f"Subscribed to whisper logs: {nats_logs_subject}")
-        await sse_log(app, f"NATS: Subscribed to {nats_logs_subject}", 
-                     level="info", category="nats")
+        await sse_log(app, f"NATS: Subscribed to {nats_logs_subject}", level="info")
 
         # Echo back mixed audio to the browser
         # echo = EchoTrackNode(source)
@@ -210,8 +190,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         asyncio.create_task(graph.start())
 
         logger.info("Audio graph started")
-        await sse_log(app, "Audio graph started successfully", 
-                     level="info", category="audio")
+        await sse_log(app, "Audio graph started successfully", level="info")
 
 
 async def nats_init():

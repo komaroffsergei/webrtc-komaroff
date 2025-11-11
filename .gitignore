@@ -1,4 +1,4 @@
-.env.*
+.env.local
 docker-compose.dev.yml
 dev/**
 *.iml
@@ -21,3 +21,4 @@ coverage
 /src_whisper_ruby/models/
 /models/
 /src_whisper_ruby/.bundle/
+!src_whisper_ruby/.env.local

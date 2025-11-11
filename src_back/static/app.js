@@ -32,19 +32,27 @@
 
   let pc = null;
   // SSE events
+  const isSimpleLog = (payload) => {
+    if (!payload || typeof payload !== 'object') return false;
+    const keys = Object.keys(payload);
+    if (keys.length !== 4) return false;
+    return keys.includes('time') && keys.includes('service') && keys.includes('type') && keys.includes('message');
+  };
+
   try {
     const es = new EventSource('/events');
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
+        const logEvent = isSimpleLog(msg);
+        if (logEvent && window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
           window.DebugPanel.addLog(msg);
         }
         if (window.AppLog && typeof window.AppLog.emit === 'function') {
           AppLog.emit('[sse]', msg);
         }
-        if (msg?.type === 'log' && msg?.message) {
-          console.log('[SSE]', msg.service || 'src_server', msg.message, msg);
+        if (logEvent) {
+          console.log('[SSE]', msg.service || 'src_server', msg.message);
         }
       } catch(err) {
         console.warn('Failed to handle SSE message', err);

@@ -14,15 +14,11 @@ ENV["NATS_MAX_RECONNECT_ATTEMPTS"] = "-1"
 
 class NATSClient
 
-  def initialize(url, options = {})
+  def initialize(url, options = {}, service_name: "src_whisper_ruby")
     @nats = NATS::Client.new
-    @nats.on_close { LOGGER.info "NATS Client closed", _1 }
-    @nats.on_error { LOGGER.error "NATS Client failed", _1 }
-    @nats.on_disconnect { LOGGER.info "NATS Client disconnected", _1 }
-    @nats.on_reconnect { LOGGER.info "NATS Client reconnected", _1}
     @nats.connect(url, options)
-
     @log_subject = nil
+    @service_name = service_name
   end
 
   def req(request, params = {})
@@ -53,110 +49,26 @@ class NATSClient
 
   def configure_logging(subject:)
     @log_subject = subject
-    @log_service_name = normalize_service_name
   end
 
-  def log_info(message, category: "general", subject: nil, **extra)
-    publish_log(subject, "info", message, category, extra)
-  end
+  def log(message:, type: "info", subject: nil)
+    target = subject || @log_subject
+    return unless target && connected?
 
-  def log_warning(message, category: "general", subject: nil, **extra)
-    publish_log(subject, "warning", message, category, extra)
-  end
-
-  def log_error(message, category: "general", subject: nil, **extra)
-    publish_log(subject, "error", message, category, extra)
-  end
-
-  def log_event(event:, message:, category: "system", level: "info", subject: nil, **extra)
-    extra[:event] = event
-    publish_log(subject, level, message, category, extra)
-  end
-
-  def log_transcription_start(audio_duration:, audio_samples:, sample_rate:, phrase_id: nil,
-                              start_timestamp: nil, metadata: nil, subject: nil)
-    ts = start_timestamp || Time.now.utc.iso8601(3)
-    extra = {
-      audio_duration: audio_duration,
-      audio_samples: audio_samples,
-      sample_rate: sample_rate,
-      start: ts,
-      event: "transcription_started"
+    payload = {
+      time: Time.now.utc.iso8601(3),
+      service: @service_name,
+      type: type,
+      message: message.to_s
     }
-    extra[:phrase_id] = phrase_id if phrase_id
-    extra[:metadata] = metadata if metadata
 
-    message = format(
-      "Transcription started: audio=%.2fs samples=%d sample_rate=%d",
-      audio_duration.to_f,
-      audio_samples.to_i,
-      sample_rate.to_i
-    )
-
-    publish_log(subject, "info", message, "whisper", extra)
-    ts
-  end
-
-  def log_transcription(text:, segments:, audio_duration:, transcription_time:,
-                        start_timestamp:, end_timestamp:, phrase_id: nil,
-                        event: "transcription_completed", subject: nil)
-    rtf = if audio_duration.to_f.positive? && transcription_time.to_f.positive?
-            transcription_time.to_f / audio_duration.to_f
-          else
-            0.0
-          end
-
-    extra = {
-      text: text,
-      segments: segments,
-      audio_duration: audio_duration,
-      transcription_time: transcription_time,
-      rtf: rtf.round(2),
-      start: start_timestamp,
-      end: end_timestamp,
-      event: event
-    }
-    extra[:phrase_id] = phrase_id if phrase_id
-
-    message = format(
-      "Transcription completed: audio=%<audio>.2fs text=%<text>s time=%<time>.2fs segments=%<segments>d",
-      audio: audio_duration,
-      text: text,
-      time: transcription_time,
-      segments: segments
-    )
-
-    publish_log(subject, "info", message, "whisper", extra)
+    data = JSON.generate(WhisperRuby::TextUtils.ensure_utf8(payload))
+    publish(target, data)
   end
 
   private
 
-
-
-  def publish_log(subject, level, message, category, extra)
-    subj = subject || @log_subject
-    return unless subj && connected?
-
-    payload = {
-      type: "log",
-      level: level,
-      category: category,
-      message: message,
-      timestamp: Time.now.utc.iso8601(3)
-    }
-    payload.merge!(extra.compact) if extra && !extra.empty?
-
-    data = JSON.generate(WhisperRuby::TextUtils.ensure_utf8(payload))
-    publish(subj, data)
-  rescue StandardError => e
-    warn("Failed to publish log to NATS: #{e}")
-  end
-
   def flush_connection
-    return unless @nats.respond_to?(:flush)
-
-    @nats.flush
-  rescue StandardError => e
-    LOGGER.warn("NATS flush failed: #{e}") if defined?(LOGGER)
+    @nats.flush if @nats.respond_to?(:flush)
   end
 end

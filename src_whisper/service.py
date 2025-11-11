@@ -59,7 +59,12 @@ class WhisperService:
         assert self.nc is not None
         whisper_logger = logging.getLogger("whisper")
         if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
-            handler = NatsLogHandler(self.nc, self.config.nats.logs_subject, level=logging.DEBUG)
+            handler = NatsLogHandler(
+                self.nc,
+                self.config.nats.logs_subject,
+                SERVICE_NAME,
+                level=logging.DEBUG,
+            )
             handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
             whisper_logger.addHandler(handler)
             logger.info("NATS log handler attached")
@@ -135,43 +140,27 @@ class WhisperService:
             )
             await self._reply_with_error(msg, str(exc), packet.phrase_id)
 
-    async def _emit_transcription_log(self, packet: PhrasePacket, result, start_ts: str, end_ts: str) -> None:
-        if not self.nats_logger or not result.text:
-            return
-        await self.nats_logger.log_transcription(
-            text=result.text,
-            segments=len(result.segments),
-            audio_duration=result.audio_duration,
-            transcription_time=result.transcription_time,
-            start_timestamp=start_ts,
-            end_timestamp=end_ts,
-            phrase_id=packet.phrase_id,
-        )
-
     async def _log_phrase_received(self, packet: PhrasePacket) -> None:
         if not self.nats_logger:
             return
-        await self.nats_logger.log_event(
-            event_type="phrase_received",
-            message="Получена фраза из NATS",
-            category="transcription",
-            phrase_id=packet.phrase_id,
-            sample_rate=packet.sample_rate,
-            audio_duration=round(packet.duration, 3),
-            audio_samples=int(packet.audio.size),
-            metadata=packet.metadata,
+        message = (
+            "Phrase received "
+            f"phrase_id={packet.phrase_id or 'unknown'} "
+            f"sr={packet.sample_rate}Hz "
+            f"duration={packet.duration:.2f}s "
+            f"samples={int(packet.audio.size)}"
         )
+        await self.nats_logger.log_info(message)
 
     async def _log_transcription_start(self, packet: PhrasePacket, start_timestamp: str) -> None:
         if not self.nats_logger:
             return
         await self.nats_logger.log_transcription_start(
-            audio_duration=packet.duration,
-            audio_samples=int(packet.audio.size),
-            sample_rate=packet.sample_rate,
             phrase_id=packet.phrase_id,
+            duration=packet.duration,
+            samples=int(packet.audio.size),
+            sample_rate=packet.sample_rate,
             start_timestamp=start_timestamp,
-            metadata=packet.metadata,
         )
 
     async def _log_transcription_complete(
@@ -181,7 +170,17 @@ class WhisperService:
         start_ts: str,
         end_ts: str,
     ) -> None:
-        await self._emit_transcription_log(packet, result, start_ts, end_ts)
+        if not self.nats_logger or not result.text:
+            return
+        await self.nats_logger.log_transcription_complete(
+            packet.phrase_id,
+            result.text,
+            len(result.segments),
+            result.audio_duration,
+            result.transcription_time,
+            start_ts,
+            end_ts,
+        )
 
     async def _log_error(
         self,
@@ -193,21 +192,15 @@ class WhisperService:
     ) -> None:
         if not self.nats_logger:
             return
-        payload = {
-            "event": event,
-            "error_type": type(exc).__name__,
-            "error_message": str(exc),
-            "stacktrace": traceback.format_exc(),
-        }
+        details = [f"event={event}", f"error={type(exc).__name__}: {exc}"]
         if phrase_id:
-            payload["phrase_id"] = phrase_id
+            details.append(f"phrase_id={phrase_id}")
         if extra:
-            payload.update(extra)
-        await self.nats_logger.log_error(
-            f"{event}: {exc}",
-            category="whisper",
-            **payload,
-        )
+            extra_info = ", ".join(f"{key}={value}" for key, value in extra.items())
+            details.append(extra_info)
+        stack = traceback.format_exc()
+        details.append(stack)
+        await self.nats_logger.log_error(" | ".join(details))
 
     def _build_response(self, packet: PhrasePacket, result, start_ts: str, end_timestamp) -> dict:
 

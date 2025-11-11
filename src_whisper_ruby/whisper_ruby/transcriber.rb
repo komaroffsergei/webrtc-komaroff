@@ -1,90 +1,6 @@
 # frozen_string_literal: true
 
 module WhisperRuby; end unless defined?(WhisperRuby)
-
-#         model_path: ENV["WHISPER_MODEL"],
-#         model_name: ENV["WHISPER_MODEL_NAME"] || "medium",
-#         model_url: ENV["WHISPER_MODEL_URL"],
-#         models_dir: models_dir,
-#         language: ENV.fetch("WHISPER_LANGUAGE", "ru"),
-#         target_sample_rate: ENV.fetch("WHISPER_SAMPLE_RATE", "16000").to_i,
-#         worker_threads: threads,
-#         max_queue_size: ENV.fetch("WHISPER_MAX_QUEUE", max_queue_default).to_i,
-#         vad_model_path: ENV["WHISPER_VAD_MODEL_PATH"],
-#         vad_model_name: ENV["WHISPER_VAD_MODEL_NAME"] || "silero-v5.1.2",
-#         vad_threshold: ENV.fetch("WHISPER_VAD_THRESHOLD", "0.5").to_f,
-#         vad_min_speech_ms: ENV.fetch("WHISPER_VAD_MIN_SPEECH_MS", "250").to_i,
-#         vad_min_silence_ms: ENV.fetch("WHISPER_VAD_MIN_SILENCE_MS", "100").to_i,
-#         vad_max_speech_ms: ENV.fetch("WHISPER_VAD_MAX_SPEECH_MS", "30000").to_i,
-#         vad_speech_pad_ms: ENV.fetch("WHISPER_VAD_SPEECH_PAD_MS", "30").to_i,
-#         force_download: truthy?(ENV["WHISPER_FORCE_DOWNLOAD"]),
-#         translate: truthy?(ENV["WHISPER_TRANSLATE"]),
-#         n_threads: ENV.fetch("WHISPER_THREADS", Etc.nprocessors).to_i,
-#         temperature: ENV.fetch("WHISPER_TEMPERATURE", "0.2").to_f,
-#         temperature_inc: ENV.fetch("WHISPER_TEMPERATURE_INC", "0.2").to_f
-
-module WhisperRuby
-  module EnvControls
-    CPU_FORCE_ENV = %w[
-      WHISPERCPP_FORCE_CPU
-      WHISPER_FORCE_CPU
-      WHISPERCPP_DISABLE_GPU
-      WHISPER_NO_GPU
-      GGML_NO_GPU
-    ].freeze
-
-    GPU_DISABLE_ENV = %w[
-      WHISPERCPP_USE_GPU
-      WHISPERCPP_ENABLE_GPU
-      WHISPER_USE_GPU
-      GGML_USE_GPU
-      GGML_USE_CUDA
-      GGML_CUDA
-    ].freeze
-
-    GPU_ENABLE_OVERRIDES = (
-      GPU_DISABLE_ENV + %w[
-        WHISPER_ENABLE_GPU
-        WHISPERCPP_ENABLE_GPU
-        WHISPERCPP_FORCE_GPU
-        WHISPER_FORCE_GPU
-      ]
-    ).uniq.freeze
-
-    module_function
-
-    def ensure_cpu_mode!
-      return if gpu_allowed?
-
-      CPU_FORCE_ENV.each { |var| ensure_env(var, "1") }
-      GPU_DISABLE_ENV.each { |var| ensure_env(var, "0") }
-    end
-
-    def gpu_allowed?
-      GPU_ENABLE_OVERRIDES.any? { |var| truthy?(ENV[var]) }
-    end
-
-    def force_env(var, value)
-      ENV[var] = value
-    end
-
-    def truthy?(value)
-      return false if value.nil?
-
-      %w[1 true yes on].include?(value.to_s.strip.downcase)
-    end
-
-    def ensure_env(var, value)
-      current = ENV[var]
-      return if current && !current.strip.empty?
-
-      ENV[var] = value
-    end
-  end
-end
-
-WhisperRuby::EnvControls.ensure_cpu_mode!
-
 require "whisper"
 
 module WhisperRuby
@@ -92,39 +8,6 @@ module WhisperRuby
 
   class Transcriber
     TARGET_SAMPLE_RATE = 16_000
-
-    class << self
-      def ensure_log_hook(logger)
-        @log_hook_mutex ||= Mutex.new
-        return if @log_hooked
-
-        @log_hook_mutex.synchronize do
-          return if @log_hooked
-
-          log_whisper_backend(logger)
-
-          @log_hooked = true
-        end
-      rescue StandardError => e
-        logger.warn "Failed to log whisper backend info: #{e}"
-      end
-
-      private
-
-      def log_whisper_backend(logger)
-        system_info = Whisper.system_info_str.to_s.strip
-        if system_info.empty?
-          logger.info "WhisperCPP initialized"
-          return
-        end
-
-        if system_info.include?("CUDA") || system_info.include?("GPU")
-          logger.info "WhisperCPP system info: #{system_info}"
-        else
-          logger.info "WhisperCPP running in CPU-only mode (info: #{system_info})"
-        end
-      end
-    end
 
     def initialize(config:)
       @config = config
@@ -157,22 +40,24 @@ module WhisperRuby
       params = build_params
       start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-      run_model(context, params, audio)
+      # run model
+      context.full(params, audio)
+
 
       segments = collect_segments(context)
-      if segments.empty?
-        fallback_stats(audio, packet)
-        params_no_vad = build_params(vad_enabled: false)
-        context_info = format(
-          "packet_id=%<id>s, duration=%<duration>.3f, samples=%<samples>d",
-          id: packet.phrase_id || "unknown",
-          duration: packet.duration,
-          samples: audio.length
-        )
-        LOGGER.warn "No speech detected by Whisper VAD, retrying without VAD (#{context_info})"
-        run_model(context, params_no_vad, audio)
-        segments = collect_segments(context)
-      end
+      # if segments.empty?
+      #   fallback_stats(audio, packet)
+      #   params_no_vad = build_params(vad_enabled: false)
+      #   context_info = format(
+      #     "packet_id=%<id>s, duration=%<duration>.3f, samples=%<samples>d",
+      #     id: packet.phrase_id || "unknown",
+      #     duration: packet.duration,
+      #     samples: audio.length
+      #   )
+      #   LOGGER.warn "No speech detected by Whisper VAD, retrying without VAD (#{context_info})"
+      #   run_model(context, params_no_vad, audio)
+      #   segments = collect_segments(context)
+      # end
       transcription_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
       text = segments.map { |segment| segment[:text] }.join(" ").strip
 
@@ -185,12 +70,6 @@ module WhisperRuby
     end
 
     private
-
-    def run_model(context, params, audio)
-      # whisper_full_parallel splits audio into chunks per processor which breaks short phrases,
-      # so stick to full() (which still uses multiple threads internally) for reliability.
-      context.full(params, audio)
-    end
 
     def thread_local_context
       ctx = Thread.current[@thread_key]
@@ -217,22 +96,6 @@ module WhisperRuby
         }
       end
       segments
-    end
-
-    def fallback_stats(audio, packet)
-      return unless audio && !audio.empty?
-
-      max_amp = audio.map(&:abs).max || 0.0
-      rms = Math.sqrt(audio.map { |s| s * s }.sum / audio.length.to_f)
-      stats = format(
-        "packet_id=%<id>s, duration=%<duration>.3f, sample_rate=%<rate>d, max_amplitude=%<max>.5f, rms=%<rms>.5f",
-        id: packet.phrase_id || "unknown",
-        duration: packet.duration.round(3),
-        rate: TARGET_SAMPLE_RATE,
-        max: max_amp.round(5),
-        rms: rms.round(5)
-      )
-      LOGGER.info "Audio stats before VAD retry (#{stats})"
     end
 
     def build_params(vad_enabled: true)

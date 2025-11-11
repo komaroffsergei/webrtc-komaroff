@@ -74,6 +74,10 @@ whisper_config.define_singleton_method(:resolved_vad_reference) do
   File.join(models_dir, default_vad_filename((vad_model_name || "silero-v5.1.2").to_s))
 end
 
+# Ensure concrete paths for download manager
+whisper_config.model_path = whisper_config.resolved_model_reference
+whisper_config.vad_model_path = whisper_config.resolved_vad_reference
+
 manager = WhisperRuby::ModelManager.new()
 paths = manager.ensure_all(whisper_config)
 

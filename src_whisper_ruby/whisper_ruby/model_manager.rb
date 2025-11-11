@@ -13,14 +13,14 @@ module WhisperRuby
 
     def ensure_all(whisper_config)
       asr_path = ensure_model(
-        target_path: whisper_config.resolved_model_reference,
+        target_path: whisper_config.model_path,
         explicit_url: whisper_config.model_url,
         default_base: ASR_BASE_URL,
         force_download: whisper_config.force_download
       )
 
       vad_path = ensure_model(
-        target_path: whisper_config.resolved_vad_reference,
+        target_path: whisper_config.vad_model_path,
         explicit_url: nil,
         default_base: VAD_BASE_URL,
         force_download: whisper_config.force_download

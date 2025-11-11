@@ -6,13 +6,6 @@ require 'rack/builder'
 require "rspec/snapshot"
 require 'testcontainers'
 
-ENV['STACK_SERVICE_NAME']='rspec_ruby_wisper'
-ENV['NATS_WHISPER_SUBJECT']='voice_chat_transcription'
-ENV['NATS_LOGS_SUBJECT']='voice_chat_logs'
-ENV['WHISPER_MODEL_NAME']='medium'
-ENV['WHISPER_VAD_MODEL_NAME']='silero-v5.1.2'
-ENV['WHISPER_MODELS_DIR']='/app/models'
-
 module Rack::Test::AppHelper
   def app = RSpec.configuration.app
 end

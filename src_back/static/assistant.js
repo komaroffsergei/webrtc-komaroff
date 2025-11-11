@@ -11,6 +11,29 @@
 
         let els = {};
 
+        function addDebugLog(message, type = 'info', service = 'ui') {
+            if (window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
+                window.DebugPanel.addLog({
+                    time: new Date().toISOString(),
+                    service,
+                    type,
+                    message
+                });
+            }
+        }
+
+        const isSimpleLogPayload = (payload) => {
+            if (!payload || typeof payload !== 'object') return false;
+            const keys = Object.keys(payload);
+            return (
+                keys.length === 4 &&
+                keys.includes('time') &&
+                keys.includes('service') &&
+                keys.includes('type') &&
+                keys.includes('message')
+            );
+        };
+
         // Установка размеров canvas с запасом
         function setupCanvas() {
             if (!els.waveBackground || !els.chatWindow) return;
@@ -235,14 +258,9 @@
                 const audioConstraints = getAudioConstraints();
                 
                 // Логируем настройки
-                if (window.DebugPanel) {
-                    window.DebugPanel.addLog({
-                        type: 'log',
-                        level: 'info',
-                        category: 'audio',
-                        message: `Requesting microphone: EC=${audioConstraints.echoCancellation}, NS=${audioConstraints.noiseSuppression}, SR=${audioConstraints.sampleRate}`
-                    });
-                }
+                addDebugLog(
+                    `Requesting microphone: EC=${audioConstraints.echoCancellation}, NS=${audioConstraints.noiseSuppression}, SR=${audioConstraints.sampleRate}`
+                );
 
                 // Получаем доступ к микрофону
                 micStream = await navigator.mediaDevices.getUserMedia({
@@ -358,11 +376,6 @@
                     try {
                         const msg = JSON.parse(e.data);
                         
-                        // Логируем все события в отладочную панель
-                        if (window.DebugPanel) {
-                            window.DebugPanel.addLog(msg);
-                        }
-                        
                         // Передаем в CommandHandler для обработки
                         if (window.CommandHandler) {
                             window.CommandHandler.handleServerMessage(msg);
@@ -408,16 +421,7 @@
                 vadThreshEl.addEventListener('input', (e) => {
                     const value = e.target.value;
                     vadLevelEl.textContent = `${value} dBFS`;
-                    
-                    // Логируем изменение в отладочную панель
-                    if (window.DebugPanel) {
-                        window.DebugPanel.addLog({
-                            type: 'log',
-                            level: 'info',
-                            category: 'audio',
-                            message: `VAD threshold changed: ${value} dBFS`
-                        });
-                    }
+                    addDebugLog(`VAD threshold changed: ${value} dBFS`);
                 });
             }
 
@@ -425,16 +429,7 @@
             if (vadEnableEl) {
                 vadEnableEl.addEventListener('change', (e) => {
                     const enabled = e.target.checked;
-                    
-                    if (window.DebugPanel) {
-                        window.DebugPanel.addLog({
-                            type: 'log',
-                            level: 'info',
-                            category: 'audio',
-                            message: `VAD ${enabled ? 'enabled' : 'disabled'}`
-                        });
-                    }
-                    
+                    addDebugLog(`VAD ${enabled ? 'enabled' : 'disabled'}`);
                     // Обновляем VAD если есть активный экземпляр
                     if (vadInstance) {
                         vadInstance.enabled = enabled;
@@ -446,15 +441,7 @@
             if (ecEnableEl) {
                 ecEnableEl.addEventListener('change', (e) => {
                     const enabled = e.target.checked;
-                    
-                    if (window.DebugPanel) {
-                        window.DebugPanel.addLog({
-                            type: 'log',
-                            level: 'info',
-                            category: 'audio',
-                            message: `Echo Cancellation ${enabled ? 'enabled' : 'disabled'}`
-                        });
-                    }
+                    addDebugLog(`Echo Cancellation ${enabled ? 'enabled' : 'disabled'}`);
                 });
             }
 
@@ -462,27 +449,14 @@
             if (nsEnableEl) {
                 nsEnableEl.addEventListener('change', (e) => {
                     const enabled = e.target.checked;
-                    
-                    if (window.DebugPanel) {
-                        window.DebugPanel.addLog({
-                            type: 'log',
-                            level: 'info',
-                            category: 'audio',
-                            message: `Noise Suppression ${enabled ? 'enabled' : 'disabled'}`
-                        });
-                    }
+                    addDebugLog(`Noise Suppression ${enabled ? 'enabled' : 'disabled'}`);
                 });
             }
 
             // Логируем начальное состояние
-            if (window.DebugPanel) {
-                window.DebugPanel.addLog({
-                    type: 'log',
-                    level: 'info',
-                    category: 'audio',
-                    message: `Audio controls initialized: VAD=${vadEnableEl?.checked}, EC=${ecEnableEl?.checked}, NS=${nsEnableEl?.checked}, Threshold=${vadThreshEl?.value}dBFS`
-                });
-            }
+            addDebugLog(
+                `Audio controls initialized: VAD=${vadEnableEl?.checked}, EC=${ecEnableEl?.checked}, NS=${nsEnableEl?.checked}, Threshold=${vadThreshEl?.value}dBFS`
+            );
         }
 
         // Получение настроек аудио для getUserMedia
