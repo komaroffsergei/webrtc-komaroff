@@ -7,10 +7,10 @@ module WhisperRuby
       @enabled = false
     end
 
-    def configure(subject:, service_name:)
+    def configure(subject:)
       return unless @nats_client.respond_to?(:configure_logging)
 
-      @nats_client.configure_logging(subject: subject, service_name: service_name)
+      @nats_client.configure_logging(subject: subject, service_name: ENV['STACK_SERVICE_NAME'] || 'undefined_service' )
       @enabled = true
     rescue StandardError => e
       LOGGER.warn("Failed to configure NATS logging: #{e}")

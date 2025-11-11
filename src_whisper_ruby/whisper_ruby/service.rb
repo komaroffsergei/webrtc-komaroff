@@ -99,10 +99,7 @@ module WhisperRuby
 
     def configure_nats_logging
       LOGGER.info("Configuring NATS logging subject=#{config.nats.logs_subject}")
-      @transcription_logger.configure(
-        subject: config.nats.logs_subject,
-        service_name: config.service_name
-      )
+      @transcription_logger.configure( subject: config.nats.logs_subject )
     end
 
     def subscribe_to_phrases

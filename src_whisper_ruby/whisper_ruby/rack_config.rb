@@ -7,31 +7,6 @@ module WhisperRuby
   module RackConfig
     module_function
 
-    def build_service_config
-      OpenStruct.new(
-        service_name: service_name,
-        whisper: build_whisper_config,
-        nats: build_nats_config
-      )
-    end
-
-    def service_name
-      (ENV["STACK_SERVICE_NAME"] || "src_whisper_ruby").strip
-    end
-
-    def nats_url
-      ENV.fetch("NATS_URL", "nats://localhost:4222")
-    end
-
-    def build_nats_config
-      OpenStruct.new(
-        url: nats_url,
-        whisper_subject: env_string("NATS_WHISPER_SUBJECT", "whisper.transcription"),
-        logs_subject: env_string("NATS_LOGS_SUBJECT", "whisper.logs"),
-        connection_name: service_name
-      )
-    end
-
     def build_whisper_config
       threads = ENV.fetch("WHISPER_WORKERS", "1").to_i
       max_queue_default = [threads * 2, 4].max

@@ -2,6 +2,27 @@
 
 module WhisperRuby; end unless defined?(WhisperRuby)
 
+#         model_path: ENV["WHISPER_MODEL"],
+#         model_name: ENV["WHISPER_MODEL_NAME"] || "medium",
+#         model_url: ENV["WHISPER_MODEL_URL"],
+#         models_dir: models_dir,
+#         language: ENV.fetch("WHISPER_LANGUAGE", "ru"),
+#         target_sample_rate: ENV.fetch("WHISPER_SAMPLE_RATE", "16000").to_i,
+#         worker_threads: threads,
+#         max_queue_size: ENV.fetch("WHISPER_MAX_QUEUE", max_queue_default).to_i,
+#         vad_model_path: ENV["WHISPER_VAD_MODEL_PATH"],
+#         vad_model_name: ENV["WHISPER_VAD_MODEL_NAME"] || "silero-v5.1.2",
+#         vad_threshold: ENV.fetch("WHISPER_VAD_THRESHOLD", "0.5").to_f,
+#         vad_min_speech_ms: ENV.fetch("WHISPER_VAD_MIN_SPEECH_MS", "250").to_i,
+#         vad_min_silence_ms: ENV.fetch("WHISPER_VAD_MIN_SILENCE_MS", "100").to_i,
+#         vad_max_speech_ms: ENV.fetch("WHISPER_VAD_MAX_SPEECH_MS", "30000").to_i,
+#         vad_speech_pad_ms: ENV.fetch("WHISPER_VAD_SPEECH_PAD_MS", "30").to_i,
+#         force_download: truthy?(ENV["WHISPER_FORCE_DOWNLOAD"]),
+#         translate: truthy?(ENV["WHISPER_TRANSLATE"]),
+#         n_threads: ENV.fetch("WHISPER_THREADS", Etc.nprocessors).to_i,
+#         temperature: ENV.fetch("WHISPER_TEMPERATURE", "0.2").to_f,
+#         temperature_inc: ENV.fetch("WHISPER_TEMPERATURE_INC", "0.2").to_f
+
 module WhisperRuby
   module EnvControls
     CPU_FORCE_ENV = %w[

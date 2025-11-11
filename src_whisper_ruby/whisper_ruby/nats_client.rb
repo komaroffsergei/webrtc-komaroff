@@ -13,16 +13,16 @@ ENV["NATS_RECONNECT_TIME_WAIT"] = "2"
 ENV["NATS_MAX_RECONNECT_ATTEMPTS"] = "-1"
 
 class NATSClient
-  DEFAULT_SERVICE_NAME = "src_whisper_ruby".freeze
 
   def initialize(url, options = {})
     @nats = NATS::Client.new
-    attach_callbacks(@nats)
+    @nats.on_close { LOGGER.info "NATS Client closed", _1 }
+    @nats.on_error { LOGGER.error "NATS Client failed", _1 }
+    @nats.on_disconnect { LOGGER.info "NATS Client disconnected", _1 }
+    @nats.on_reconnect { LOGGER.info "NATS Client reconnected", _1}
     @nats.connect(url, options)
 
-    @log_mutex = Mutex.new
     @log_subject = nil
-    @log_service_name = DEFAULT_SERVICE_NAME
   end
 
   def req(request, params = {})
@@ -47,21 +47,13 @@ class NATSClient
     end
   end
 
-  def connected?
-    @nats&.connected?
-  end
+  def connected? = @nats&.connected?
+  def connected_server = @nats&.uri
+  def uri = @nats&.uri
 
-  def connected_server
-    @nats&.uri
-  end
-
-  def uri
-    @nats&.uri
-  end
-
-  def configure_logging(subject:, service_name: nil)
+  def configure_logging(subject:)
     @log_subject = subject
-    @log_service_name = normalize_service_name(service_name)
+    @log_service_name = normalize_service_name
   end
 
   def log_info(message, category: "general", subject: nil, **extra)
@@ -139,17 +131,7 @@ class NATSClient
 
   private
 
-  def attach_callbacks(nc)
-    nc.on_close { |reason| LOGGER.info "NATS Client closed", reason }
-    nc.on_error { |err| LOGGER.error "NATS Client failed", err }
-    nc.on_disconnect { |reason| LOGGER.info "NATS Client disconnected", reason }
-    nc.on_reconnect { |nc_instance| LOGGER.info "NATS Client reconnected", nc_instance }
-  end
 
-  def normalize_service_name(name)
-    value = name.to_s.strip
-    value.empty? ? DEFAULT_SERVICE_NAME : value
-  end
 
   def publish_log(subject, level, message, category, extra)
     subj = subject || @log_subject
@@ -160,15 +142,12 @@ class NATSClient
       level: level,
       category: category,
       message: message,
-      service: @log_service_name,
       timestamp: Time.now.utc.iso8601(3)
     }
     payload.merge!(extra.compact) if extra && !extra.empty?
 
     data = JSON.generate(WhisperRuby::TextUtils.ensure_utf8(payload))
-    @log_mutex.synchronize do
-      publish(subj, data)
-    end
+    publish(subj, data)
   rescue StandardError => e
     warn("Failed to publish log to NATS: #{e}")
   end
