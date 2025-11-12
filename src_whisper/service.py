@@ -19,6 +19,9 @@ from utils.nats_log_handler import NatsLogHandler
 from utils.nats_logger import NatsLogger
 from phrases import PhrasePacket, PhrasePacketError
 from transcriber import WhisperTranscriber
+from utils.model_downloader import ensure_model_available
+from pathlib import Path
+import os
 
 
 logger = logging.getLogger("whisper.service")
@@ -36,7 +39,8 @@ class WhisperService:
     async def run(self) -> None:
         await self._connect()
         await self._setup_logging()
-        await self.transcriber.load()
+        # start async model init and status logging
+        asyncio.create_task(self._ensure_model_ready(), name="ensure_model_ready")
 
         assert self.nc is not None
         subject = self.config.nats.whisper_subject
@@ -216,6 +220,28 @@ class WhisperService:
             "start_timestamp": start_ts,
             "end_timestamp": end_timestamp,
         }
+
+    async def _ensure_model_ready(self) -> None:
+        if not self.nats_logger:
+            return
+        # Determine if the model already exists (faster-whisper layout checks config.json)
+        path = Path(self.config.whisper.model_path)
+        exists = path.exists() and (path / "config.json").exists()
+
+        if exists:
+            await self.nats_logger.log_status("ready")
+            # Load synchronously now that it is present
+            await self.transcriber.load()
+            return
+
+        await self.nats_logger.log_status("downloading")
+        loop = asyncio.get_event_loop()
+        # Download (or resolve) the model path in executor
+        resolved_path = await loop.run_in_executor(None, ensure_model_available, self.config.whisper.model_path)
+        # Update transcriber path and load
+        self.transcriber.model_path = resolved_path
+        await self.transcriber.load()
+        await self.nats_logger.log_status("ready")
 
     async def _reply(self, msg: Msg, payload: dict) -> None:
         assert self.nc is not None

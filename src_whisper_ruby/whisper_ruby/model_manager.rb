@@ -5,38 +5,51 @@ require "net/http"
 require "uri"
 
 module WhisperRuby
-  ModelPaths = Struct.new(:asr, :vad, keyword_init: true)
-
   class ModelManager
-    def ensure_all(whisper_config)
-      asr_path = ensure_model(
-        target_path: whisper_config.model_path,
-        url: whisper_config.model_url,
-        force_download: whisper_config.force_download
-      )
+    def asr_target_path(models_dir:, model_name:)
+      File.join(models_dir, "ggml-#{model_name}.bin")
+    end
 
-      vad_path = ensure_model(
-        target_path: whisper_config.vad_model_path,
-        url: whisper_config.vad_model_url,
-        force_download: whisper_config.force_download
-      )
+    def vad_target_path(models_dir:, vad_model_name:)
+      File.join(models_dir, "ggml-#{vad_model_name}.bin")
+    end
 
-      ModelPaths.new(asr: asr_path, vad: vad_path)
+    # Ensure ASR model is present; download if missing.
+    def ensure_asr(models_dir:, model_name:)
+      target = asr_target_path(models_dir:, model_name:)
+      return target if File.file?(target)
+
+      FileUtils.mkdir_p(File.dirname(target))
+      url = asr_url_for(model_name)
+      download_file(url, target)
+    end
+
+    # Ensure VAD model is present; download if missing.
+    def ensure_vad(models_dir:, vad_model_name:)
+      target = vad_target_path(models_dir:, vad_model_name:)
+      return target if File.file?(target)
+
+      FileUtils.mkdir_p(File.dirname(target))
+      url = vad_url_for(vad_model_name)
+      download_file(url, target)
     end
 
     private
 
-    def ensure_model(target_path:, url:, force_download:)
-      return target_path if File.file?(target_path) && !force_download
+    def asr_url_for(model_name)
+      # Minimal mapping to official whisper.cpp HF repo naming
+      "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-#{model_name}.bin"
+    end
 
-      FileUtils.mkdir_p(File.dirname(target_path))
-      download_file(url, target_path)
+    def vad_url_for(vad_model_name)
+      # VAD model follows ggml-silero-<version>.bin naming in the same repo
+      "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-#{vad_model_name}.bin"
     end
 
     def download_file(url, destination)
       tmp_path = "#{destination}.download"
       local_logger = defined?(LOGGER) ? LOGGER : nil
-      local_logger&.info "Downloading model #{File.basename(destination)}"
+      local_logger&.info "Downloading model #{File.basename(destination)} from #{url}"
 
       fetch_with_redirects(URI(url)) do |response|
         File.open(tmp_path, "wb") { |f| response.read_body { |chunk| f.write(chunk) } }

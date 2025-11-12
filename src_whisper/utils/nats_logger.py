@@ -53,6 +53,9 @@ class NatsLogger:
     async def log_error(self, message: str) -> None:
         await self._publish("error", message)
 
+    async def log_status(self, value: str) -> None:
+        await self._publish("status", value)
+
     async def log_transcription_start(
         self,
         phrase_id: str | None,

@@ -465,6 +465,12 @@ body {
     font-weight: 600;
 }
 
+.log-level-status {
+    color: #ffffff;
+    border: #3eff00 1px solid;
+    font-weight: 600;
+}
+
 /* Debug Modal */
 .debug-modal {
     position: fixed;

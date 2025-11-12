@@ -32,11 +32,7 @@ ENV RACK_ENV=production NODE_ENV=production \
     GGML_USE_CUDA=0 \
     GGML_CUDA=0
 
-RUN mkdir -p ${WHISPER_MODELS_DIR} && \
-    bundle exec ruby scripts/download_model.rb \
-      --model ${WHISPER_MODEL_NAME} \
-      --vad-model ${WHISPER_VAD_MODEL_NAME} \
-      --models-dir ${WHISPER_MODELS_DIR}
+RUN mkdir -p ${WHISPER_MODELS_DIR}
 
 RUN rm -rf node_modules
 

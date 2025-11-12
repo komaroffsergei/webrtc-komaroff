@@ -29,6 +29,8 @@ services:
       target: whisper
     depends_on:
       - audio_nats
+    volumes:
+      - whisper_models:/app/models
     ports:
       - "9000:9000"
 
@@ -48,7 +50,7 @@ services:
       WHISPER_MODELS_DIR: /app/models
       PORT: ${WHISPER_RUBY_PORT:-7000}
     volumes:
-      - whisper_ruby_models:/app/models
+      - whisper_models:/app/models
     depends_on:
       - audio_nats
     ports:
@@ -56,4 +58,4 @@ services:
 
 volumes:
   silero_vad_cache: {}
-  whisper_ruby_models: {}
+  whisper_models: {}

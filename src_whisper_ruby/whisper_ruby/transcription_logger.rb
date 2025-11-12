@@ -16,6 +16,11 @@ module WhisperRuby
 
     def enabled? = @enabled
 
+    # Public helper to send status updates (e.g., downloading/ready)
+    def log_status(value)
+      publish(message: value.to_s, type: "status")
+    end
+
     def phrase_received(packet)
       return unless active?(packet)
 

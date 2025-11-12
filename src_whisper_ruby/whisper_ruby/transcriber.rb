@@ -97,7 +97,10 @@ module WhisperRuby
       segments
     end
 
-    def build_params(vad_enabled: true)
+    def build_params(vad_enabled: nil)
+      # Disable VAD if no VAD model path provided
+      effective_vad = vad_enabled.nil? ? !@vad_model_path.nil? : vad_enabled
+
       params = Whisper::Params.new(
         language: @config.language,
         translate: @config.translate,
@@ -110,8 +113,8 @@ module WhisperRuby
         token_timestamps: false,
         max_len: 0,
         split_on_word: true,
-        vad: vad_enabled,
-        vad_model_path: vad_enabled ? @vad_model_path : nil
+        vad: effective_vad,
+        vad_model_path: effective_vad ? @vad_model_path : nil
       )
       params.temperature = @config.temperature
       params.temperature_inc = @config.temperature_inc

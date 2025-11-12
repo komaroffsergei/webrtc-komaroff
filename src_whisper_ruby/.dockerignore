@@ -1,0 +1,4 @@
+# Do not bundle models into the image
+models/
+# Common local artifacts
+coverage/

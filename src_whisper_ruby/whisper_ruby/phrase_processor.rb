@@ -14,6 +14,7 @@ module WhisperRuby
       @logger = logger
       @config = config
       @nats_client = nats_client
+      @logger.log_status(STATE[:model_load_status])
     end
 
     def process(msg)

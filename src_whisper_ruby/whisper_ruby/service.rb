@@ -23,7 +23,6 @@ module WhisperRuby
       @running = false
       @transcriber = Transcriber.new config: config.whisper
       @model_manager = ModelManager.new
-      @model_paths = nil
       @transcription_logger = TranscriptionLogger.new(nats_client: @nats_client)
       @phrase_processor = PhraseProcessor.new(
         transcriber: @transcriber,
@@ -45,12 +44,11 @@ module WhisperRuby
 
       LOGGER.info("Service starting (subject=#{config.nats.whisper_subject})")
       @running = true
-      ensure_models_and_transcriber
       connect_nats
       configure_nats_logging
       start_workers
       subscribe_to_phrases
-      LOGGER.info "WhisperRuby service is ready (subject=#{config.nats.whisper_subject})"
+      LOGGER.info "WhisperRuby service bootstrapped (subject=#{config.nats.whisper_subject})"
       wait_for_shutdown
       self
     rescue StandardError => e
@@ -67,6 +65,11 @@ module WhisperRuby
       @running
     end
 
+    # Load transcriber with prepared model paths (called from config.ru)
+    def prepare_transcriber(model_path:, vad_model_path: nil)
+      @transcriber.load!(model_path: model_path, vad_model_path: vad_model_path)
+    end
+
     def stop
       @shutdown << true
     rescue ThreadError
@@ -81,14 +84,30 @@ module WhisperRuby
       # queue interrupted, fall through to shutdown
     end
 
-    def ensure_models_and_transcriber
-      LOGGER.info("Ensuring models and loading transcriber")
-      @model_paths = @model_manager.ensure_all(config.whisper)
-      @transcriber.load!(
-        model_path: @model_paths.asr,
-        vad_model_path: @model_paths.vad
-      )
-      LOGGER.info("Transcriber loaded (asr=#{@model_paths.asr}, vad=#{@model_paths.vad})")
+    def ensure_asr_model_async
+      models_dir = config.whisper.models_dir
+      model_name = config.whisper.model_name
+      target = @model_manager.asr_target_path(models_dir:, model_name:)
+
+      if File.file?(target)
+        LOGGER.info("ASR model already present: #{target}")
+        @transcription_logger.log_status("ready") if @transcription_logger.enabled?
+        @transcriber.load!(model_path: target, vad_model_path: nil)
+        return
+      end
+
+      Thread.new do
+        begin
+          @transcription_logger.log_status("downloading") if @transcription_logger.enabled?
+          path = @model_manager.ensure_asr(models_dir:, model_name:)
+          @transcriber.load!(model_path: path, vad_model_path: nil)
+          @transcription_logger.log_status("ready") if @transcription_logger.enabled?
+          LOGGER.info("ASR model ready at #{path}")
+        rescue => e
+          LOGGER.error("Failed to ensure ASR model: #{e}")
+          raise
+        end
+      end
     end
 
     def connect_nats
