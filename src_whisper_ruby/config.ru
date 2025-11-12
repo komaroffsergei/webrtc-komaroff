@@ -15,6 +15,15 @@ configure do
   nats_client = NATSClient.new(config.nats.url, {}, service_name: config.service_name)
   set :service, WhisperRuby::Service.new(config:, nats_client:)
   set :boot_error, nil
+  set :model_exists, false # settings.model_exists
+
+  Thread.new do
+    # drs: volume name: 'whisper_models', target: '/app/models'
+    unless File.exist? '/app/models/asdasd.mmm'
+
+      set :model_exists, true
+    end
+  end
 
   thread = Thread.new do
     settings.service.start
