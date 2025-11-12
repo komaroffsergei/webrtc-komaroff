@@ -43,7 +43,6 @@ module WhisperRuby
       # run model
       context.full(params, audio)
 
-
       segments = collect_segments(context)
       # if segments.empty?
       #   fallback_stats(audio, packet)

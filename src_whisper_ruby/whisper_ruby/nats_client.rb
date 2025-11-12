@@ -7,11 +7,6 @@ require "thread"
 
 require_relative "../utils/text_utils"
 
-ENV["NATS_RECONNECT"] = "true"
-# ENV['NATS_VERBOSE'] = 'true'
-ENV["NATS_RECONNECT_TIME_WAIT"] = "2"
-ENV["NATS_MAX_RECONNECT_ATTEMPTS"] = "-1"
-
 class NATSClient
 
   def initialize(url, options = {}, service_name: "src_whisper_ruby")
