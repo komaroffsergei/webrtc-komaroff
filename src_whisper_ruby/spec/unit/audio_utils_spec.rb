@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative '../../whisper_ruby/tils'
+require_relative '../../utils/audio_utils'
 
 RSpec.describe WhisperRuby::AudioUtils do
   describe '.resample' do

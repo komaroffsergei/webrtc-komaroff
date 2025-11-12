@@ -8,39 +8,38 @@ require_relative "whisper_ruby/service"
 require_relative "whisper_ruby/nats_client"
 require_relative "whisper_ruby/rack_config"
 
-STATE = { service: nil, thread: nil, boot_error: nil }
-
 StackServiceBase.rack_setup(self)
 
 configure do
   config = WhisperRuby::RackConfig.build_service_config
   nats_client = NATSClient.new(config.nats.url, {}, service_name: config.service_name)
-  STATE[:service] = WhisperRuby::Service.new(config:, nats_client:)
-  STATE[:boot_error] = nil
+  set :service, WhisperRuby::Service.new(config:, nats_client:)
+  set :boot_error, nil
 
-  STATE[:thread] = Thread.new do
-    STATE[:service].start
+  thread = Thread.new do
+    settings.service.start
   rescue => e
-    STATE[:boot_error] = e
+    settings.boot_error = e
     LOGGER.error("Service stopped: #{e.message}")
   end
+  set :thread, thread
 
   at_exit do
-    STATE[:service]&.stop
-    STATE[:thread]&.join(5)
+    settings.service&.stop
+    settings.thread&.join(5)
   end
-end
+end unless defined? RSpec
 
 get "/healthcheck" do
-  healthy = STATE[:boot_error].nil? && STATE[:service]&.running?
+  healthy = settings.boot_error.nil? && settings.service&.running?
   content_type :json
   status(healthy ? 200 : 503)
   {
-    status: healthy ? "ok" : "error",
-    service: STATE[:service]&.config&.service_name,
-    thread_alive: STATE[:thread]&.alive?,
-    boot_error: STATE[:boot_error]&.message
+    Status: healthy ? "Healthy" : "unhealthy",
+    service: settings.service&.config&.service_name,
+    thread_alive: settings.thread&.alive?,
+    boot_error: settings.boot_error&.message
   }.compact.to_json
-end
+end unless defined? RSpec
 
 run Sinatra::Application

@@ -7,7 +7,7 @@ RSpec.describe "Integration Tests", type: :request do
       get "/healthcheck"
       expect(last_response.status).to eq(200)
       body = JSON.parse(last_response.body)
-      expect(body.fetch("status")).to eq("ok")
+      expect(body.fetch('Status')).to eq('Healthy')
     end
   end
 end
