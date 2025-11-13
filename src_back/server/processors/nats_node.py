@@ -46,7 +46,7 @@ class NatsNode(ConsumerNode):
             
             # Отправляем лог о подключении если есть app
             if hasattr(self, '_app'):
-                from ..handlers.sse import sse_log
+                from src_back.server.utils.sse import sse_log
                 await sse_log(
                     self._app,
                     f"NATS connected: {self.nc.connected_url.netloc}",

@@ -52,7 +52,7 @@
           AppLog.emit('[sse]', msg);
         }
         if (logEvent) {
-          console.log('[SSE]', msg.service || 'src_server', msg.message);
+          console.log('[SSE]', msg.service, msg.message);
         }
       } catch(err) {
         console.warn('Failed to handle SSE message', err);

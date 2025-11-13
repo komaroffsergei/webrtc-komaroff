@@ -5,7 +5,7 @@ from .handlers.handle_index import handle_index
 from .handlers.handle_offer import handle_offer
 from .handlers.handle_shutdown import handle_shutdown
 from .handlers.handle_message import message_handler
-from .handlers.sse import sse_handler
+from src_back.server.utils.sse import sse_handler
 from .utils.config import STATIC_DIR
 
 

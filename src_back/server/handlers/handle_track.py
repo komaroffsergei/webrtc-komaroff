@@ -4,23 +4,16 @@ import logging
 import os
 from typing import Dict, Any
 
-from aiortc import RTCPeerConnection
 from ..processors import (
     TrackSourceNode,
-    BgmMixerNode,
-    LossFillerNode,
-    RecorderNode,
-    EchoTrackNode,
-    AudioMonitorNode,
     NatsNode,
     PhraseSegmenterNode,
 )
 from ..processors.graph import AudioGraph
-from ..utils.config import STATIC_DIR
 from ..utils.pc_lifecycle import attach_pc_lifecycle
 from ..voice_commands import CommandRegistry, CommandMatcher
 from ..commands import register_alert_command
-from .sse import sse_command, sse_log, sse_message, sse_warning
+from src_back.server.utils.sse import sse_log
 
 logger = logging.getLogger("handle_track")
 
@@ -111,7 +104,6 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                     level="info",
                     service=service_name,
                 )
-                await sse_message(app, text, descr="transcription", service=service_name)
 
                 command_result = await command_matcher.process_transcription(text)
                 if command_result:
@@ -123,7 +115,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
                     cmd_payload = command_result["result"]
                     if isinstance(cmd_payload, dict) and not cmd_payload.get("error"):
                         if cmd_payload.get("type") == "command":
-                            await sse_command(
+                            await sse_log(
                                 app,
                                 cmd_payload.get("method"),
                                 cmd_payload.get("params", {}),
