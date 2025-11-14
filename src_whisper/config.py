@@ -7,12 +7,6 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-def _resolve_subject(env_value: Optional[str], default: str) -> str:
-    """Нормализовать NATS subject, убирая лишние точки."""
-    value = (env_value or "").strip()
-    if not value:
-        value = default
-    return value[:-1] if value.endswith(".") else value
 
 
 @dataclass
@@ -28,9 +22,9 @@ class NatsConfig:
         """Создать конфигурацию из переменных окружения."""
         return cls(
             url=os.getenv("NATS_URL", "nats://localhost:4222"),
-            audio_subject=_resolve_subject(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames"),
-            whisper_subject=_resolve_subject(os.getenv("NATS_WHISPER_SUBJECT"), "whisper.transcription"),
-            logs_subject=_resolve_subject(os.getenv("NATS_LOGS_SUBJECT"), "whisper.logs")
+            audio_subject=os.getenv(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames"),
+            whisper_subject=os.getenv(os.getenv("NATS_WHISPER_SUBJECT"), "whisper.transcription"),
+            logs_subject=os.getenv(os.getenv("NATS_LOGS_SUBJECT"), "whisper.logs")
         )
 
 
@@ -49,7 +43,7 @@ class WhisperConfig:
         if model_name:
             # Используем ./models для локальной разработки, /app/models для Docker
             default_models_dir = "./models" if not os.path.exists("/app") else "/app/models"
-            models_dir = os.getenv("WHISPER_MODELS_DIR", default_models_dir)
+            models_dir = os.getenv("MODELS_DIR", default_models_dir)
             model_path = f"{models_dir}/{model_name}"
         else:
             # Иначе используем WHISPER_MODEL или default

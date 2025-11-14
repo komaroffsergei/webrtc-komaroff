@@ -16,7 +16,7 @@ module WhisperRuby
       [:model_path, "WHISPER_MODEL", :string],
       [:model_name, "WHISPER_MODEL_NAME", :string],
       [:model_url, "WHISPER_MODEL_URL", :string],
-      [:models_dir, "WHISPER_MODELS_DIR", :string],
+      [:models_dir, "MODELS_DIR", :string],
       [:language, "WHISPER_LANGUAGE", :string],
       [:target_sample_rate, "WHISPER_SAMPLE_RATE", :integer],
       [:worker_threads, "WHISPER_WORKERS", :integer],

@@ -17,14 +17,6 @@ from src_back.server.utils.sse import sse_log
 
 logger = logging.getLogger("handle_track")
 
-
-def _resolve_subject(env_key: str, default: str) -> str:
-    value = os.getenv(env_key, "").strip()
-    if not value:
-        return default
-    return value[:-1] if value.endswith(".") else value
-
-
 async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     nats_node = await nats_init()
     logger.info(f"on_track: received kind={track.kind}")
@@ -70,8 +62,8 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         graph.add(nats_node)
 
         await nats_node.ensure_nc()
-        nats_whisper_subject = _resolve_subject("NATS_WHISPER_SUBJECT", "whisper.transcription")
-        nats_logs_subject = _resolve_subject("NATS_LOGS_SUBJECT", "whisper.logs")
+        nats_whisper_subject = os.getenv("NATS_WHISPER_SUBJECT", "whisper.transcription")
+        nats_logs_subject = os.getenv("NATS_LOGS_SUBJECT", "whisper.logs")
 
         command_registry = CommandRegistry()
         register_alert_command(command_registry)
@@ -188,7 +180,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 async def nats_init():
     nats_node = NatsNode()
     nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
-    nats_subject = _resolve_subject("NATS_AUDIO_SUBJECT", "audio.frames")
+    nats_subject = os.getenv("NATS_AUDIO_SUBJECT", "audio.frames")
     await nats_node.connect(
         nc_url=nats_url,
         subject=nats_subject

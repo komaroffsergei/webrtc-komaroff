@@ -119,7 +119,7 @@ def ensure_model_available(model_path: str) -> str:
     if "/" not in model_path:
         # Определяем cache_dir: ./models для локальной разработки, /app/models для Docker
         default_cache_dir = "./models" if not os.path.exists("/app") else "/app/models"
-        cache_dir = os.getenv("WHISPER_MODELS_DIR", default_cache_dir)
+        cache_dir = os.getenv("MODELS_DIR", default_cache_dir)
         return download_model_if_needed(model_path, cache_dir)
     
     # Возвращаем путь как есть (может быть кастомная модель)

@@ -30,7 +30,7 @@ def main():
     parser.add_argument(
         "--cache-dir",
         type=str,
-        default=os.getenv("WHISPER_MODELS_DIR", "/app/models"),
+        default=os.getenv("MODELS_DIR", "/app/models"),
         help="Directory to store downloaded models"
     )
     parser.add_argument(

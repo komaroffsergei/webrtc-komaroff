@@ -11,7 +11,7 @@ require "whisper_ruby"
 
 options = {
   model: ENV["WHISPER_MODEL_NAME"],
-  models_dir: ENV["WHISPER_MODELS_DIR"],
+  models_dir: ENV["MODELS_DIR"],
   vad_model: ENV["WHISPER_VAD_MODEL_NAME"],
   force: false
 }
@@ -26,7 +26,7 @@ OptionParser.new do |parser|
 end.parse!
 
 ENV["WHISPER_MODEL_NAME"] = options[:model] if options[:model]
-ENV["WHISPER_MODELS_DIR"] = options[:models_dir] if options[:models_dir]
+ENV["MODELS_DIR"] = options[:models_dir] if options[:models_dir]
 ENV["WHISPER_VAD_MODEL_NAME"] = options[:vad_model] if options[:vad_model]
 ENV["WHISPER_FORCE_DOWNLOAD"] = "1" if options[:force]
 
@@ -49,7 +49,7 @@ def default_vad_filename(name)
   "ggml-#{name}.bin"
 end
 
-models_dir = ENV.fetch("WHISPER_MODELS_DIR", File.expand_path("../../models", __dir__))
+models_dir = ENV.fetch("MODELS_DIR", File.expand_path("../../models", __dir__))
 
 whisper_config = OpenStruct.new(
   model_path: ENV["WHISPER_MODEL"],

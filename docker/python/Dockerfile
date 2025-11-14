@@ -52,7 +52,7 @@ RUN mkdir -p /app/models
 # Установить переменные окружения для загрузки модели
 ENV SERVER_ENV=production \
     PORT=8000 \
-    WHISPER_MODELS_DIR=/app/models \
+    MODELS_DIR=/app/models \
     WHISPER_MODEL_NAME=medium
 
 ENTRYPOINT ["/entrypoint.sh"]
@@ -61,4 +61,4 @@ CMD ["python", "main.py"]
 FROM base AS whisper
 
 # Скачать модель Whisper при сборке образа
-RUN python3 download_model.py --model ${WHISPER_MODEL_NAME} --cache-dir ${WHISPER_MODELS_DIR}
+RUN python3 download_model.py --model ${WHISPER_MODEL_NAME} --cache-dir ${MODELS_DIR}
