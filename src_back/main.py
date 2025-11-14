@@ -14,7 +14,7 @@ from src_back.server.utils.config import STATIC_DIR
 from src_back.server.utils.sse import sse_handler, sse_broadcast
 
 WHISPER_MODEL_DIR = os.getenv("MODELS_DIR", Path("/app/models") if os.path.exists("/app") else Path("./models"))
-WHISPER_MODEL_URL = os.getenv("WHISPER_MODEL_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin")
+WHISPER_MODEL_URL = os.getenv("WHISPER_MODEL_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin")
 WHISPER_MODEL_SHA256 = os.getenv("WHISPER_MODEL_SHA256", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208")
 
 

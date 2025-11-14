@@ -40,11 +40,7 @@
 
     <div class="chat-window">
         <canvas id="waveBackground" class="waveform-background"></canvas>
-        <div class="message-log" id="messageLog">
-            <div class="message server-message">
-                Готов к работе. Нажмите микрофон для начала разговора.
-            </div>
-        </div>
+        <div class="message-log" id="messageLog"></div>
 
         <div class="text-input-container">
             <input type="text" class="text-input" id="textInput" placeholder="Введите сообщение...">
@@ -71,12 +67,13 @@
 <audio id="remoteAudio" autoplay class="hidden"></audio>
 
 <script src="/static/config.js"></script>
+<script src="/static/logger.js"></script>
 <script src="/static/audio_viz.js"></script>
 <script src="/static/vad.js"></script>
 <script src="/static/webrtc.js"></script>
 <script src="/static/command_handler.js"></script>
 <script src="/static/chat_ui.js"></script>
-<script src="/static/warning_ui.js"></script>
+<!--<script src="/static/warning_ui.js"></script>-->
 <script src="/static/debug_panel.js"></script>
 <script src="/static/assistant.js"></script>
 </body>

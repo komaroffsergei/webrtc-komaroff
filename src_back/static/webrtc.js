@@ -1,4 +1,7 @@
 (function () {
+    const emitLog = typeof window.logEvent === 'function' ? window.logEvent : () => false;
+    const SERVICE = 'webrtc';
+
     // Wait until ICE gathering completes or timeout elapses
     async function waitForIceGatheringComplete(pc, timeoutMs = 3000) {
         if (pc.iceGatheringState === 'complete') return;
@@ -96,22 +99,13 @@
 
         // Diagnostics
         if (config.webrtc.diagnostics) {
-            pc.oniceconnectionstatechange = () => {
-                console.log('[pc] iceconnectionstate:', pc.iceConnectionState);
-                window.AppLog && AppLog.emit('[pc] iceconnectionstate', pc.iceConnectionState);
+            const emitState = (label, value) => {
+                emitLog({service: SERVICE, type: 'info', message: `[pc] ${label}: ${value}`});
             };
-            pc.onconnectionstatechange = () => {
-                console.log('[pc] connectionstate:', pc.connectionState);
-                window.AppLog && AppLog.emit('[pc] connectionstate', pc.connectionState);
-            };
-            pc.onsignalingstatechange = () => {
-                console.log('[pc] signalingstate:', pc.signalingState);
-                window.AppLog && AppLog.emit('[pc] signalingstate', pc.signalingState);
-            };
-            pc.onicegatheringstatechange = () => {
-                console.log('[pc] icegatheringstate:', pc.iceGatheringState);
-                window.AppLog && AppLog.emit('[pc] icegatheringstate', pc.iceGatheringState);
-            };
+            pc.oniceconnectionstatechange = () => emitState('iceconnectionstate', pc.iceConnectionState);
+            pc.onconnectionstatechange = () => emitState('connectionstate', pc.connectionState);
+            pc.onsignalingstatechange = () => emitState('signalingstate', pc.signalingState);
+            pc.onicegatheringstatechange = () => emitState('icegatheringstate', pc.iceGatheringState);
         }
 
         return pc;

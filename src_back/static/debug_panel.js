@@ -63,13 +63,13 @@
             entry &&
             typeof entry.time === 'string' &&
             typeof entry.service === 'string' &&
-            typeof entry.type === 'string' &&
-            typeof entry.message === 'string'
+            typeof entry.type === 'string'
         );
     }
 
     function addLog(entry) {
         if (!isValid(entry)) {
+            console.warn('Unknown message format', entry)
             return;
         }
 
@@ -88,12 +88,12 @@
         const timeLabel = new Date(entry.time).toLocaleTimeString();
         const service = entry.service || 'unknown';
         const typeLabel = entry.type.toUpperCase();
-        return `[${timeLabel}] [${service}] [${typeLabel}] ${entry.message}`;
+        return `[${timeLabel}] [${service}] [${typeLabel}] ${entry?.name ? [entry.name] : ''} ${entry.message}`;
     }
 
     function createRow(entry) {
         const row = document.createElement('div');
-        row.className = `debug-log-entry log-level-${entry.type}`;
+        row.className = `debug-log-entry log-level-${entry?.type || 'info'} log-name-${entry?.name || 'none'}`;
         row.textContent = formatLine(entry);
         return row;
     }

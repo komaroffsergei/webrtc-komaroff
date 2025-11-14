@@ -1,5 +1,11 @@
 (function(){
   const cfg = window.AppConfig;
+  const emitLog = typeof window.logEvent === 'function' ? window.logEvent : () => false;
+  const DEFAULT_SERVICE = 'app';
+
+  function log(type, message, service = DEFAULT_SERVICE) {
+    emitLog({ service, type, message });
+  }
 
   // UI bindings helper exposed for VAD threshold access
   const els = {
@@ -19,8 +25,6 @@
     logAutoscroll: document.getElementById('logAutoscroll'),
   };
 
-  if (window.AppLog){ AppLog.init({ el: els.log, clearBtn: els.logClear, autoChk: els.logAutoscroll, maxLines: 5000 }); }
-
   window.UIBindings = {
     vadThreshold: () => els.vadThresh.valueAsNumber,
   };
@@ -32,36 +36,21 @@
 
   let pc = null;
   // SSE events
-  const isSimpleLog = (payload) => {
-    if (!payload || typeof payload !== 'object') return false;
-    const keys = Object.keys(payload);
-    if (keys.length !== 4) return false;
-    return keys.includes('time') && keys.includes('service') && keys.includes('type') && keys.includes('message');
-  };
 
   try {
     const es = new EventSource('/events');
     es.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        const logEvent = isSimpleLog(msg);
-        if (logEvent && window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
-          window.DebugPanel.addLog(msg);
-        }
-        if (window.AppLog && typeof window.AppLog.emit === 'function') {
-          AppLog.emit('[sse]', msg);
-        }
-        if (logEvent) {
-          console.log('[SSE]', msg.service, msg.message);
-        }
+        emitLog(msg);
       } catch(err) {
-        console.warn('Failed to handle SSE message', err);
+        log('error', `Failed to handle SSE message: ${err?.message || err}`, 'sse');
       }
     };
     es.onerror = (err) => {
-      console.warn('SSE connection error', err);
+      log('warn', `SSE connection error: ${err?.message || err}`, 'sse');
     };
-  } catch(e) { console.warn('SSE init failed', e); }
+  } catch(e) { log('error', `SSE init failed: ${e?.message || e}`, 'sse'); }
   let sender = null;
   let micStream = null;
   let micTrack = null;
@@ -71,9 +60,10 @@
     try{
       if (!pc) {
         pc = await window.WebRTC.createPeer(cfg);
-        if (window.AppLog) AppLog.emit('[pc] prewarmed');
       }
-    }catch(e){ console.warn('prewarm pc failed', e); }
+    } catch(e){
+        log('warn', `prewarm pc failed: ${e?.message || e}`, 'webrtc');
+    }
   });
 
   function getUserMediaOpts(){
@@ -111,11 +101,11 @@
       micStream = s;
       micTrack = newTrack;
       els.status.textContent = `mic reconfigured: EC=${els.ecEnable.checked} NS=${els.nsEnable.checked}`;
-      if (window.AppLog) AppLog.emit('[media] mic reconfigured', { echoCancellation: els.ecEnable.checked, noiseSuppression: els.nsEnable.checked });
+      log('info', `[media] mic reconfigured ${JSON.stringify({ echoCancellation: els.ecEnable.checked, noiseSuppression: els.nsEnable.checked })}`, 'media');
       if (els.vadEnable.checked){
         await applyVAD();
       }
-    }catch(e){ console.warn('failed to reconfigure mic', e); }
+    }catch(e){ log('warn', `failed to reconfigure mic: ${e?.message || e}`, 'media'); }
   }
 
   async function applyVAD(){
@@ -123,7 +113,6 @@
     stopVAD();
     vadInstance = window.VAD.createEnergyVAD(micTrack, cfg, (gate)=>{
       els.vadLevel.textContent = `${gate} dBFS`;
-      if (window.AppLog) AppLog.emit('[vad] level', gate);
     });
     await sender.replaceTrack(vadInstance.track);
   }
@@ -133,7 +122,7 @@
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       const drawer = window.AudioViz.createWaveDrawer(els.waveIn, cfg);
       window.AudioViz.attachAnalyserDraw(ac, micStream, cfg, (hist)=>drawer(hist, cfg.ui.colors.in));
-    }catch(e){ console.warn('waveIn failed', e); }
+    }catch(e){ log('warn', `waveIn failed: ${e?.message || e}`, 'viz'); }
   }
 
   function setupOutputViz(outStream){
@@ -141,7 +130,7 @@
       const ac = new (window.AudioContext || window.webkitAudioContext)();
       const drawer = window.AudioViz.createWaveDrawer(els.waveOut, cfg);
       window.AudioViz.attachAnalyserDraw(ac, outStream, cfg, (hist)=>drawer(hist, cfg.ui.colors.out));
-    }catch(e){ console.warn('waveOut failed', e); }
+    }catch(e){ log('warn', `waveOut failed: ${e?.message || e}`, 'viz'); }
   }
 
   async function onConnect(){
@@ -162,7 +151,7 @@
         params.encodings[0].maxBitrate = cfg.audio.opus.maxBitrate;
         params.encodings[0].dtx = true;
         await sender.setParameters(params);
-      }catch(e){ console.warn('failed to set sender params', e); }
+      }catch(e){ log('warn', `failed to set sender params: ${e?.message || e}`, 'webrtc'); }
 
       // Prefer OPUS codec explicitly where supported
       try{
@@ -175,13 +164,13 @@
             if (opus.length){ txv.setCodecPreferences([...opus, ...cn]); }
           }
         }
-      }catch(e){ console.warn('failed to set codec preferences', e); }
+      }catch(e){ log('warn', `failed to set codec preferences: ${e?.message || e}`, 'webrtc'); }
 
       pc.ontrack = (event) => {
         const stream = event.streams?.[0] || new MediaStream([event.track]);
         els.remoteAudio.srcObject = stream;
         els.remoteAudio.muted = false;
-        els.remoteAudio.play().catch(err => console.warn('[audio] play() rejected', err));
+        els.remoteAudio.play().catch(err => log('warn', `[audio] play() rejected: ${err?.message || err}`, 'media'));
         setupOutputViz(stream);
       };
 
@@ -194,7 +183,7 @@
       els.stop.disabled = false;
       els.status.textContent = 'connected';
     }catch(e){
-      console.error(e);
+      log('error', e?.message || e, 'webrtc');
       els.status.textContent = 'error: ' + e.message;
     }
   }

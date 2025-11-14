@@ -4,10 +4,10 @@ import os
 from aiohttp import web
 import logging
 
-from ..utils.download_models import is_model_exists, download_model_async
-from ..utils.sse import sse_log, make_async_callback
+from ..utils.download_models import download_model_async
 
-logger = logging.getLogger("handle_startup")
+logger = logging.getLogger(__name__)
+
 
 async def handle_startup(app: web.Application):
     logger.info("startup")
@@ -17,9 +17,7 @@ async def handle_startup(app: web.Application):
         # msg может быть "downloading", "progress|12", "downloaded", "error"
         loop.call_soon_threadsafe(
             asyncio.create_task,
-            app["methods"]["sse_broadcast"](
-                {"type": "model_status", "value": msg},
-            ),
+            app["methods"]["sse_broadcast"](msg),
         )
 
     download_model_async(
@@ -28,5 +26,3 @@ async def handle_startup(app: web.Application):
         sha256=app["data"]["WHISPER_MODEL_SHA256"],
         on_status=on_status,
     )
-
-

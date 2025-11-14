@@ -95,7 +95,7 @@ async def sse_broadcast(app, message, ensure_meta: bool = True):
         except Exception as e:
             logger.warning("Error putting to SSE queue: %s", e)
 
-async def sse_log(app, message: str, level: str = "info", service: str = DEFAULT_SERVICE_NAME, *, log_time: str | None = None):
+async def sse_log(app, message: str, level: str = "info", service: str = DEFAULT_SERVICE_NAME, *, log_time: str | None = None, name: str = None):
     """
     Отправить лог-сообщение клиенту для отладочного окна в упрощенном формате.
     """
@@ -103,6 +103,7 @@ async def sse_log(app, message: str, level: str = "info", service: str = DEFAULT
         "time": log_time or datetime.utcnow().isoformat(),
         "service": service,
         "type": level,
+        "name": name or "",
         "message": message,
     }
 

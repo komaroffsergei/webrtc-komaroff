@@ -1,26 +1,12 @@
 import hashlib
+import logging
 import os
 import threading
 import urllib
-from pathlib import Path
 
 import requests
-from aiohttp import web
-import logging
-from ..utils.sse import sse_log
 
-logger = logging.getLogger("download_models")
-
-
-def is_model_exists(app: web.Application) -> bool:
-    os.makedirs(app['data']['WHISPER_MODEL_DIR'], exist_ok=True)
-
-    filename = os.path.basename(urllib.parse.urlparse(app['data']['WHISPER_MODEL_URL']).path)
-    target_path = os.path.join(app['data']['WHISPER_MODEL_DIR'], filename)
-
-    if os.path.exists(target_path):
-        return True
-    return False
+logger = logging.getLogger(__name__)
 
 
 def sha256_file(path):
@@ -42,16 +28,36 @@ def download_model_async(model_url: str, models_dir: str, sha256: str, on_status
             # уже есть
             if os.path.exists(target_path):
                 if sha256 == sha256_file(target_path):
-                    on_status({"type": "model_downloading_status", "value": "exists"})
+                    on_status({
+                        "type": "info",
+                        "name": "model_downloading_status",
+                        "message": "exists"}
+                    )
                     return
                 else:
-                    on_status({"type": "model_downloading_status", "value": "redownloading"})
+                    on_status({
+                        "type": "info",
+                        "name": "model_downloading_status",
+                        "message": "downloading"}
+                    )
                     os.remove(target_path)
             else:
-                on_status({"type": "model_downloading_status", "value": "downloading"})
+                on_status({
+                    "type": "info",
+                    "name": "model_downloading_status",
+                    "message": "downloading"}
+                )
 
-            resp = requests.get(model_url, stream=True)
-            resp.raise_for_status()
+            try:
+                resp = requests.get(model_url, stream=True, timeout=10)
+            except requests.exceptions.RequestException as exc:
+                logging.error(f"Network error: {exc}")
+                on_status({
+                    "type": "error",
+                    "name": "model_downloading_status",
+                    "message": f"network_error: {exc}"
+                })
+                return
 
             total_size = int(resp.headers.get("Content-Length", 0))
             downloaded = 0
@@ -69,15 +75,27 @@ def download_model_async(model_url: str, models_dir: str, sha256: str, on_status
                         percent = int(downloaded * 100 / total_size)
 
                         if percent >= next_percent:
-                            on_status({"type": "model_downloading_percent", "value": percent})
+                            on_status({
+                                "type": "info",
+                                "name": "model_downloading_percent",
+                                "message": percent
+                            })
                             next_percent = percent + 1
                             if next_percent > 100:
                                 next_percent = 100
 
-            on_status({"type": "model_downloading_status", "value": "downloaded"})
+            on_status({
+                "type": "info",
+                "name": "model_downloading_status",
+                "message": "exists"
+            })
 
         except Exception as e:
             logging.error(e)
-            on_status({"type": "model_downloading_status", "value": "error"})
+            on_status({
+                "type": "info",
+                "name": "model_downloading_status",
+                "message": "error"
+            })
 
     threading.Thread(target=worker, daemon=True).start()
