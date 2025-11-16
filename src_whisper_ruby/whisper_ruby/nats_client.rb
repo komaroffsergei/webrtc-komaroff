@@ -9,11 +9,10 @@ require_relative "../utils/text_utils"
 
 class NATSClient
 
-  def initialize(url, options = {}, service_name: "src_whisper_ruby")
+  def initialize(url, options = {})
     @nats = NATS::Client.new
     @nats.connect(url, options)
     @log_subject = nil
-    @service_name = service_name
   end
 
   def req(request, params = {})
@@ -46,7 +45,7 @@ class NATSClient
     @log_subject = subject
   end
 
-  def log(message:, type: "info", subject: nil)
+  def log(message:, type: "info", subject: "src_whisper_ruby", name: nil)
     target = subject || @log_subject
     return unless target && connected?
 
@@ -54,6 +53,7 @@ class NATSClient
       time: Time.now.utc.iso8601(3),
       service: @service_name,
       type: type,
+      name: name || "",
       message: message.to_s
     }
 

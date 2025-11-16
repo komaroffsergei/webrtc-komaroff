@@ -30,9 +30,8 @@ Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-serve
       NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
       NATS_LOGS_SUBJECT: 'voice_chat_logs',
       SERVICE_NAME: 'src_whisper_ruby',
-      WHISPER_MODEL_NAME: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
-      WHISPER_VAD_MODEL_NAME: 'silero-v5.1.2',
-      MODELS_DIR: '/app/models',
+      WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+      WHISPER_MODEL_SHA256: '6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208'
       PORT: 7000
    volume name: 'whisper_ruby_models', target: '/app/models'
 end

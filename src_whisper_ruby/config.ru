@@ -12,25 +12,28 @@ StackServiceBase.rack_setup(self)
 
 configure do
   config = WhisperRuby::RackConfig.build_service_config
-  nats_client = NATSClient.new(config.nats.url, {}, service_name: config.service_name)
+  nats_client = NATSClient.new(config.nats.url, {})
   set :service, WhisperRuby::Service.new(config:, nats_client:)
   set :boot_error, nil
   set :model_exists, false # settings.model_exists
 
-  Thread.new do
-    # drs: volume name: 'whisper_models', target: '/app/models'
-    unless File.exist? '/app/models/asdasd.mmm'
-
-      set :model_exists, true
-    end
-  end
-
+  # Thread.new do
+  #   # drs: volume name: 'whisper_models', target: '/app/models'
+  #   unless File.exist? '/app/models/asdasd.mmm'
+  #
+  #     set :model_exists, true
+  #   end
+  # end
+  #
   thread = Thread.new do
     settings.service.start
   rescue => e
     settings.boot_error = e
     LOGGER.error("Service stopped: #{e.message}")
   end
+
+  nats_client.log(message: "So, Hi !")
+
   set :thread, thread
 
   at_exit do
@@ -38,6 +41,10 @@ configure do
     settings.thread&.join(5)
   end
 end unless defined? RSpec
+
+
+
+
 
 get "/healthcheck" do
   healthy = settings.boot_error.nil? && settings.service&.running?
