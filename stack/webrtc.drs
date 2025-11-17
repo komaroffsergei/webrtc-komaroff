@@ -27,8 +27,8 @@ Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-serve
   env NATS_URL: NATS_URL,
       NATS_FRAMES_SUBJECT: 'nats.frames',
       NATS_LOGS_SUBJECT: 'nats.logs'
-      WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
-      WHISPER_MODEL_SHA256: '6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208'
+      WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium-q8_0',
+      WHISPER_MODEL_SHA1: 'e66645948aff4bebbec71b3485c576f3d63af5d6'
       PORT: 7000
    volume name: 'models_dir', target: '/app/models'
 end

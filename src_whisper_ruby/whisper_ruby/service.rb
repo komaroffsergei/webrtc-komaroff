@@ -4,7 +4,6 @@ require "whisper"
 require "tempfile"
 require "time"
 
-require_relative "config"
 require_relative "logger"
 require_relative "model_downloader"
 require_relative "phrase_packet"
@@ -34,14 +33,29 @@ module WhisperRuby
           WhisperRuby::ModelDownloader.download_model(
             @log,
             model_url: WHISPER_MODEL_URL,
-            model_sha: WHISPER_MODEL_SHA256,
+            model_sha: WHISPER_MODEL_SHA1,
             model_dir: MODELS_DIR,
             model_path: MODEL_PATH
           )
 
-          @ctx = Whisper::Context.new(MODEL_PATH)
-          @model_status = :ready
-          @log.log("Model loaded")
+          begin
+            @ctx = Whisper::Context.new(MODEL_PATH)
+            @model_status = :ready
+            @log.log("Model loaded")
+
+          rescue Whisper::Error => e
+            @model_status = :error
+            @log.log("Whisper init failed: #{e}", type: "error")
+
+          rescue Errno::ENOENT => e
+            @model_status = :error
+            @log.log("Model file missing: #{e}", type: "error")
+
+          rescue => e
+            @model_status = :error
+            @log.log("Unexpected init error: #{e} (#{e.class})", type: "error")
+          end
+
 
         rescue => e
           @model_status = :error
@@ -105,6 +119,11 @@ module WhisperRuby
       wav.flush
 
       params = Whisper::Params.new
+      params.language = "ru"
+      params.translate = false
+      params.vad = false
+      params.no_context = true
+
       @ctx.transcribe(wav.path, params)
 
       segments = @ctx.full_n_segments
@@ -114,6 +133,7 @@ module WhisperRuby
       wav.close!
       text.strip
     end
+
 
     def build_wav_header(data_size, sample_rate, channels)
       byte_rate   = sample_rate * channels * 2

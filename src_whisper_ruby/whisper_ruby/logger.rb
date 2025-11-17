@@ -7,23 +7,17 @@ module WhisperRuby
     def initialize(nc, logs_subject)
       @nc = nc
       @subject = logs_subject
-      @last_percent = -1
     end
 
-    def log(message, type: "info", service: STACK_SERVICE_NAME)
+    def log(message, type: "info", service: STACK_SERVICE_NAME, name: "")
       payload = {
         time: Time.now.utc.iso8601(3),
         service: service,
         type: type,
-        message: message
+        message: message,
+        name: name
       }
       @nc.publish(@subject, payload.to_json)
-    end
-
-    def progress(percent)
-      return if percent <= @last_percent
-      @last_percent = percent
-      log(percent, type: "progress", service: STACK_SERVICE_NAME)
     end
 
     def flush

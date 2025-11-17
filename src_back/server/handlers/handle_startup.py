@@ -32,6 +32,7 @@ async def handle_startup(app: web.Application):
                 level=data.get("type", "info"),
                 service=data.get("service", "whisper"),
                 log_time=data.get("time"),
+                name=data.get("name"),
             )
         except Exception as e:
             logger.warning("Error parsing whisper log: %s", e)
@@ -55,7 +56,7 @@ async def handle_startup(app: web.Application):
     # download_model_async(
     #     model_url=app["data"]["WHISPER_MODEL_URL"],
     #     models_dir=str(app["data"]["WHISPER_MODEL_DIR"]),
-    #     sha256=app["data"]["WHISPER_MODEL_SHA256"],
+    #     sha256=app["data"]["WHISPER_MODEL_SHA1"],
     #     on_status=on_status_update,
     # )
 

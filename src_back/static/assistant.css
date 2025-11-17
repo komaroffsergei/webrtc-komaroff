@@ -446,7 +446,13 @@ body {
     border-left: 3px solid #ff9f0a;
 }
 
+.log-level-progress {
+    color: #0093ff;
+    opacity: 0.9;
+}
+
 .log-level-debug {
+    color: #c6c6c6;
     opacity: 0.7;
 }
 

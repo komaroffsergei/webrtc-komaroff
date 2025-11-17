@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require "faraday"
-require "faraday/retry"
-require "faraday/follow_redirects"
 require "digest"
 require "fileutils"
 
@@ -10,84 +7,124 @@ module WhisperRuby
   module ModelDownloader
     module_function
 
-    TIMEOUT = 120
-    OPEN_TIMEOUT = 20
-    RETRIES = 5
-
-    def faraday
-      @faraday ||= Faraday.new do |f|
-        f.request :retry,
-                  max: RETRIES,
-                  interval: 1,
-                  interval_randomness: 0.2,
-                  backoff_factor: 2
-
-        f.response :follow_redirects
-
-        f.options.timeout = TIMEOUT
-        f.options.open_timeout = OPEN_TIMEOUT
-
-        f.adapter :net_http
-      end
-    end
-
     def download_model(logger, model_url:, model_sha:, model_dir:, model_path:)
       FileUtils.mkdir_p(model_dir)
+      service = defined?(STACK_SERVICE_NAME) ? STACK_SERVICE_NAME : "whisper_ruby"
 
-      # Если файл уже есть
+      # ------------------------------------------------------------
+      # Existing file check
+      # ------------------------------------------------------------
       if File.exist?(model_path)
-        if model_sha && Digest::SHA256.file(model_path).hexdigest == model_sha
-          logger.log("Model exists (checksum OK)")
+        if model_sha && Digest::SHA1.file(model_path).hexdigest == model_sha
+          logger.log("exists", type: "info", service: service, name: "model_downloading_status")
           return
         end
 
-        logger.log("Checksum mismatch, removing old model")
+        logger.log("Checksum mismatch, removing file", type: "info",
+                   service: service, name: "model_downloading_status")
         File.delete(model_path)
       end
 
-      logger.log("Downloading model: #{model_url}")
+      logger.log("downloading", type: "info", service: service, name: "model_downloading_status")
 
-      # Получаем Content-Length через HEAD-запрос
-      head_response = faraday.head(model_url)
-      total = head_response.headers["content-length"]&.to_i
+      # ------------------------------------------------------------
+      # Determine total size
+      # ------------------------------------------------------------
+      total_size = `curl -sIL "#{model_url}" | grep -i Content-Length | tail -1 | awk '{print $2}'`.to_i
+      total_size = nil if total_size == 0
 
-      downloaded = 0
+      if total_size
+        logger.log("size=#{total_size}", type: "info", service: service, name: "model_file_size")
+      else
+        logger.log("unable to detect file size", type: "warn", service: service)
+      end
+
+      # ------------------------------------------------------------
+      # temp file path
+      # ------------------------------------------------------------
+      tmp = File.join(model_dir, ".download_#{Time.now.to_i}_#{rand(9999)}.bin")
+
+      # ------------------------------------------------------------
+      # Run curl async (background download)
+      # ------------------------------------------------------------
+      curl_cmd = [
+        "curl",
+        "-L",
+        "-f",
+        "--silent",
+        "--show-error",
+        "--retry", "5",
+        "--retry-delay", "2",
+        "-o", tmp,
+        model_url
+      ]
+
+      curl_thread = Thread.new do
+        system(*curl_cmd)
+      end
+
+      # ------------------------------------------------------------
+      # Track progress every 100ms
+      # ------------------------------------------------------------
       last_percent = -1
 
-      File.open(model_path, "wb") do |file|
-        response = faraday.get(model_url) do |req|
-          req.options.on_data = proc do |chunk, bytes_received|
-            file.write(chunk)
-            downloaded = bytes_received
+      until !curl_thread.alive?
+        if total_size && File.exist?(tmp)
+          downloaded = File.size(tmp)
+          percent = (downloaded * 100 / total_size).to_i
 
-            if total && total > 0
-              percent = (downloaded * 100 / total).to_i
-              if percent > last_percent
-                logger.progress(percent)
-                last_percent = percent
-              end
-            end
+          if percent != last_percent && percent >= 0 && percent <= 100
+            logger.log(percent.to_s,
+                       type: "info",
+                       service: service,
+                       name: "model_downloading_percent")
+
+            last_percent = percent
           end
         end
 
-        unless response.success?
-          logger.log("HTTP error #{response.status}", type: "error")
-          raise "Failed to download model"
-        end
+        sleep 0.1
       end
 
+      # ------------------------------------------------------------
+      # Curl exit code
+      # ------------------------------------------------------------
+      unless File.exist?(tmp) && File.size(tmp) > 0
+        raise "model was not downloaded"
+      end
+
+      # ------------------------------------------------------------
+      # Checksum
+      # ------------------------------------------------------------
       if model_sha
-        sha = Digest::SHA256.file(model_path).hexdigest
-        if sha != model_sha
-          logger.log("Checksum mismatch after download", type: "error")
+        actual_sha = Digest::SHA1.file(tmp).hexdigest
+        if actual_sha != model_sha
+          logger.log("Checksum mismatch: #{actual_sha} != #{model_sha}",
+                     type: "error", service: service, name: "model_downloading_status")
           raise "Checksum mismatch"
         end
       end
 
-      logger.log("Model downloaded successfully")
+      # ------------------------------------------------------------
+      # Move to final path
+      # ------------------------------------------------------------
+      File.rename(tmp, model_path)
+
+      logger.log("100", type: "info", service: service, name: "model_downloading_percent")
+      logger.log("exists", type: "info", service: service, name: "model_downloading_status")
+
     rescue => e
-      logger.log("Downloader error: #{e}", type: "error")
+      logger.log("Downloader error: #{e}", type: "error",
+                 service: service, name: "model_downloading_status")
       raise
+    ensure
+      if defined?(tmp) && File.exist?(tmp)
+        begin
+          File.delete(tmp)
+        rescue => e
+          logger.log("Could not delete temp file: #{e}", type: "warn", service: service)
+        end
+      end
     end
   end
 end
