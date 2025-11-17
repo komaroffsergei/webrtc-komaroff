@@ -5,35 +5,32 @@ PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: '
 Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
         ingress: { host: 'webrtc-komaroff.*' } do
   env NATS_URL: NATS_URL,
-      NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
-      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
-      NATS_LOGS_SUBJECT: 'voice_chat_logs',
-      WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
-      WHISPER_MODEL_SHA256: '6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208'
-      MODELS_DIR: '/app/models'
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs'
 end
+
+
+
 
 Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper/main', ports: 9000,
         ingress: { host: 'webrtc-komaroff-whisper.*' } do
-   env NATS_URL: NATS_URL,
-      NATS_AUDIO_SUBJECT: 'voice_chat_audio.frames',
-      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
-      NATS_LOGS_SUBJECT: 'voice_chat_logs',
-      WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs'
+      MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
       MODELS_DIR: '/app/models'
    volume name: 'wisper_models', target: '/app/server/models'
 end
 
 Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-ruby/main', ports: 7000,
         ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
-   env NATS_URL: NATS_URL,
-      NATS_WHISPER_SUBJECT: 'voice_chat_transcription',
-      NATS_LOGS_SUBJECT: 'voice_chat_logs',
-      SERVICE_NAME: 'src_whisper_ruby',
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs'
       WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-medium.bin',
       WHISPER_MODEL_SHA256: '6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208'
       PORT: 7000
-   volume name: 'whisper_ruby_models', target: '/app/models'
+   volume name: 'models_dir', target: '/app/models'
 end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch'

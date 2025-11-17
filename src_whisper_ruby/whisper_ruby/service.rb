@@ -1,143 +1,139 @@
 # frozen_string_literal: true
 
-require "json"
-require "logger"
+require "whisper"
+require "tempfile"
 require "time"
-require "thread"
 
-require "nats/io/client"
-
-require_relative "transcription_logger"
-require_relative "phrase_processor"
-require_relative "transcription_worker_pool"
+require_relative "config"
+require_relative "logger"
+require_relative "model_downloader"
+require_relative "phrase_packet"
 
 module WhisperRuby
-  ReceivedMessage = Struct.new(:subject, :reply, :data, keyword_init: true)
-
   class Service
-    attr_reader :config
+    def initialize(nc:)
+      @nc  = nc
+      @log = Logger.new(@nc, NATS_LOGS_SUBJECT)
 
-    def initialize(config:, nats_client:)
-      @config = config
-      @nats_client = nats_client
-      @running = false
-      @transcriber = Transcriber.new config: config.whisper
-      @model_manager = ModelManager.new
-      @model_paths = nil
-      @transcription_logger = TranscriptionLogger.new(nats_client: @nats_client)
-      @phrase_processor = PhraseProcessor.new(
-        transcriber: @transcriber,
-        logger: @transcription_logger,
-        config: config,
-        nats_client: @nats_client
-      )
-      @worker_pool = TranscriptionWorkerPool.new(
-        processor: @phrase_processor,
-        queue_size: config.whisper.max_queue_size,
-        worker_count: config.whisper.worker_threads
-      )
-      @subscription_sid = nil
-      @shutdown = Queue.new
+      @model_status = :downloading
+      @ctx = nil
     end
 
-    def start
-      return if @running
-
-      LOGGER.info("Service starting (subject=#{config.nats.whisper_subject})")
-      @running = true
-      ensure_models_and_transcriber
-      connect_nats
-      configure_nats_logging
-      start_workers
-      subscribe_to_phrases
-      LOGGER.info "WhisperRuby service is ready (subject=#{config.nats.whisper_subject})"
-      wait_for_shutdown
-      self
-    rescue StandardError => e
-      LOGGER.error("Service crashed: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
-      raise
-    ensure
-      @running = false
-      stop_subscription
-      stop_workers
-      @transcription_logger.shutdown
-    end
-
-    def running?
-      @running
-    end
-
-    def stop
-      @shutdown << true
-    rescue ThreadError
-      # ignore repeated stops
+    def run
+      start_model_loader_thread
+      subscribe_frames
+      @log.log("Whisper Ruby service started")
+      sleep
     end
 
     private
 
-    def wait_for_shutdown
-      @shutdown.pop
-    rescue ThreadError
-      # queue interrupted, fall through to shutdown
-    end
+    def start_model_loader_thread
+      Thread.new do
+        begin
+          WhisperRuby::ModelDownloader.download_model(
+            @log,
+            model_url: WHISPER_MODEL_URL,
+            model_sha: WHISPER_MODEL_SHA256,
+            model_dir: MODELS_DIR,
+            model_path: MODEL_PATH
+          )
 
-    def ensure_models_and_transcriber
-      LOGGER.info("Ensuring models and loading transcriber")
-      @model_paths = @model_manager.ensure_all(config.whisper)
-      @transcriber.load!(
-        model_path: @model_paths.asr,
-        vad_model_path: @model_paths.vad
-      )
-      LOGGER.info("Transcriber loaded (asr=#{@model_paths.asr}, vad=#{@model_paths.vad})")
-    end
+          @ctx = Whisper::Context.new(MODEL_PATH)
+          @model_status = :ready
+          @log.log("Model loaded")
 
-    def connect_nats
-      # NATSClient handles connection internally on initialization.
-      LOGGER.info("Using NATS connection #{@nats_client.uri}")
-      @nats_client
-    end
-
-    def configure_nats_logging
-      LOGGER.info("Configuring NATS logging subject=#{config.nats.logs_subject}")
-      @transcription_logger.configure( subject: config.nats.logs_subject )
-    end
-
-    def subscribe_to_phrases
-      @subscription_sid = @nats_client.loop_sub(config.nats.whisper_subject) do |msg|
-        LOGGER.info("Received NATS message subject=#{msg.subject} reply=#{msg.reply} size=#{msg.data&.bytesize}")
-        enqueue_message(msg)
-      rescue StandardError => e
-        LOGGER.error("NATS loop error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
-      rescue Exception => e
-        LOGGER.fatal("NATS loop fatal error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
-        raise
+        rescue => e
+          @model_status = :error
+          @log.log("Model download failed: #{e}", type: "error")
+        end
       end
-      LOGGER.info("Subscribed to #{config.nats.whisper_subject}")
+
+
     end
 
-    def enqueue_message(msg)
-      received = ReceivedMessage.new(subject: msg.subject, reply: msg.reply, data: msg.data)
-      LOGGER.info("Enqueuing message subject=#{received.subject} reply=#{received.reply} size=#{received.data&.bytesize}")
-      @worker_pool.submit(received)
+    def subscribe_frames
+      @nc.subscribe(NATS_FRAMES_SUBJECT) { |msg| handle_frame(msg) }
+      @log.log("Subscribed to #{NATS_FRAMES_SUBJECT}")
     end
 
-    def start_workers
-      LOGGER.info("Starting worker pool")
-      @worker_pool.start
+    def handle_frame(msg)
+      return unless @model_status == :ready
+
+      Thread.new do
+        begin
+          packet = PhrasePacket.parse(msg.data)
+          @log.log("Phrase received id=#{packet.phrase_id} dur=#{packet.duration}")
+
+          started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          @log.log("Transcription started phrase_id=#{packet.phrase_id}")
+
+          text = transcribe_packet(packet)
+
+          transcription_time = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+          payload = {
+            time: Time.now.utc.iso8601(3),
+            service: "whisper_ruby",
+            type: "info",
+            message: {
+              phrase_id: packet.phrase_id,
+              text: text,
+              duration: packet.duration,
+              transcribe_time: transcription_time
+            }
+          }
+
+          @nc.publish(NATS_LOGS_SUBJECT, payload.to_json)
+          @log.log("Transcription finished phrase_id=#{packet.phrase_id} time=#{transcription_time.round(3)}s")
+        rescue => e
+          @log.log("Transcription error: #{e}", type: "error")
+        end
+      end
     end
 
-    def stop_workers
-      LOGGER.info("Stopping worker pool")
-      @worker_pool.stop
+    def transcribe_packet(packet)
+      pcm_i16 = packet.audio.map { |f| (f * 32767).clamp(-32_768, 32_767).to_i }.pack("s*")
+
+      min_bytes = (packet.sample_rate * MIN_PHRASE_MS / 1000) * 2
+      pcm_i16 += ("\x00" * (min_bytes - pcm_i16.bytesize)) if pcm_i16.bytesize < min_bytes
+
+      wav = Tempfile.new(%w[phrase .wav])
+      wav.binmode
+      wav.write(build_wav_header(pcm_i16.bytesize, packet.sample_rate, 1))
+      wav.write(pcm_i16)
+      wav.flush
+
+      params = Whisper::Params.new
+      @ctx.transcribe(wav.path, params)
+
+      segments = @ctx.full_n_segments
+      text = +""
+      segments.times { |i| text << @ctx.full_get_segment_text(i) }
+
+      wav.close!
+      text.strip
     end
 
-    def stop_subscription
-      return unless @subscription_sid
+    def build_wav_header(data_size, sample_rate, channels)
+      byte_rate   = sample_rate * channels * 2
+      block_align = channels * 2
 
-      @nats_client.unsubscribe(@subscription_sid)
-      @subscription_sid = nil
-    rescue StandardError => e
-      LOGGER.warn("Failed to unsubscribe from NATS: #{e}")
+      [
+        "RIFF",
+        36 + data_size,
+        "WAVE",
+        "fmt ",
+        16,
+        1,
+        channels,
+        sample_rate,
+        byte_rate,
+        block_align,
+        16,
+        "data",
+        data_size
+      ].pack("A4VA4A4VvvVVvvA4V")
     end
   end
 end

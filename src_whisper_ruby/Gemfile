@@ -7,7 +7,9 @@ gem 'async'
 gem 'nats-pure'
 gem 'whispercpp'
 gem 'narray'
-
+gem 'faraday'
+gem "faraday-retry"
+gem "faraday-follow_redirects"
 gem 'rack', '~> 3.1.13'
 gem 'rackup', '~> 2.2.1'
 gem 'falcon'

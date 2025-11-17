@@ -1,0 +1,1731 @@
+src_whisper_ruby/Gemfile {
+source 'https://rubygems.org'
+
+gem 'sinatra'
+gem 'slim'
+gem 'sassc'
+gem 'async'
+gem 'nats-pure'
+gem 'whispercpp'
+gem 'narray'
+
+gem 'rack', '~> 3.1.13'
+gem 'rackup', '~> 2.2.1'
+gem 'falcon'
+
+gem 'stack-service-base'
+gem 'ostruct'
+
+group :test do
+  gem 'sqlite3'
+  gem 'rspec'
+  gem 'rack-test'
+  gem 'rspec-benchmark'
+  gem 'rspec_junit_formatter'
+  gem 'async-rspec'
+  gem "rspec-snapshot"
+  gem 'testcontainers'
+
+  gem 'simplecov'
+  # gem 'simplecov-cobertura'
+  gem 'yard'
+end
+}
+
+src_back/requirements.txt {
+aiortc==1.14.0
+av==14.2.0
+aiohttp==3.10.5
+numpy~=1.26
+scipy~=1.11
+soundfile~=0.12
+nats-py~=2.11.0
+cryptography>44.0.0
+onnxruntime>=1.18.0
+whisper-cpp-python}
+
+src_whisper_ruby/Gemfile.lock {
+GEM
+  remote: https://rubygems.org/
+  specs:
+    async (2.34.0)
+      console (~> 1.29)
+      fiber-annotation
+      io-event (~> 1.11)
+      metrics (~> 0.12)
+      traces (~> 0.18)
+    async-container (0.27.7)
+      async (~> 2.22)
+    async-container-supervisor (0.8.0)
+      async-service
+      io-endpoint
+      memory (~> 0.7)
+      memory-leak (~> 0.5)
+      process-metrics
+    async-http (0.92.1)
+      async (>= 2.10.2)
+      async-pool (~> 0.11)
+      io-endpoint (~> 0.14)
+      io-stream (~> 0.6)
+      metrics (~> 0.12)
+      protocol-http (~> 0.49)
+      protocol-http1 (~> 0.30)
+      protocol-http2 (~> 0.22)
+      protocol-url (~> 0.2)
+      traces (~> 0.10)
+    async-http-cache (0.4.6)
+      async-http (~> 0.56)
+    async-pool (0.11.0)
+      async (>= 2.0)
+    async-rspec (1.17.1)
+      rspec (~> 3.0)
+      rspec-files (~> 1.0)
+      rspec-memory (~> 1.0)
+    async-service (0.14.4)
+      async
+      async-container (~> 0.16)
+      string-format (~> 0.2)
+    awesome_print (1.9.2)
+    bake (0.24.1)
+      bigdecimal
+      samovar (~> 2.1)
+    base64 (0.3.0)
+    benchmark-malloc (0.2.0)
+    benchmark-perf (0.6.0)
+    benchmark-trend (0.4.0)
+    bigdecimal (3.3.1)
+    concurrent-ruby (1.3.5)
+    console (1.34.2)
+      fiber-annotation
+      fiber-local (~> 1.1)
+      json
+    date (3.5.0)
+    debug (1.11.0)
+      irb (~> 1.10)
+      reline (>= 0.3.8)
+    diff-lcs (1.6.2)
+    docile (1.4.1)
+    docker-api (2.4.0)
+      excon (>= 0.64.0)
+      multi_json
+    dotenv (3.1.8)
+    erb (5.1.3)
+    excon (1.3.1)
+      logger
+    falcon (0.52.4)
+      async
+      async-container (~> 0.20)
+      async-container-supervisor (~> 0.6)
+      async-http (~> 0.75)
+      async-http-cache (~> 0.4)
+      async-service (~> 0.10)
+      bundler
+      localhost (~> 1.1)
+      openssl (~> 3.0)
+      protocol-http (~> 0.31)
+      protocol-rack (~> 0.7)
+      samovar (~> 2.3)
+    ffi (1.17.2-aarch64-linux-gnu)
+    ffi (1.17.2-aarch64-linux-musl)
+    ffi (1.17.2-arm-linux-gnu)
+    ffi (1.17.2-arm-linux-musl)
+    ffi (1.17.2-arm64-darwin)
+    ffi (1.17.2-x86-linux-gnu)
+    ffi (1.17.2-x86-linux-musl)
+    ffi (1.17.2-x86_64-darwin)
+    ffi (1.17.2-x86_64-linux-gnu)
+    ffi (1.17.2-x86_64-linux-musl)
+    fiber-annotation (0.2.0)
+    fiber-local (1.1.0)
+      fiber-storage
+    fiber-storage (1.0.1)
+    google-protobuf (4.33.0)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-aarch64-linux-gnu)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-aarch64-linux-musl)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-arm64-darwin)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-x86-linux-gnu)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-x86-linux-musl)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-x86_64-darwin)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-x86_64-linux-gnu)
+      bigdecimal
+      rake (>= 13)
+    google-protobuf (4.33.0-x86_64-linux-musl)
+      bigdecimal
+      rake (>= 13)
+    googleapis-common-protos-types (1.22.0)
+      google-protobuf (~> 4.26)
+    io-console (0.8.1)
+    io-endpoint (0.15.2)
+    io-event (1.14.0)
+    io-stream (0.11.0)
+    irb (1.15.3)
+      pp (>= 0.6.0)
+      rdoc (>= 4.0.0)
+      reline (>= 0.4.2)
+    json (2.16.0)
+    localhost (1.6.0)
+    logger (1.7.0)
+    mapping (1.1.3)
+    memory (0.11.1)
+      bake (~> 0.15)
+      console
+      msgpack
+    memory-leak (0.7.0)
+    metrics (0.15.0)
+    msgpack (1.8.0)
+    multi_json (1.17.0)
+    mustermann (3.0.4)
+      ruby2_keywords (~> 0.0.1)
+    narray (0.6.1.2)
+    nats-pure (2.5.0)
+      base64
+      concurrent-ruby (~> 1.0)
+      json
+      securerandom
+      uri
+    openssl (3.3.2)
+    opentelemetry-api (1.7.0)
+    opentelemetry-common (0.23.0)
+      opentelemetry-api (~> 1.0)
+    opentelemetry-exporter-otlp (0.31.1)
+      google-protobuf (>= 3.18)
+      googleapis-common-protos-types (~> 1.3)
+      opentelemetry-api (~> 1.1)
+      opentelemetry-common (~> 0.20)
+      opentelemetry-sdk (~> 1.10)
+      opentelemetry-semantic_conventions
+    opentelemetry-helpers-mysql (0.4.0)
+      opentelemetry-api (~> 1.7)
+      opentelemetry-common (~> 0.21)
+    opentelemetry-helpers-sql (0.3.0)
+      opentelemetry-api (~> 1.7)
+    opentelemetry-helpers-sql-obfuscation (0.5.0)
+      opentelemetry-common (~> 0.21)
+    opentelemetry-instrumentation-action_mailer (0.6.1)
+      opentelemetry-instrumentation-active_support (~> 0.10)
+    opentelemetry-instrumentation-action_pack (0.15.1)
+      opentelemetry-instrumentation-rack (~> 0.29)
+    opentelemetry-instrumentation-action_view (0.11.1)
+      opentelemetry-instrumentation-active_support (~> 0.10)
+    opentelemetry-instrumentation-active_job (0.10.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-active_model_serializers (0.24.0)
+      opentelemetry-instrumentation-active_support (>= 0.7.0)
+    opentelemetry-instrumentation-active_record (0.11.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-active_storage (0.3.1)
+      opentelemetry-instrumentation-active_support (~> 0.10)
+    opentelemetry-instrumentation-active_support (0.10.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-all (0.87.0)
+      opentelemetry-instrumentation-active_model_serializers (~> 0.24.0)
+      opentelemetry-instrumentation-anthropic (~> 0.3.0)
+      opentelemetry-instrumentation-aws_lambda (~> 0.6.0)
+      opentelemetry-instrumentation-aws_sdk (~> 0.11.0)
+      opentelemetry-instrumentation-bunny (~> 0.24.0)
+      opentelemetry-instrumentation-concurrent_ruby (~> 0.24.0)
+      opentelemetry-instrumentation-dalli (~> 0.29.0)
+      opentelemetry-instrumentation-delayed_job (~> 0.25.1)
+      opentelemetry-instrumentation-ethon (~> 0.25.0)
+      opentelemetry-instrumentation-excon (~> 0.26.0)
+      opentelemetry-instrumentation-faraday (~> 0.30.0)
+      opentelemetry-instrumentation-grape (~> 0.5.0)
+      opentelemetry-instrumentation-graphql (~> 0.31.1)
+      opentelemetry-instrumentation-grpc (~> 0.4.1)
+      opentelemetry-instrumentation-gruf (~> 0.5.0)
+      opentelemetry-instrumentation-http (~> 0.27.0)
+      opentelemetry-instrumentation-http_client (~> 0.26.0)
+      opentelemetry-instrumentation-httpx (~> 0.5.0)
+      opentelemetry-instrumentation-koala (~> 0.23.0)
+      opentelemetry-instrumentation-lmdb (~> 0.25.0)
+      opentelemetry-instrumentation-mongo (~> 0.25.0)
+      opentelemetry-instrumentation-mysql2 (~> 0.31.0)
+      opentelemetry-instrumentation-net_http (~> 0.26.0)
+      opentelemetry-instrumentation-pg (~> 0.33.0)
+      opentelemetry-instrumentation-que (~> 0.11.1)
+      opentelemetry-instrumentation-racecar (~> 0.6.0)
+      opentelemetry-instrumentation-rack (~> 0.29.0)
+      opentelemetry-instrumentation-rails (~> 0.39.1)
+      opentelemetry-instrumentation-rake (~> 0.5.0)
+      opentelemetry-instrumentation-rdkafka (~> 0.9.0)
+      opentelemetry-instrumentation-redis (~> 0.28.0)
+      opentelemetry-instrumentation-resque (~> 0.8.0)
+      opentelemetry-instrumentation-restclient (~> 0.26.0)
+      opentelemetry-instrumentation-ruby_kafka (~> 0.24.0)
+      opentelemetry-instrumentation-sidekiq (~> 0.28.0)
+      opentelemetry-instrumentation-sinatra (~> 0.28.0)
+      opentelemetry-instrumentation-trilogy (~> 0.64.0)
+    opentelemetry-instrumentation-anthropic (0.3.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-aws_lambda (0.6.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-aws_sdk (0.11.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-base (0.25.0)
+      opentelemetry-api (~> 1.7)
+      opentelemetry-common (~> 0.21)
+      opentelemetry-registry (~> 0.1)
+    opentelemetry-instrumentation-bunny (0.24.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-concurrent_ruby (0.24.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-dalli (0.29.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-delayed_job (0.25.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-ethon (0.25.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-excon (0.26.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-faraday (0.30.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-grape (0.5.0)
+      opentelemetry-instrumentation-rack (~> 0.29)
+    opentelemetry-instrumentation-graphql (0.31.2)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-grpc (0.4.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-gruf (0.5.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-http (0.27.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-http_client (0.26.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-httpx (0.5.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-koala (0.23.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-lmdb (0.25.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-mongo (0.25.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-mysql2 (0.31.0)
+      opentelemetry-helpers-mysql
+      opentelemetry-helpers-sql
+      opentelemetry-helpers-sql-obfuscation
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-net_http (0.26.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-pg (0.33.0)
+      opentelemetry-helpers-sql
+      opentelemetry-helpers-sql-obfuscation
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-que (0.11.1)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-racecar (0.6.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-rack (0.29.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-rails (0.39.1)
+      opentelemetry-instrumentation-action_mailer (~> 0.6)
+      opentelemetry-instrumentation-action_pack (~> 0.15)
+      opentelemetry-instrumentation-action_view (~> 0.11)
+      opentelemetry-instrumentation-active_job (~> 0.10)
+      opentelemetry-instrumentation-active_record (~> 0.11)
+      opentelemetry-instrumentation-active_storage (~> 0.3)
+      opentelemetry-instrumentation-active_support (~> 0.10)
+      opentelemetry-instrumentation-concurrent_ruby (~> 0.23)
+    opentelemetry-instrumentation-rake (0.5.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-rdkafka (0.9.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-redis (0.28.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-resque (0.8.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-restclient (0.26.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-ruby_kafka (0.24.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-sidekiq (0.28.0)
+      opentelemetry-instrumentation-base (~> 0.25)
+    opentelemetry-instrumentation-sinatra (0.28.0)
+      opentelemetry-instrumentation-rack (~> 0.29)
+    opentelemetry-instrumentation-trilogy (0.64.0)
+      opentelemetry-helpers-mysql
+      opentelemetry-helpers-sql
+      opentelemetry-helpers-sql-obfuscation
+      opentelemetry-instrumentation-base (~> 0.25)
+      opentelemetry-semantic_conventions (>= 1.8.0)
+    opentelemetry-registry (0.4.0)
+      opentelemetry-api (~> 1.1)
+    opentelemetry-sdk (1.10.0)
+      opentelemetry-api (~> 1.1)
+      opentelemetry-common (~> 0.20)
+      opentelemetry-registry (~> 0.2)
+      opentelemetry-semantic_conventions
+    opentelemetry-semantic_conventions (1.36.0)
+      opentelemetry-api (~> 1.0)
+    ostruct (0.6.3)
+    pp (0.6.3)
+      prettyprint
+    prettyprint (0.2.0)
+    process-metrics (0.7.0)
+      console (~> 1.8)
+      json (~> 2)
+      samovar (~> 2.1)
+    prometheus-client (4.2.5)
+      base64
+    protocol-hpack (1.5.1)
+    protocol-http (0.55.0)
+    protocol-http1 (0.35.2)
+      protocol-http (~> 0.22)
+    protocol-http2 (0.23.0)
+      protocol-hpack (~> 1.4)
+      protocol-http (~> 0.47)
+    protocol-rack (0.16.0)
+      io-stream (>= 0.10)
+      protocol-http (~> 0.43)
+      rack (>= 1.0)
+    protocol-url (0.4.0)
+    psych (5.2.6)
+      date
+      stringio
+    rack (3.1.19)
+    rack-protection (4.2.1)
+      base64 (>= 0.1.0)
+      logger (>= 1.6.0)
+      rack (>= 3.0.0, < 4)
+    rack-session (2.1.1)
+      base64 (>= 0.1.0)
+      rack (>= 3.0.0)
+    rack-test (2.2.0)
+      rack (>= 1.3)
+    rackup (2.2.1)
+      rack (>= 3)
+    rake (13.3.1)
+    rdoc (6.15.1)
+      erb
+      psych (>= 4.0.0)
+      tsort
+    reline (0.6.2)
+      io-console (~> 0.5)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-benchmark (0.6.0)
+      benchmark-malloc (~> 0.2)
+      benchmark-perf (~> 0.6)
+      benchmark-trend (~> 0.4)
+      rspec (>= 3.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-files (1.1.3)
+      rspec (~> 3.0)
+    rspec-memory (1.0.4)
+      rspec (~> 3.0)
+    rspec-mocks (3.13.7)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-snapshot (2.0.3)
+      awesome_print (> 1.0.0)
+      rspec (> 3.0.0)
+    rspec-support (3.13.6)
+    rspec_junit_formatter (0.6.0)
+      rspec-core (>= 2, < 4, != 2.12.0)
+    ruby2_keywords (0.0.5)
+    samovar (2.4.1)
+      console (~> 1.0)
+      mapping (~> 1.0)
+    sassc (2.4.0)
+      ffi (~> 1.9)
+    securerandom (0.4.1)
+    simplecov (0.22.0)
+      docile (~> 1.1)
+      simplecov-html (~> 0.11)
+      simplecov_json_formatter (~> 0.1)
+    simplecov-html (0.13.2)
+    simplecov_json_formatter (0.1.4)
+    sinatra (4.2.1)
+      logger (>= 1.6.0)
+      mustermann (~> 3.0)
+      rack (>= 3.0.0, < 4)
+      rack-protection (= 4.2.1)
+      rack-session (>= 2.0.0, < 3)
+      tilt (~> 2.0)
+    slim (5.2.1)
+      temple (~> 0.10.0)
+      tilt (>= 2.1.0)
+    sqlite3 (2.8.0-aarch64-linux-gnu)
+    sqlite3 (2.8.0-aarch64-linux-musl)
+    sqlite3 (2.8.0-arm-linux-gnu)
+    sqlite3 (2.8.0-arm-linux-musl)
+    sqlite3 (2.8.0-arm64-darwin)
+    sqlite3 (2.8.0-x86-linux-gnu)
+    sqlite3 (2.8.0-x86-linux-musl)
+    sqlite3 (2.8.0-x86_64-darwin)
+    sqlite3 (2.8.0-x86_64-linux-gnu)
+    sqlite3 (2.8.0-x86_64-linux-musl)
+    stack-service-base (0.0.56)
+      async
+      debug
+      dotenv
+      nats-pure
+      opentelemetry-exporter-otlp
+      opentelemetry-instrumentation-all
+      opentelemetry-sdk
+      prometheus-client
+      rack
+      websocket
+    string-format (0.2.0)
+    stringio (3.1.7)
+    temple (0.10.4)
+    testcontainers (0.2.0)
+      testcontainers-core (= 0.2.0)
+    testcontainers-core (0.2.0)
+      docker-api (~> 2.2)
+    tilt (2.6.1)
+    traces (0.18.2)
+    tsort (0.2.0)
+    uri (1.1.1)
+    websocket (1.2.11)
+    whispercpp (1.3.4)
+    yard (0.9.37)
+
+PLATFORMS
+  aarch64-linux-gnu
+  aarch64-linux-musl
+  arm-linux-gnu
+  arm-linux-musl
+  arm64-darwin
+  x86-linux-gnu
+  x86-linux-musl
+  x86_64-darwin
+  x86_64-linux-gnu
+  x86_64-linux-musl
+
+DEPENDENCIES
+  async
+  async-rspec
+  falcon
+  narray
+  nats-pure
+  ostruct
+  rack (~> 3.1.13)
+  rack-test
+  rackup (~> 2.2.1)
+  rspec
+  rspec-benchmark
+  rspec-snapshot
+  rspec_junit_formatter
+  sassc
+  simplecov
+  sinatra
+  slim
+  sqlite3
+  stack-service-base
+  testcontainers
+  whispercpp
+  yard
+
+BUNDLED WITH
+   2.6.7
+}
+
+src_whisper_ruby/whisper_ruby.rb {
+# frozen_string_literal: true
+
+require "logger"
+require_relative "utils/audio_utils"
+require_relative "utils/text_utils"
+require_relative "utils/transcription_response"
+require_relative "whisper_ruby/model_manager"
+require_relative "whisper_ruby/nats_client"
+require_relative "whisper_ruby/service"
+require_relative "whisper_ruby/transcriber"
+}
+
+src_whisper_ruby/config.ru {
+require "stack-service-base"
+require "sinatra"
+require "json"
+require_relative "whisper_ruby/model_manager"
+require_relative "utils/audio_utils"
+require_relative "whisper_ruby/transcriber"
+require_relative "whisper_ruby/service"
+require_relative "whisper_ruby/nats_client"
+require_relative "whisper_ruby/rack_config"
+
+StackServiceBase.rack_setup(self)
+
+configure do
+  config = WhisperRuby::RackConfig.build_service_config
+  nats_client = NATSClient.new(config.nats.url, {})
+  nats_client.configure_logging(subject: config.nats.logs_subject, service_name: config.service_name)
+  set :service, WhisperRuby::Service.new(config:, nats_client:)
+  set :boot_error, nil
+  set :model_exists, false # settings.model_exists
+
+  # Thread.new do
+  #   # drs: volume name: 'whisper_models', target: '/app/models'
+  #   unless File.exist? '/app/models/asdasd.mmm'
+  #
+  #     set :model_exists, true
+  #   end
+  # end
+  #
+  thread = Thread.new do
+    settings.service.start
+
+    nats_client.log(message: "src_whisper_ruby/config.ru, started")
+  rescue => e
+    settings.boot_error = e
+    LOGGER.error("Service stopped: #{e.message}")
+  end
+
+
+  set :thread, thread
+
+  at_exit do
+    settings.service&.stop
+    settings.thread&.join(5)
+  end
+end unless defined? RSpec
+
+
+
+
+
+get "/healthcheck" do
+  healthy = settings.boot_error.nil? && settings.service&.running?
+  content_type :json
+  status(healthy ? 200 : 503)
+  {
+    Status: healthy ? "Healthy" : "unhealthy",
+    service: settings.service&.config&.service_name,
+    thread_alive: settings.thread&.alive?,
+    boot_error: settings.boot_error&.message
+  }.compact.to_json
+end unless defined? RSpec
+
+run Sinatra::Application
+}
+
+src_whisper_ruby/whisper_ruby/rack_config.rb {
+# frozen_string_literal: true
+
+require "ostruct"
+
+module WhisperRuby
+  module RackConfig
+    module_function
+
+    NATS_ENV = [
+      [:url, "NATS_URL", :string],
+      [:whisper_subject, "NATS_WHISPER_SUBJECT", :string],
+      [:logs_subject, "NATS_LOGS_SUBJECT", :string]
+    ].freeze
+
+    WHISPER_ENV = [
+      [:model_path, "WHISPER_MODEL", :string],
+      [:model_name, "WHISPER_MODEL_NAME", :string],
+      [:model_url, "WHISPER_MODEL_URL", :string],
+      [:models_dir, "MODELS_DIR", :string],
+      [:language, "WHISPER_LANGUAGE", :string],
+      [:target_sample_rate, "WHISPER_SAMPLE_RATE", :integer],
+      [:worker_threads, "WHISPER_WORKERS", :integer],
+      [:max_queue_size, "WHISPER_MAX_QUEUE", :integer],
+      [:vad_model_path, "WHISPER_VAD_MODEL_PATH", :string],
+      [:vad_model_name, "WHISPER_VAD_MODEL_NAME", :string],
+      [:vad_threshold, "WHISPER_VAD_THRESHOLD", :float],
+      [:vad_min_speech_ms, "WHISPER_VAD_MIN_SPEECH_MS", :integer],
+      [:vad_min_silence_ms, "WHISPER_VAD_MIN_SILENCE_MS", :integer],
+      [:vad_max_speech_ms, "WHISPER_VAD_MAX_SPEECH_MS", :integer],
+      [:vad_speech_pad_ms, "WHISPER_VAD_SPEECH_PAD_MS", :integer],
+      [:force_download, "WHISPER_FORCE_DOWNLOAD", :boolean],
+      [:translate, "WHISPER_TRANSLATE", :boolean],
+      [:n_threads, "WHISPER_THREADS", :integer],
+      [:temperature, "WHISPER_TEMPERATURE", :float],
+      [:temperature_inc, "WHISPER_TEMPERATURE_INC", :float]
+    ].freeze
+
+    def build_service_config
+      OpenStruct.new(
+        service_name: env!("STACK_SERVICE_NAME"),
+        nats: OpenStruct.new(load_values(NATS_ENV)),
+        whisper: OpenStruct.new(load_values(WHISPER_ENV))
+      )
+    end
+
+    def load_values(definitions)
+      definitions.each_with_object({}) do |(attr, key, type), acc|
+        acc[attr] = cast(env!(key), type)
+      end
+    end
+
+    def env!(key)
+      value = ENV.fetch(key) { raise KeyError, "Missing #{key}" }
+      value.strip
+    end
+
+    def cast(value, type)
+      case type
+      when :integer then value.to_i
+      when :float then value.to_f
+      when :boolean then %w[1 true yes on].include?(value.downcase)
+      else
+        value
+      end
+    end
+  end
+end
+}
+
+src_whisper_ruby/whisper_ruby/phrase_processor.rb {
+# frozen_string_literal: true
+
+require "json"
+require "time"
+
+require_relative "../utils/audio_utils"
+require_relative "../utils/text_utils"
+require_relative "../utils/transcription_response"
+
+module WhisperRuby
+  class PhraseProcessor
+    def initialize(transcriber:, logger:, config:, nats_client:)
+      @transcriber = transcriber
+      @logger = logger
+      @config = config
+      @nats_client = nats_client
+    end
+
+    def process(msg)
+      LOGGER.info("Processing message subject=#{msg.subject} reply=#{msg.reply} size=#{msg.data&.bytesize}")
+      packet = nil
+      packet = AudioUtils.parse_phrase_packet(msg.data)
+      LOGGER.info(
+        "Packet parsed phrase_id=#{phrase_id(packet)} sample_rate=#{packet.sample_rate} samples=#{packet.audio.length} duration=#{format('%.3f', packet.duration)}"
+      )
+      @logger.phrase_received(packet)
+      start_ts = timestamp_now
+      @logger.transcription_start(packet, start_ts)
+      LOGGER.info("Starting transcription phrase_id=#{phrase_id(packet)} thread=#{Thread.current.name || Thread.current.object_id}")
+      transcribe_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      result = @transcriber.transcribe(packet)
+      transcription_duration = Process.clock_gettime(Process::CLOCK_MONOTONIC) - transcribe_started
+      LOGGER.info(
+        "Transcription finished phrase_id=#{phrase_id(packet)} segments=#{result.segments.length} text_length=#{result.text.to_s.length} time=#{format('%.3f', transcription_duration)}s"
+      )
+      end_ts = timestamp_now
+
+      payload = TranscriptionResponse.success(
+        config: @config,
+        packet: packet,
+        result: result,
+        start_ts: start_ts,
+        end_ts: end_ts
+      )
+      @logger.transcription_complete(packet, result, start_ts, end_ts)
+      reply(msg, payload)
+      LOGGER.info("Transcription done phrase_id=#{phrase_id(packet)}")
+    rescue PhrasePacketError => e
+      log_and_report_error("phrase_parse_failed", e, packet: nil, extra: {payload_size: msg.data&.bytesize})
+      reply_with_error(msg, e.message)
+    rescue StandardError => e
+      log_and_report_error("transcription_failed", e, packet: packet)
+      reply_with_error(msg, e.message, packet&.phrase_id)
+    rescue Exception => e
+      LOGGER.fatal("Unexpected fatal error phrase_id=#{phrase_id(packet)}: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+      raise
+    end
+
+    private
+
+    def reply(msg, payload)
+      data = JSON.generate(TextUtils.ensure_utf8(payload))
+      destination = msg.reply && !msg.reply.empty? ? msg.reply : "#{@config.nats.whisper_subject}.result"
+      @nats_client.publish(destination, data)
+      LOGGER.info("Published response phrase_id=#{payload[:phrase_id]} destination=#{destination} size=#{data.bytesize}")
+    end
+
+    def reply_with_error(msg, error, phrase_id = nil)
+      payload = TranscriptionResponse.error(error: error, phrase_id: phrase_id)
+      reply(msg, payload)
+    end
+
+    def log_and_report_error(event, error, packet:, extra: nil)
+      LOGGER.error("#{event} phrase_id=#{phrase_id(packet)} error=#{error.class}: #{error.message}\n#{error.full_message}")
+      @logger.transcription_error(event, error, packet: packet, extra: extra)
+    end
+
+    def timestamp_now
+      Time.now.utc.strftime("%Y-%m-%dT%H:%M:%S.%L")
+    end
+
+    def phrase_id(packet)
+      packet&.phrase_id || "unknown"
+    end
+  end
+end
+}
+
+src_whisper_ruby/whisper_ruby/service.rb {
+# frozen_string_literal: true
+
+require "json"
+require "logger"
+require "time"
+require "thread"
+
+require "nats/io/client"
+
+require_relative "transcription_logger"
+require_relative "phrase_processor"
+require_relative "transcription_worker_pool"
+
+module WhisperRuby
+  ReceivedMessage = Struct.new(:subject, :reply, :data, keyword_init: true)
+
+  class Service
+    attr_reader :config
+
+    def initialize(config:, nats_client:)
+      @config = config
+      @nats_client = nats_client
+      @running = false
+      @transcriber = Transcriber.new config: config.whisper
+      @model_manager = ModelManager.new
+      @model_paths = nil
+      @transcription_logger = TranscriptionLogger.new(nats_client: @nats_client)
+      @phrase_processor = PhraseProcessor.new(
+        transcriber: @transcriber,
+        logger: @transcription_logger,
+        config: config,
+        nats_client: @nats_client
+      )
+      @worker_pool = TranscriptionWorkerPool.new(
+        processor: @phrase_processor,
+        queue_size: config.whisper.max_queue_size,
+        worker_count: config.whisper.worker_threads
+      )
+      @subscription_sid = nil
+      @shutdown = Queue.new
+    end
+
+    def start
+      return if @running
+
+      LOGGER.info("Service starting (subject=#{config.nats.whisper_subject})")
+      @running = true
+      ensure_models_and_transcriber
+      connect_nats
+      configure_nats_logging
+      start_workers
+      subscribe_to_phrases
+      LOGGER.info "WhisperRuby service is ready (subject=#{config.nats.whisper_subject})"
+      wait_for_shutdown
+      self
+    rescue StandardError => e
+      LOGGER.error("Service crashed: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+      raise
+    ensure
+      @running = false
+      stop_subscription
+      stop_workers
+      @transcription_logger.shutdown
+    end
+
+    def running?
+      @running
+    end
+
+    def stop
+      @shutdown << true
+    rescue ThreadError
+      # ignore repeated stops
+    end
+
+    private
+
+    def wait_for_shutdown
+      @shutdown.pop
+    rescue ThreadError
+      # queue interrupted, fall through to shutdown
+    end
+
+    def ensure_models_and_transcriber
+      LOGGER.info("Ensuring models and loading transcriber")
+      @model_paths = @model_manager.ensure_all(config.whisper)
+      @transcriber.load!(
+        model_path: @model_paths.asr,
+        vad_model_path: @model_paths.vad
+      )
+      LOGGER.info("Transcriber loaded (asr=#{@model_paths.asr}, vad=#{@model_paths.vad})")
+    end
+
+    def connect_nats
+      # NATSClient handles connection internally on initialization.
+      LOGGER.info("Using NATS connection #{@nats_client.uri}")
+      @nats_client
+    end
+
+    def configure_nats_logging
+      LOGGER.info("Configuring NATS logging subject=#{config.nats.logs_subject}")
+      @transcription_logger.configure( subject: config.nats.logs_subject )
+    end
+
+    def subscribe_to_phrases
+      @subscription_sid = @nats_client.loop_sub(config.nats.whisper_subject) do |msg|
+        LOGGER.info("Received NATS message subject=#{msg.subject} reply=#{msg.reply} size=#{msg.data&.bytesize}")
+        enqueue_message(msg)
+      rescue StandardError => e
+        LOGGER.error("NATS loop error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+      rescue Exception => e
+        LOGGER.fatal("NATS loop fatal error: #{e.class}: #{e.message}\n#{Array(e.backtrace).join("\n")}")
+        raise
+      end
+      LOGGER.info("Subscribed to #{config.nats.whisper_subject}")
+    end
+
+    def enqueue_message(msg)
+      received = ReceivedMessage.new(subject: msg.subject, reply: msg.reply, data: msg.data)
+      LOGGER.info("Enqueuing message subject=#{received.subject} reply=#{received.reply} size=#{received.data&.bytesize}")
+      @worker_pool.submit(received)
+    end
+
+    def start_workers
+      LOGGER.info("Starting worker pool")
+      @worker_pool.start
+    end
+
+    def stop_workers
+      LOGGER.info("Stopping worker pool")
+      @worker_pool.stop
+    end
+
+    def stop_subscription
+      return unless @subscription_sid
+
+      @nats_client.unsubscribe(@subscription_sid)
+      @subscription_sid = nil
+    rescue StandardError => e
+      LOGGER.warn("Failed to unsubscribe from NATS: #{e}")
+    end
+  end
+end
+}
+
+src_whisper_ruby/whisper_ruby/transcription_logger.rb {
+# frozen_string_literal: true
+
+module WhisperRuby
+  class TranscriptionLogger
+    def initialize(nats_client:)
+      @nats_client = nats_client
+      @enabled = false
+    end
+
+    def configure(subject:)
+      return unless @nats_client.respond_to?(:configure_logging)
+
+      @nats_client.configure_logging(subject: subject)
+      @enabled = true
+    end
+
+    def enabled? = @enabled
+
+    def phrase_received(packet)
+      return unless active?(packet)
+
+      publish(
+        message: format(
+          "Phrase %s received samples=%d sr=%dHz duration=%.2fs",
+          packet.phrase_id || "unknown",
+          packet.audio.length,
+          packet.sample_rate,
+          packet.duration
+        )
+      )
+    end
+
+    def transcription_start(packet, start_ts)
+      return unless active?(packet)
+
+      publish(
+        message: format(
+          "Transcription started for %s duration=%.2fs start=%s",
+          packet.phrase_id || "unknown",
+          packet.duration,
+          start_ts
+        )
+      )
+    end
+
+    def transcription_complete(packet, result, start_ts, end_ts)
+      return if result.text.to_s.empty?
+      return unless enabled?
+
+      publish(
+        message: format(
+          "Transcription completed for %s segments=%d audio=%.2fs time=%.2fs %s->%s text=\"%s\"",
+          packet.phrase_id || "unknown",
+          result.segments.length,
+          result.audio_duration,
+          result.transcription_time,
+          start_ts,
+          end_ts,
+          shorten_text(result.text)
+        )
+      )
+    end
+
+    def transcription_error(event, error, packet:, extra: nil)
+      details = [
+        "#{event}",
+        "#{error.class}: #{error.message}"
+      ]
+      if packet
+        details << "phrase_id=#{packet.phrase_id}" if packet.phrase_id
+        details << "sr=#{packet.sample_rate}"
+        details << format("duration=%.2fs", packet.duration) if packet.duration
+      end
+      details << extra.inspect if extra
+
+      publish(
+        message: "#{details.compact.join(' ')} | #{Array(error.backtrace).join(' >> ')}",
+        type: "error"
+      )
+    end
+
+    def shutdown = @enabled = false
+
+    private
+
+    def active?(packet) = enabled? && packet
+
+    def publish(message:, type: "info")
+      return unless enabled?
+      @nats_client.log(message:, type:)
+    end
+
+    def shorten_text(text)
+      normalized = text.to_s.strip.gsub(/\s+/, ' ')
+      return normalized if normalized.length <= 120
+
+      "#{normalized[0, 117]}..."
+    end
+  end
+end
+}
+
+src_whisper_ruby/whisper_ruby/nats_client.rb {
+# frozen_string_literal: true
+
+require "nats"
+require "json"
+require "time"
+require "thread"
+
+require_relative "../utils/text_utils"
+
+class NATSClient
+
+  def initialize(url, options = {})
+    @nats = NATS::Client.new
+    @nats.connect(url, options)
+    @log_subject = 'voice_chat_logs'
+  end
+
+  def req(request, params = {})
+    JSON(@nats.request(request, params.to_json).data, symbolize_names: true)
+  end
+
+  def publish(subj, message)
+    payload = message.is_a?(String) ? message : message.to_json
+    @nats.publish(subj, payload)
+    flush_connection
+  end
+
+  def loop_sub(subject, &block)
+    @nats.subscribe(subject, &block)
+  end
+
+  def unsubscribe(sid)
+    return unless sid
+
+    if @nats.respond_to?(:unsubscribe, true)
+      @nats.__send__(:unsubscribe, sid)
+    end
+  end
+
+  def connected? = @nats&.connected?
+  def connected_server = @nats&.uri
+  def uri = @nats&.uri
+
+  def configure_logging(subject:, service_name: nil)
+    @log_subject = subject
+    @service_name = service_name if service_name
+  end
+
+  def log(message:, type: "info", subject: nil, name: nil)
+    target = subject || @log_subject
+    return unless target && connected?
+
+    payload = {
+      time: Time.now.utc.iso8601(3),
+      service: @service_name,
+      type: type,
+      name: name || "",
+      message: message.to_s
+    }
+
+    data = JSON.generate(WhisperRuby::TextUtils.ensure_utf8(payload))
+    publish(target, data)
+  end
+
+  private
+
+  def flush_connection
+    @nats.flush if @nats.respond_to?(:flush)
+  end
+end
+}
+
+src_back/server/processors/phrase_segmenter_node.py {
+import asyncio
+import json
+import logging
+import os
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Awaitable, Callable, List, Optional
+
+import numpy as np
+from av import AudioFrame
+from nats import NATS
+from nats.errors import TimeoutError as NatsTimeoutError
+
+from .base import ConsumerNode
+from ..utils.audio_utils import resample_audio
+from ..utils.silero_onnx_vad import (
+    DEFAULT_SILERO_VAD_URL,
+    SileroOnnxVAD,
+    ensure_or_download_model,
+    get_speech_timestamps as silero_get_speech_timestamps,
+)
+
+
+logger = logging.getLogger("audio.PhraseSegmenterNode")
+
+
+@dataclass
+class PhraseSegment:
+    audio: np.ndarray
+    sample_rate: int
+    start_time: float
+    end_time: float
+    duration: float
+    phrase_id: str
+
+
+class PhraseSegmenterNode(ConsumerNode):
+    """
+    Нода для обнаружения фраз, отправки их в Whisper и получения транскрипций.
+    """
+
+    def __init__(
+        self,
+        source_node,
+        nats_client: NATS,
+        whisper_subject: str,
+        on_transcription: Callable[[dict], Awaitable[None]],
+        sample_rate: int = 16000,
+        min_speech_duration_ms: int = 250,
+        min_silence_duration_ms: int = 500,
+        max_speech_duration_s: float = 30.0,
+        speech_pad_ms: int = 30,
+        threshold: float = 0.8,
+        buffer_check_interval_s: float = 1.0,
+        request_timeout: float = 15.0,
+        max_pending_tasks: int = 3,
+    ):
+        super().__init__(source_node)
+
+        self.nc = nats_client
+        self.whisper_subject = whisper_subject
+        self.on_transcription = on_transcription
+
+        self.target_sample_rate = sample_rate
+        self.min_speech_duration_ms = min_speech_duration_ms
+        self.min_silence_duration_ms = min_silence_duration_ms
+        self.max_speech_duration_s = max_speech_duration_s
+        self.speech_pad_ms = speech_pad_ms
+        self.threshold = threshold
+        self.buffer_check_interval_s = buffer_check_interval_s
+        self.request_timeout = request_timeout
+
+        self.buffer: List[np.ndarray] = []
+        self.buffer_sample_rate = sample_rate
+
+        self.vad_model: Optional[SileroOnnxVAD] = None
+        self.get_speech_timestamps = silero_get_speech_timestamps
+
+        self._check_in_progress = False
+        self._pending_tasks: set[asyncio.Task] = set()
+        self._pending_semaphore = asyncio.Semaphore(max_pending_tasks)
+
+    async def start(self) -> None:
+        await self._load_silero_vad()
+        await super().start()
+
+    async def stop(self) -> None:
+        for task in list(self._pending_tasks):
+            task.cancel()
+        self._pending_tasks.clear()
+
+        self.vad_model = None
+        self.buffer.clear()
+        await super().stop()
+
+    async def handle_frame(self, frame: AudioFrame) -> None:
+        try:
+            if frame.sample_rate:
+                self.buffer_sample_rate = frame.sample_rate
+
+            pcm = frame.to_ndarray()
+            if pcm.ndim == 2:
+                pcm = pcm.reshape(-1)
+
+            audio_float = pcm.astype(np.float32) / 32768.0
+            self.buffer.append(audio_float)
+
+            buffer_duration = sum(len(x) for x in self.buffer) / self.buffer_sample_rate
+
+            if buffer_duration >= self.buffer_check_interval_s and not self._check_in_progress:
+                asyncio.create_task(self._check_buffer_async())
+
+        except Exception as exc:
+            logger.error("Error processing audio frame: %s", exc, exc_info=True)
+        finally:
+            await self.fan_out(frame)
+
+    async def _load_silero_vad(self) -> None:
+        loop = asyncio.get_event_loop()
+
+        def _resolve_model_path() -> str:
+            configured = os.getenv("SILERO_VAD_MODEL_PATH")
+            if configured:
+                return configured
+
+            dir_candidate = os.getenv("SILERO_VAD_DIR")
+            if dir_candidate:
+                return os.path.join(dir_candidate, "silero_vad.onnx")
+
+            project_root = Path(__file__).resolve().parents[3]
+            return str(project_root / "models" / "silero_vad.onnx")
+
+        def _load():
+            model_path = _resolve_model_path()
+            auto_download = os.getenv("SILERO_VAD_AUTO_DOWNLOAD", "1").lower() not in {
+                "0",
+                "false",
+                "no",
+            }
+            model_url = os.getenv("SILERO_VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
+            ensure_or_download_model(model_path, download=auto_download, url=model_url)
+            return SileroOnnxVAD(model_path)
+
+        self.vad_model = await loop.run_in_executor(None, _load)
+        logger.info("Silero VAD ONNX model loaded from %s", self.vad_model.model_path)
+
+    async def _check_buffer_async(self) -> None:
+        if self._check_in_progress:
+            return
+
+        self._check_in_progress = True
+        try:
+            await self._check_buffer()
+        finally:
+            self._check_in_progress = False
+
+    async def _check_buffer(self) -> None:
+        if not self.buffer or self.vad_model is None:
+            return
+
+        try:
+            audio = np.concatenate(self.buffer)
+
+            if self.buffer_sample_rate != self.target_sample_rate:
+                audio = resample_audio(audio, self.buffer_sample_rate, self.target_sample_rate)
+
+            if len(audio) / self.target_sample_rate < 1.0:
+                return
+
+            loop = asyncio.get_event_loop()
+            timestamps = await loop.run_in_executor(
+                None,
+                self._get_timestamps,
+                audio,
+            )
+
+            if not timestamps:
+                if len(audio) / self.target_sample_rate > 5.0:
+                    self.buffer.clear()
+                return
+
+            last_segment = timestamps[-1]
+            last_end_sample = last_segment["end"]
+            silence_after = (len(audio) - last_end_sample) / self.target_sample_rate
+            min_silence_s = self.min_silence_duration_ms / 1000.0
+
+            if silence_after >= min_silence_s:
+                for ts in timestamps:
+                    start_sample = ts["start"]
+                    end_sample = ts["end"]
+                    segment_audio = audio[start_sample:end_sample]
+                    duration = len(segment_audio) / self.target_sample_rate
+
+                    phrase = PhraseSegment(
+                        audio=segment_audio,
+                        sample_rate=self.target_sample_rate,
+                        start_time=start_sample / self.target_sample_rate,
+                        end_time=end_sample / self.target_sample_rate,
+                        duration=duration,
+                        phrase_id=str(uuid.uuid4()),
+                    )
+
+                    task = asyncio.create_task(self._handle_phrase(phrase))
+                    self._pending_tasks.add(task)
+                    task.add_done_callback(self._pending_tasks.discard)
+
+                self.buffer.clear()
+
+        except Exception as exc:
+            logger.error("Error checking buffer: %s", exc, exc_info=True)
+
+    def _get_timestamps(self, audio_array: np.ndarray):
+        try:
+            if self.vad_model is None:
+                raise RuntimeError("VAD model is not loaded")
+            return self.get_speech_timestamps(
+                audio_array,
+                self.vad_model,
+                sampling_rate=self.target_sample_rate,
+                min_speech_duration_ms=self.min_speech_duration_ms,
+                min_silence_duration_ms=self.min_silence_duration_ms,
+                max_speech_duration_s=self.max_speech_duration_s,
+                speech_pad_ms=self.speech_pad_ms,
+                threshold=self.threshold,
+                return_seconds=False,
+            )
+        except Exception as exc:
+            logger.error("Error in VAD get_timestamps: %s", exc, exc_info=True)
+            return []
+
+    async def _handle_phrase(self, phrase: PhraseSegment) -> None:
+        try:
+            async with self._pending_semaphore:
+                int16_audio = np.clip(phrase.audio, -1.0, 1.0)
+                int16_audio = (int16_audio * 32767.0).astype(np.int16)
+                raw_bytes = int16_audio.tobytes()
+
+                meta = {
+                    "type": "phrase",
+                    "phrase_id": phrase.phrase_id,
+                    "sample_rate": phrase.sample_rate,
+                    "sample_width": 2,
+                    "channels": 1,
+                    "duration": phrase.duration,
+                    "start_time": phrase.start_time,
+                    "end_time": phrase.end_time,
+                }
+
+                meta_bytes = json.dumps(meta).encode("utf-8")
+                payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_bytes
+
+                response = await self.nc.request(
+                    self.whisper_subject,
+                    payload,
+                    timeout=self.request_timeout,
+                )
+
+                try:
+                    data = json.loads(response.data.decode("utf-8"))
+                except Exception as exc:
+                    logger.error("Invalid response from whisper: %s", exc, exc_info=True)
+                    return
+
+                data.setdefault("phrase_id", phrase.phrase_id)
+                await self.on_transcription(data)
+
+        except NatsTimeoutError:
+            logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
+        except Exception as exc:
+            logger.error("Failed[src_whisper] to process phrase %s: %s", phrase.phrase_id, exc, exc_info=True)
+}
+
+src_back/server/processors/nats_node.py {
+import asyncio
+import json
+import logging
+import os
+from typing import Optional
+
+import nats
+from av import AudioFrame
+
+logger = logging.getLogger("audio.NatsNode")
+
+
+from .base import ConsumerNode
+
+
+def _normalize_subject(candidate: Optional[str], default: str) -> str:
+    subject = (candidate or "").strip()
+    if not subject:
+        subject = default
+    return subject[:-1] if subject.endswith(".") else subject
+
+
+class NatsNode(ConsumerNode):
+    """
+    Publishes audio frames to NATS (core) and fans out downstream.
+    JetStream support removed by requirement. ensure_js() now only ensures core NATS connection.
+    """
+
+    def __init__(self, source_node=None) -> None:
+        super().__init__(source_node)
+        self.nc: Optional[nats.NATS] = None
+        self.nc_url = os.getenv("NATS_URL", "nats://localhost:4222")
+        self.subject = _normalize_subject(os.getenv("NATS_AUDIO_SUBJECT"), "audio.frames")
+
+    async def ensure_nc(self):
+        if self.nc is None or not getattr(self.nc, "is_connected", False):
+            # Support multiple URLs in NATS_URL separated by comma
+            urls = [u.strip() for u in str(self.nc_url).split(",") if u.strip()]
+            self.nc = await nats.connect(
+                servers=urls or [self.nc_url],
+                max_reconnect_attempts=-1,
+                reconnect_time_wait=2,
+                ping_interval=10,
+            )
+            logger.info(f"NATS connected: {self.nc.connected_url.netloc}")
+            
+            # Отправляем лог о подключении если есть app
+            if hasattr(self, '_app'):
+                from src_back.server.utils.sse import sse_log
+                await sse_log(
+                    self._app,
+                    f"NATS connected: {self.nc.connected_url.netloc}",
+                    level="info",
+                )
+        
+        # JetStream support removed: ensure only core NATS connection
+        return self.nc
+
+    def use_source(self, source) -> "NatsNode":
+        """Bind upstream audio source after initialization and allow chaining."""
+        self.bind_source(source)
+        return self
+
+    async def connect(self, nc_url: Optional[str] = None, subject: Optional[str] = None) -> None:
+        if nc_url:
+            self.nc_url = nc_url
+        if subject:
+            self.subject = _normalize_subject(subject, self.subject or "audio.frames")
+        await self.ensure_nc()
+
+    async def start(self) -> None:
+        await self.ensure_nc()
+        await super().start()
+
+    async def stop(self) -> None:
+        await super().stop()
+        if self.nc is not None:
+            try:
+                await self.nc.drain()
+            except Exception:
+                pass
+            try:
+                await self.nc.close()
+            except Exception:
+                pass
+            self.nc = None
+
+    async def handle_frame(self, frame: AudioFrame) -> None:
+        # print(
+        #     f"NatsNode: frame pts={getattr(frame, 'pts', None)} sr={getattr(frame, 'sample_rate', None)} fmt={getattr(frame, 'format', None)}"
+        # )
+        # publish in bg
+        # await self._publish_raw_frame(frame)
+        asyncio.create_task(self._publish_raw_frame(frame))
+
+        # continue
+        await self.fan_out(frame)
+
+    async def _publish_raw_frame(self, frame: AudioFrame) -> None:
+        try:
+            await self.ensure_nc()
+            if len(frame.planes) == 0:
+                logger.warning("Skipping empty audio frame")
+                return
+
+            # Encode full frame: [4b meta_len][meta_json][raw_bytes]
+            raw_audio_bytes = bytes(frame.planes[0])
+
+            # channels
+            channels = 1
+            if frame.layout and frame.layout.channels:
+                try:
+                    channels = len(frame.layout.channels)
+                except Exception:
+                    channels = 1
+
+            meta = {
+                "pts": frame.pts,
+                "sample_rate": frame.sample_rate,
+                "format": frame.format.name if frame.format else None,
+                "samples": frame.samples,
+                "channels": channels,
+                "size_bytes": len(raw_audio_bytes),
+            }
+
+            meta_bytes = json.dumps(meta).encode("utf-8")
+            payload = len(meta_bytes).to_bytes(4, "big") + meta_bytes + raw_audio_bytes
+
+            await self.nc.publish(self.subject, payload)
+            logger.debug(f"Published raw frame via NATS, {len(payload)} bytes")
+
+        except Exception as e:
+            logger.error(f"Failed to publish raw frame: {e}", exc_info=True)
+}
+
+src_back/server/handlers/handle_track.py {
+import asyncio
+import json
+import logging
+import os
+from typing import Dict, Any
+
+from ..processors import (
+    TrackSourceNode,
+    NatsNode,
+    PhraseSegmenterNode,
+)
+from ..processors.graph import AudioGraph
+from ..utils.pc_lifecycle import attach_pc_lifecycle
+from ..voice_commands import CommandRegistry, CommandMatcher
+from ..commands import register_alert_command
+from src_back.server.utils.sse import sse_log
+
+logger = logging.getLogger("handle_track")
+
+async def handle_track(track, pc, audio_transceiver, app, echo_ref):
+    nats_node = await nats_init()
+    logger.info(f"on_track: received kind={track.kind}")
+    await sse_log(app, f"Audio track processing started, kind={track.kind}", level="info")
+    
+    if track.kind == "audio":
+        graph = AudioGraph()
+        attach_pc_lifecycle(pc, app, graph, audio_transceiver, echo_ref)
+
+        source = graph.add(TrackSourceNode(
+            track,
+            frame_duration_ms=20,
+            target_rate=16000,
+            target_channels=1,
+            target_output_format='s16p'
+        ))
+
+        # Callback для отправки предупреждений об уровне звука
+        # async def audio_warning_callback(warning_type: str):
+        #     await sse_warning(app, warning_type)
+
+        # Нода мониторинга аудио (встраивается в граф)
+        # monitor = graph.add(AudioMonitorNode(
+        #     source,
+        #     warning_callback=audio_warning_callback,
+        #     check_interval=2.0,
+        #     loud_threshold=0.9,
+        #     quiet_threshold=0.02,
+        #     noise_threshold=0.15,
+        #     min_frames_for_check=10,
+        #     warning_cooldown=10.0
+        # ))
+
+        # Build BGM mixer on top of monitored source
+        # bgm = graph.add(BgmMixerNode(monitor, bgm_path=os.path.join(STATIC_DIR, "bg.wav"), gain=0.2))
+
+        # filler = graph.add(
+        #     LossFillerNode(monitor, latency_budget_ms=180, backlog_leave_frames=2, fill_mode="silence"))
+        # recorder = graph.add(RecorderNode(monitor, batch_frames=512))
+
+        # Bind upstream audio to pre-initialized NATS node and add into graph
+        nats_node.use_source(source)
+        graph.add(nats_node)
+
+        await nats_node.ensure_nc()
+        nats_whisper_subject = os.getenv("NATS_WHISPER_SUBJECT", "whisper.transcription")
+        nats_logs_subject = os.getenv("NATS_LOGS_SUBJECT", "whisper.logs")
+
+        command_registry = CommandRegistry()
+        register_alert_command(command_registry)
+        command_matcher = CommandMatcher(command_registry)
+
+        logger.info("Registered %d voice commands", len(command_registry.commands))
+
+        async def handle_transcription(data: Dict[str, Any]) -> None:
+            try:
+                text = str(data.get("text", "")).strip()
+                if not text:
+                    return
+                service_name = data.get("service") or "src_whisper"
+
+                audio_duration = data.get("audio_duration")
+                transcription_time = data.get("transcription_time")
+                segment_count = data.get("segments")
+                details = []
+                if isinstance(audio_duration, (int, float)):
+                    details.append(f"audio={audio_duration:.2f}s")
+                if isinstance(transcription_time, (int, float)):
+                    details.append(f"time={transcription_time:.2f}s")
+                if isinstance(segment_count, int):
+                    details.append(f"segments={segment_count}")
+                details_suffix = f" ({', '.join(details)})" if details else ""
+
+                await sse_log(
+                    app,
+                    f"Transcription: {text}{details_suffix}",
+                    level="info",
+                    service=service_name,
+                )
+
+                command_result = await command_matcher.process_transcription(text)
+                if command_result:
+                    await sse_log(
+                        app,
+                        f"Voice command: {command_result['command']}",
+                        level="info",
+                    )
+                    cmd_payload = command_result["result"]
+                    if isinstance(cmd_payload, dict) and not cmd_payload.get("error"):
+                        if cmd_payload.get("type") == "command":
+                            await sse_log(
+                                app,
+                                cmd_payload.get("method"),
+                                cmd_payload.get("params", {}),
+                            )
+            except Exception as exc:
+                logger.warning("Transcription handling error: %s", exc, exc_info=True)
+
+        vad_sample_rate = int(os.getenv("VAD_SAMPLE_RATE", "16000"))
+        vad_min_speech = int(os.getenv("VAD_MIN_SPEECH_DURATION_MS", "250"))
+        vad_min_silence = int(os.getenv("VAD_MIN_SILENCE_DURATION_MS", "500"))
+        vad_max_speech = float(os.getenv("VAD_MAX_SPEECH_DURATION_S", "30.0"))
+        vad_speech_pad = int(os.getenv("VAD_SPEECH_PAD_MS", "30"))
+        vad_threshold = float(os.getenv("VAD_THRESHOLD", "0.8"))
+        vad_check_interval = float(os.getenv("VAD_BUFFER_CHECK_INTERVAL", "1.0"))
+
+        segmenter = graph.add(
+            PhraseSegmenterNode(
+                source,
+                nats_node.nc,
+                nats_whisper_subject,
+                handle_transcription,
+                sample_rate=vad_sample_rate,
+                min_speech_duration_ms=vad_min_speech,
+                min_silence_duration_ms=vad_min_silence,
+                max_speech_duration_s=vad_max_speech,
+                speech_pad_ms=vad_speech_pad,
+                threshold=vad_threshold,
+                buffer_check_interval_s=vad_check_interval,
+            )
+        )
+        logger.info("PhraseSegmenterNode configured for subject %s", nats_whisper_subject)
+        await sse_log(
+            app,
+            f"Whisper phrase pipeline ready ({nats_whisper_subject})",
+            level="info",
+        )
+        
+        # Подписка на логи от Whisper сервиса
+        async def _whisper_logs_cb(msg):
+            try:
+                log_data = json.loads(msg.data.decode("utf-8"))
+                service_name = log_data.get('service') or 'src_whisper'
+                message_text = log_data.get('message', '')
+
+                await sse_log(
+                    app,
+                    message_text,
+                    level=log_data.get('type', 'info'),
+                    service=service_name,
+                    log_time=log_data.get('time'),
+                )
+
+            except Exception as e:
+                logger.warning(f"Error processing whisper log: {e}")
+        
+        await nats_node.nc.subscribe(nats_logs_subject, cb=_whisper_logs_cb)
+        logger.info(f"Subscribed to whisper logs: {nats_logs_subject}")
+        await sse_log(app, f"NATS: Subscribed to {nats_logs_subject}", level="info")
+
+        # Echo back mixed audio to the browser
+        # echo = EchoTrackNode(source)
+        # audio_transceiver.sender.replaceTrack(echo)
+        # echo_ref["node"] = echo
+        asyncio.create_task(graph.start())
+
+        logger.info("Audio graph started")
+        await sse_log(app, "Audio graph started successfully", level="info")
+
+
+async def nats_init():
+    nats_node = NatsNode()
+    nats_url = os.getenv("NATS_URL", "nats://localhost:4222")
+    nats_subject = os.getenv("NATS_AUDIO_SUBJECT", "audio.frames")
+    await nats_node.connect(
+        nc_url=nats_url,
+        subject=nats_subject
+    )
+    await nats_node.ensure_nc()
+
+    async def _core_cb(msg):
+        await nats_on_message_core(msg)
+
+    # await nats_node.nc.subscribe(nats_subject, cb=_core_cb)
+    logger.info("Subscribed to NATS subject (core mode, no JetStream)")
+    
+    # Сохраняем app для логирования (если доступен через контекст)
+    # nats_node._app = app  # Будет добавлено в вызывающей функции
+    
+    return nats_node
+
+async def nats_on_message_core(msg):
+    # Core NATS message (no JS metadata/ack)
+    print(f"--- new msg (core): subject={msg.subject} reply={msg.reply}")
+    print(f"---- data: {msg.data[:100]}...")
+}
+
+src_back/server/processors/__init__.py {
+from .track_source_node import TrackSourceNode
+from .echo_track_node import EchoTrackNode
+from .recorder_node import RecorderNode
+from .loss_filler_node import LossFillerNode
+from .bgm_mixer_node import BgmMixerNode
+from .blank_node import BlankNode
+from .audio_monitor_node import AudioMonitorNode
+from .nats_node import NatsNode
+from .phrase_segmenter_node import PhraseSegmenterNode
+}
+

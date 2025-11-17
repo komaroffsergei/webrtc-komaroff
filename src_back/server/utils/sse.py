@@ -24,7 +24,6 @@ DEFAULT_SERVICE_NAME = "src_back"
 #     request.app.setdefault("sse_clients", set()).add(q)
 async def sse_handler(request: web.Request):
     app = request.app
-
     resp = web.StreamResponse(
         status=200,
         reason="OK",
@@ -67,6 +66,8 @@ async def sse_handler(request: web.Request):
         logger.info("SSE client removed, total=%s", len(app["sse_clients"]))
 
     return resp
+
+
 async def sse_broadcast(app, message, ensure_meta: bool = True):
     if not isinstance(message, dict):
         message = {"msg": str(message)}
@@ -95,7 +96,9 @@ async def sse_broadcast(app, message, ensure_meta: bool = True):
         except Exception as e:
             logger.warning("Error putting to SSE queue: %s", e)
 
-async def sse_log(app, message: str, level: str = "info", service: str = DEFAULT_SERVICE_NAME, *, log_time: str | None = None, name: str = None):
+
+async def sse_log(app, message: str, level: str = "info", service: str = DEFAULT_SERVICE_NAME, *,
+                  log_time: str | None = None, name: str = None):
     """
     Отправить лог-сообщение клиенту для отладочного окна в упрощенном формате.
     """
@@ -116,4 +119,5 @@ def make_async_callback(loop, async_func, app):
             asyncio.create_task,
             async_func(app, status)
         )
+
     return callback

@@ -9,7 +9,6 @@ from typing import Awaitable, Callable, List, Optional
 
 import numpy as np
 from av import AudioFrame
-from nats import NATS
 from nats.errors import TimeoutError as NatsTimeoutError
 
 from .base import ConsumerNode
@@ -43,7 +42,7 @@ class PhraseSegmenterNode(ConsumerNode):
     def __init__(
         self,
         source_node,
-        nats_client: NATS,
+        nats_client,
         whisper_subject: str,
         on_transcription: Callable[[dict], Awaitable[None]],
         sample_rate: int = 16000,
@@ -153,6 +152,11 @@ class PhraseSegmenterNode(ConsumerNode):
         try:
             await self._check_buffer()
         finally:
+
+
+
+
+
             self._check_in_progress = False
 
     async def _check_buffer(self) -> None:

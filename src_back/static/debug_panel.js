@@ -88,7 +88,8 @@
         const timeLabel = new Date(entry.time).toLocaleTimeString();
         const service = entry.service || 'unknown';
         const typeLabel = entry.type.toUpperCase();
-        return `[${timeLabel}] [${service}] [${typeLabel}] ${entry?.name ? [entry.name] : ''} ${entry.message}`;
+        const msg = typeof entry.message === 'string' ? entry.message : JSON.stringify(entry.message);
+        return `[${timeLabel}] [${service}] [${typeLabel}] ${entry?.name ? [entry.name] : ''} ${msg}`;
     }
 
     function createRow(entry) {

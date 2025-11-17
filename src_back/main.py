@@ -13,10 +13,12 @@ import os
 from src_back.server.utils.config import STATIC_DIR
 from src_back.server.utils.sse import sse_handler, sse_broadcast
 
-WHISPER_MODEL_DIR = os.getenv("MODELS_DIR", Path("/app/models") if os.path.exists("/app") else Path("./models"))
-WHISPER_MODEL_URL = os.getenv("WHISPER_MODEL_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin")
-WHISPER_MODEL_SHA256 = os.getenv("WHISPER_MODEL_SHA256", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208")
-
+# WHISPER_MODEL_DIR = os.getenv("MODELS_DIR", Path("/app/models") if os.path.exists("/app") else Path("./models"))
+# WHISPER_MODEL_URL = os.getenv("WHISPER_MODEL_URL", "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin")
+# WHISPER_MODEL_SHA256 = os.getenv("WHISPER_MODEL_SHA256", "6c14d5adee5f86394037b4e4e8b59f1673b6cee10e3cf0b11bbdbee79c156208")
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
+NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 
 def setup_routes(app):
     app.router.add_get("/", handle_index)
@@ -34,11 +36,10 @@ if __name__ == "__main__":
     app["methods"] = {
         "sse_broadcast": lambda msg: sse_broadcast(app, msg)
     }
-    app['data'] = {
-        "WHISPER_MODEL_DIR": WHISPER_MODEL_DIR,
-        "WHISPER_MODEL_URL": WHISPER_MODEL_URL,
-        "WHISPER_MODEL_SHA256": WHISPER_MODEL_SHA256,
-        'MODEL_STATUS': None
+    app['vars'] = {
+        "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
+        "NATS_LOGS_SUBJECT": NATS_LOGS_SUBJECT,
+        "NATS_URL": NATS_URL
     }
 
     setup_routes(app)
