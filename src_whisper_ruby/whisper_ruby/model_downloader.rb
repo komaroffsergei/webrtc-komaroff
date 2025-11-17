@@ -117,14 +117,14 @@ module WhisperRuby
       logger.log("Downloader error: #{e}", type: "error",
                  service: service, name: "model_downloading_status")
       raise
-    ensure
-      if defined?(tmp) && File.exist?(tmp)
-        begin
-          File.delete(tmp)
-        rescue => e
-          logger.log("Could not delete temp file: #{e}", type: "warn", service: service)
-        end
-      end
+    # ensure
+      # if defined?(tmp) && File.exist?(tmp)
+      #   begin
+      #     File.delete(tmp)
+      #   rescue => e
+      #     logger.log("Could not delete temp file: #{e}", type: "warn", service: service)
+      #   end
+      # end
     end
   end
 end
