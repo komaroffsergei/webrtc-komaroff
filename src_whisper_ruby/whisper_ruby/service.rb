@@ -107,6 +107,17 @@ module WhisperRuby
     end
 
     def transcribe_packet(packet)
+
+
+      # Сохраняем оригинальный $stdout
+      old_stdout = $stdout
+
+      # Создаём буфер и перенаправляем $stdout туда
+      buffer = StringIO.new
+      $stdout = buffer
+
+
+
       pcm_i16 = packet.audio.map { |f| (f * 32767).clamp(-32_768, 32_767).to_i }.pack("s*")
 
       min_bytes = (packet.sample_rate * MIN_PHRASE_MS / 1000) * 2
@@ -124,7 +135,19 @@ module WhisperRuby
       params.vad = false
       params.no_context = true
 
+      params.print_progress = true
+
+
       @ctx.transcribe(wav.path, params)
+
+
+      # Восстанавливаем $stdout
+      $stdout = old_stdout
+
+      # Теперь читаем накопленный вывод из буфера
+      progress_logs = buffer.string
+      puts progress_logs
+
 
       segments = @ctx.full_n_segments
       text = +""
