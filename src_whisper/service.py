@@ -57,7 +57,6 @@ class WhisperService:
         self._stop_event = asyncio.Event()
         self._model_task: Optional[asyncio.Task] = None
         self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def run(self) -> None:
         await self._connect()
@@ -77,7 +76,6 @@ class WhisperService:
                 logger.debug("Signal handlers are not supported on this platform")
 
     async def _connect(self) -> None:
-        self._loop = asyncio.get_running_loop()
         self._nc = await nats.connect(
             servers=[self._nats_url],
             name=self._service_name,
@@ -135,6 +133,13 @@ class WhisperService:
             await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
             return
 
+        try:
+            model = await self._ensure_model_loaded()
+        except Exception as exc:
+            await self._log_error(f"Model not ready: {exc}")
+            await self._reply(msg, {"phrase_id": packet.phrase_id, "error": "model_error"})
+            return
+
         await self._nats_logger.info(
             f"Phrase received id={packet.phrase_id} dur={packet.duration:.2f}"
         )
@@ -144,7 +149,6 @@ class WhisperService:
 
         async with self._semaphore:
             try:
-                model = await self._ensure_model_loaded()
                 text = await asyncio.to_thread(self._transcribe, model, packet)
             except Exception as exc:
                 logger.exception("Transcription error: %s", exc)

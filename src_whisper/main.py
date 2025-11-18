@@ -5,13 +5,19 @@ import logging
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 from service import WhisperService
+current_dir = Path(__file__).parent.resolve()
+env_file = current_dir / '.env'
+env_local_file = current_dir / '.env.local'
+load_dotenv(env_local_file if os.path.exists(env_local_file) else env_file)
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_whisper_python")
 NATS_URL = os.getenv("NATS_URL", "nats://127.0.0.1:4222")
 NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
-MODELS_DIR = Path(os.getenv("MODELS_DIR", "./models")).resolve()
+MODELS_DIR = current_dir / Path(os.getenv("MODELS_DIR", "models"))
 WHISPER_MODEL_ID = os.getenv("WHISPER_MODEL_ID", "Systran/faster-whisper-small")
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)

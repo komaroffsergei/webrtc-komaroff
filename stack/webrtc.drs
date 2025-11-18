@@ -11,6 +11,15 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
       NATS_LOGS_SUBJECT: 'nats.logs'
 end
 
+Service :whisper, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper/main', ports: 9000,
+        ingress: { host: 'webrtc-komaroff-whisper.*' } do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs'
+      WHISPER_MODEL_ID: 'Systran/faster-whisper-small',
+   volume name: 'MODELS_DIR', target: '/app/models'
+end
+
 Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-ruby/main', ports: 7000,
         ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
   env NATS_URL: NATS_URL,
@@ -19,7 +28,7 @@ Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-serve
       WHISPER_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
       WHISPER_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
       PORT: 7000
-   volume name: 'models_dir', target: '/app/models'
+   volume name: 'MODELS_DIR', target: '/app/models'
 end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch'
