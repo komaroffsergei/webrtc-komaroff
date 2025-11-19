@@ -57,6 +57,8 @@ class PhraseSegmenterNode(ConsumerNode):
     ):
         super().__init__(source_node)
 
+        self.app = getattr(source_node, "app", None)
+
         self.nc = nats_client
         self.whisper_subject = whisper_subject
         self.on_transcription = on_transcription
@@ -138,11 +140,18 @@ class PhraseSegmenterNode(ConsumerNode):
                 "no",
             }
             model_url = os.getenv("VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
-            ensure_or_download_model(model_path, download=auto_download, url=model_url)
-            return SileroOnnxVAD(model_path)
+            try:
+                ensure_or_download_model(model_path, download=auto_download, url=model_url)
+                return SileroOnnxVAD(model_path)
+            except Exception as exc:
+                logger.error("VAD model load failed: %s", exc, exc_info=True)
+                return None
 
         self.vad_model = await loop.run_in_executor(None, _load)
-        logger.info("Silero VAD ONNX model loaded from %s", self.vad_model.model_path)
+        if self.vad_model:
+            logger.info("Silero VAD ONNX model loaded from %s", self.vad_model.model_path)
+        else:
+            logger.error("Silero VAD model is unavailable")
 
     async def _check_buffer_async(self) -> None:
         if self._check_in_progress:
@@ -271,5 +280,13 @@ class PhraseSegmenterNode(ConsumerNode):
 
         except NatsTimeoutError:
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
+            if self.app:
+                await sse_log(
+                    self.app,
+                    f"ASR timeout for phrase {phrase.phrase_id}",
+                    level="warn",
+                    service="src_back",
+                    name="asr_timeout",
+                )
         except Exception as exc:
             logger.error("Failed[src_whisper] to process phrase %s: %s", phrase.phrase_id, exc, exc_info=True)
