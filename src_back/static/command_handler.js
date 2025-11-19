@@ -12,7 +12,13 @@
     'use strict';
 
     const handlers = new Map();
-    const logger = window.AppLog || console;
+    const LOG_SERVICE = 'command';
+
+    function log(type, message) {
+        if (typeof window.logEvent === 'function') {
+            window.logEvent({service: LOG_SERVICE, type, message});
+        }
+    }
 
     /**
      * Регистрация обработчика команды
@@ -21,11 +27,11 @@
      */
     function register(method, handler) {
         if (typeof handler !== 'function') {
-            logger.error(`[CommandHandler] Handler for "${method}" must be a function`);
+            log('error', `[CommandHandler] Handler for "${method}" must be a function`);
             return;
         }
         handlers.set(method, handler);
-        logger.info(`[CommandHandler] Registered handler for "${method}"`);
+        log('info', `[CommandHandler] Registered handler for "${method}"`);
     }
 
     /**
@@ -38,15 +44,15 @@
         const handler = handlers.get(method);
         
         if (!handler) {
-            logger.warn(`[CommandHandler] No handler registered for method "${method}"`);
+            log('warn', `[CommandHandler] No handler registered for method "${method}"`);
             return;
         }
 
         try {
-            logger.info(`[CommandHandler] Executing "${method}" with uid=${uid}`);
+            log('info', `[CommandHandler] Executing "${method}" with uid=${uid}`);
             await handler(params, uid);
         } catch (error) {
-            logger.error(`[CommandHandler] Error executing "${method}":`, error);
+            log('error', `[CommandHandler] Error executing "${method}": ${error?.message || error}`);
         }
     }
 
@@ -59,13 +65,7 @@
             return;
         }
 
-        const isSimpleLog = message &&
-            typeof message === 'object' &&
-            Object.keys(message).length === 4 &&
-            'time' in message && 'service' in message && 'type' in message && 'message' in message;
-
-        if (isSimpleLog && window.DebugPanel) {
-            window.DebugPanel.addLog(message);
+        if (typeof window.logEvent === 'function' && window.logEvent(message)) {
             return;
         }
 
@@ -94,7 +94,7 @@
                 break;
 
             default:
-                logger.debug(`[CommandHandler] Unhandled message type: ${type}`);
+                log('debug', `[CommandHandler] Unhandled message type: ${type}`);
         }
     }
 
@@ -116,10 +116,10 @@
             }
 
             const data = await response.json();
-            logger.info(`[CommandHandler] Message sent, uid=${data.uid}`);
+            log('info', `[CommandHandler] Message sent, uid=${data.uid}`);
             return data;
         } catch (error) {
-            logger.error('[CommandHandler] Failed to send message:', error);
+            log('error', `[CommandHandler] Failed to send message: ${error?.message || error}`);
             throw error;
         }
     }
@@ -134,7 +134,7 @@
 
     // console - вывод в консоль
     register('console', (params) => {
-        console.log('[Server Command]', params);
+        log('info', `[Server Command] ${JSON.stringify(params)}`);
     });
 
     // reload - перезагрузка страницы
@@ -157,7 +157,7 @@
             try {
                 eval(code);
             } catch (e) {
-                logger.error('[CommandHandler] eval_js error:', e);
+                log('error', `[CommandHandler] eval_js error: ${e?.message || e}`);
             }
         }
     });

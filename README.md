@@ -74,3 +74,14 @@
    Для быстрого прогона сервисов можно использовать `docker/docker-compose.yml`, предварительно подставив нужные env (`REGISTRY_HOST`, `CI_COMMIT_BRANCH`, `NATS_URL`, и т.д.) и выполнив `docker compose up --build`.
 
 Эти шаги описывают текущее состояние окружения. Если добавите новые бекэнды или измените структуру `docker/`, обновите инструкцию, чтобы не потерять нюансы.
+
+
+
+
+1) bundle config unset build.whispercpp
+2) bundle config build.whispercpp --disable-ggml-cuda --disable-ggml-cublas
+3) bundle pristine whispercpp
+// in case of faile
+4) bundle exec gem uninstall whispercpp
+   bundle install
+   [goto 2]

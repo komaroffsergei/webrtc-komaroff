@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     ffmpeg libsm6 libxext6 libgl1 libglib2.0-0 libavformat-dev libavcodec-dev  \
-    libavdevice-dev libavfilter-dev  libswresample-dev libswscale-dev pkg-config \
+    libavdevice-dev libavfilter-dev  libswresample-dev libswscale-dev pkg-config curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
@@ -14,15 +14,27 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Create directory for whisper models (mounted as a volume at runtime)
-RUN mkdir -p /app/models
+RUN cat <<'EOF' >/entrypoint.sh
+#!/bin/sh
+set -e
+exec "$@"
+EOF
 
-# Runtime env
+RUN chmod +x /entrypoint.sh
+
+# Создать директории для моделей
+RUN mkdir -p /app/models/asr /app/models/vad
+
+# Установить переменные окружения для загрузки модели
 ENV SERVER_ENV=production \
     PORT=8000 \
-    WHISPER_MODELS_DIR=/app/models \
-    WHISPER_MODEL_NAME=medium
+    ASR_MODELS_DIR=/app/models/asr \
+    ASR_MODEL_ID=Systran/faster-whisper-small \
+    VAD_MODELS_DIR=/app/models/vad \
+    VAD_MODEL_PATH=/app/models/vad/silero_vad.onnx
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "main.py"]
 
 FROM base AS whisper
+# Placeholder stage (runtime downloads model on first start)

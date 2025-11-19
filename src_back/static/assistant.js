@@ -10,39 +10,17 @@
     let eventSource = null;
 
     let els = {};
-    const ModelLoadStatusEnum = {
-        LOADING: 0,
-        LOADED: 1,
-        ERROR: 2
-    };
-    const MODEL_STATUS_POLL_INTERVAL = 3000;
-    let modelStatusIntervalId = null;
-    let modelStatusRequestInFlight = false;
-    let modelStatusLastValue = null;
-    let autoConnectTimer = null;
+    const DEFAULT_SERVICE = 'app-assistant';
 
-    function addDebugLog(message, type = 'info', service = 'ui') {
-        if (window.DebugPanel && typeof window.DebugPanel.addLog === 'function') {
-            window.DebugPanel.addLog({
-                time: new Date().toISOString(),
-                service,
+    function log(type, message, service) {
+        if (typeof window.logEvent === 'function') {
+            window.logEvent({
+                service: (service ? DEFAULT_SERVICE + '-' + service : DEFAULT_SERVICE),
                 type,
                 message
             });
         }
     }
-
-    const isSimpleLogPayload = (payload) => {
-        if (!payload || typeof payload !== 'object') return false;
-        const keys = Object.keys(payload);
-        return (
-            keys.length === 4 &&
-            keys.includes('time') &&
-            keys.includes('service') &&
-            keys.includes('type') &&
-            keys.includes('message')
-        );
-    };
 
     // Установка размеров canvas с запасом
     function setupCanvas() {
@@ -71,113 +49,8 @@
 
     function updateStatus(text) {
         if (els.connectionStatus) {
-            if (els.connectionStatus.dataset.statusSource !== 'model') {
-                els.connectionStatus.textContent = text;
-                els.connectionStatus.dataset.statusSource = 'default';
-            }
+            els.connectionStatus.textContent = text;
         }
-        addMessage(text, 'status');
-    }
-
-    function setConnectionStateText(text, { lock = false } = {}) {
-        if (!els.connectionStatus) {
-            return;
-        }
-        els.connectionStatus.textContent = text;
-        els.connectionStatus.dataset.statusSource = lock ? 'model' : 'default';
-    }
-
-    function releaseConnectionStatusLock() {
-        if (els.connectionStatus) {
-            els.connectionStatus.dataset.statusSource = 'default';
-        }
-    }
-
-    function setInteractiveControlsDisabled(disabled) {
-        const root = els.assistantContainer || document;
-        root.querySelectorAll('button, input').forEach(control => {
-            if (control && 'disabled' in control) {
-                control.disabled = disabled;
-            }
-        });
-    }
-
-    function disableInteractiveControls() {
-        setInteractiveControlsDisabled(true);
-    }
-
-    function enableInteractiveControls() {
-        setInteractiveControlsDisabled(false);
-    }
-
-    function cancelAutoConnectAttempt() {
-        if (autoConnectTimer) {
-            clearTimeout(autoConnectTimer);
-            autoConnectTimer = null;
-        }
-    }
-
-    function scheduleAutoConnect() {
-        if (autoConnectTimer || isConnected) {
-            return;
-        }
-        autoConnectTimer = setTimeout(() => {
-            autoConnectTimer = null;
-            enableInteractiveControls();
-            releaseConnectionStatusLock();
-            connect();
-        }, 2000);
-    }
-
-    async function pollModelStatus() {
-        try {
-            const response = await fetch('/status', { cache: 'no-store' });
-            if (!response.ok) {
-                addDebugLog(`Model status fetch failed with ${response.status}`);
-                return;
-            }
-            const payload = await response.json();
-
-        } catch (error) {
-            addDebugLog(`Failed to read model status: ${error.message}`);
-        } finally {
-            modelStatusRequestInFlight = false;
-        }
-    }
-
-    function applyModelStatus(statusValue) {
-        if (modelStatusLastValue === statusValue) {
-            return;
-        }
-        modelStatusLastValue = statusValue;
-        cancelAutoConnectAttempt();
-        switch (statusValue) {
-            case ModelLoadStatusEnum.LOADING:
-                setConnectionStateText('Скачивание модели', { lock: true });
-                disableInteractiveControls();
-                break;
-            case ModelLoadStatusEnum.LOADED:
-                setConnectionStateText('Модель загружена', { lock: true });
-                disableInteractiveControls();
-                scheduleAutoConnect();
-                break;
-            case ModelLoadStatusEnum.ERROR:
-                setConnectionStateText('Ошибка загрузки модели', { lock: true });
-                disableInteractiveControls();
-                break;
-            default:
-                addDebugLog(`Unknown model status: ${statusValue}`);
-        }
-    }
-
-    function startModelStatusPolling() {
-        if (modelStatusIntervalId) {
-            return;
-        }
-        pollModelStatus();
-        modelStatusIntervalId = setInterval(() => {
-
-        }, MODEL_STATUS_POLL_INTERVAL);
     }
 
     function setupBackgroundWaveform(stream) {
@@ -228,7 +101,7 @@
             );
 
         } catch (e) {
-            console.warn('Background waveform failed', e);
+            log('warn', `Background waveform failed: ${e?.message || e}`, 'viz');
         }
     }
 
@@ -280,7 +153,7 @@
             );
 
         } catch (e) {
-            console.warn('Mic waveform failed', e);
+            log('warn', `Mic waveform failed: ${e?.message || e}`, 'viz');
         }
     }
 
@@ -366,14 +239,17 @@
     async function connect() {
         try {
             updateStatus('Подключение...');
+            addMessage('Подключение...', 'status');
             expandChatWindow();
 
             // Получаем настройки аудио из элементов управления
             const audioConstraints = getAudioConstraints();
 
             // Логируем настройки
-            addDebugLog(
-                `Requesting microphone: EC=${audioConstraints.echoCancellation}, NS=${audioConstraints.noiseSuppression}, SR=${audioConstraints.sampleRate}`
+            log(
+                'info',
+                `Requesting microphone: EC=${audioConstraints.echoCancellation}, NS=${audioConstraints.noiseSuppression}, SR=${audioConstraints.sampleRate}`,
+                'audio'
             );
 
             // Получаем доступ к микрофону
@@ -410,7 +286,7 @@
             isConnected = true;
 
         } catch (e) {
-            console.error('Connection failed', e);
+            log('error', `Connection failed: ${e?.message || e}`, 'webrtc');
             updateStatus('Ошибка подключения');
             addMessage(`Ошибка: ${e.message}`, 'status');
             disconnect();
@@ -457,7 +333,7 @@
             }
 
         } catch (e) {
-            console.warn('Disconnect error', e);
+            log('warn', `Disconnect error: ${e?.message || e}`, 'webrtc');
         }
     }
 
@@ -487,30 +363,24 @@
             eventSource = new EventSource('/events');
 
             eventSource.onmessage = (e) => {
-                try {
-                    const msg = JSON.parse(e.data);
-
-                    // Передаем в CommandHandler для обработки
-                    if (window.CommandHandler) {
-                        window.CommandHandler.handleServerMessage(msg);
-                    }
-
-                    // Обратная совместимость - старая логика
-                    if (msg.text && !msg.type) {
-                        addMessage(msg.text, 'server');
-                    }
-                } catch (err) {
-                    console.error('SSE message parse error:', err);
-                }
+                processMessage(e.data);
             };
 
             eventSource.onopen = () => {
-                console.log('SSE connected');
+                logEvent({
+                    service: DEFAULT_SERVICE + '-sse',
+                    type: 'info',
+                    message: `SSE connected`
+                });
                 updateStatus('Подключено к серверу');
             };
 
             eventSource.onerror = (e) => {
-                console.warn('SSE error, reconnecting...', e);
+                logEvent({
+                    service: DEFAULT_SERVICE + '-sse',
+                    type: 'info',
+                    message: `SSE error, reconnecting: ${e?.message || e}`
+                });
                 updateStatus('Переподключение...');
                 setTimeout(() => {
                     initSSE();
@@ -518,7 +388,12 @@
             };
 
         } catch (e) {
-            console.warn('SSE failed', e);
+            logEvent({
+                service: DEFAULT_SERVICE + '-sse',
+                type: 'error',
+                message: `SSE failed: ${e?.message || e}`
+            });
+
         }
     }
 
@@ -535,7 +410,7 @@
             vadThreshEl.addEventListener('input', (e) => {
                 const value = e.target.value;
                 vadLevelEl.textContent = `${value} dBFS`;
-                addDebugLog(`VAD threshold changed: ${value} dBFS`);
+                log('info', `VAD threshold changed: ${value} dBFS`, 'audio');
             });
         }
 
@@ -543,7 +418,7 @@
         if (vadEnableEl) {
             vadEnableEl.addEventListener('change', (e) => {
                 const enabled = e.target.checked;
-                addDebugLog(`VAD ${enabled ? 'enabled' : 'disabled'}`);
+                log('info', `VAD ${enabled ? 'enabled' : 'disabled'}`, 'audio');
                 // Обновляем VAD если есть активный экземпляр
                 if (vadInstance) {
                     vadInstance.enabled = enabled;
@@ -555,7 +430,7 @@
         if (ecEnableEl) {
             ecEnableEl.addEventListener('change', (e) => {
                 const enabled = e.target.checked;
-                addDebugLog(`Echo Cancellation ${enabled ? 'enabled' : 'disabled'}`);
+                log('info', `Echo Cancellation ${enabled ? 'enabled' : 'disabled'}`, 'audio');
             });
         }
 
@@ -563,13 +438,15 @@
         if (nsEnableEl) {
             nsEnableEl.addEventListener('change', (e) => {
                 const enabled = e.target.checked;
-                addDebugLog(`Noise Suppression ${enabled ? 'enabled' : 'disabled'}`);
+                log('info', `Noise Suppression ${enabled ? 'enabled' : 'disabled'}`, 'audio');
             });
         }
 
         // Логируем начальное состояние
-        addDebugLog(
-            `Audio controls initialized: VAD=${vadEnableEl?.checked}, EC=${ecEnableEl?.checked}, NS=${nsEnableEl?.checked}, Threshold=${vadThreshEl?.value}dBFS`
+        log(
+            'info',
+            `Audio controls initialized: VAD=${vadEnableEl?.checked}, EC=${ecEnableEl?.checked}, NS=${nsEnableEl?.checked}, Threshold=${vadThreshEl?.value}dBFS`,
+            'audio'
         );
     }
 
@@ -585,6 +462,56 @@
             sampleRate: 48000,
             channelCount: 1
         };
+    }
+
+    function setInteractiveControlsDisabled(disabled) {
+        const root = els.assistantContainer || document;
+        root.querySelectorAll('input').forEach(control => {
+            if (control && 'disabled' in control) {
+                control.disabled = disabled;
+            }
+        });
+    }
+
+    function processMessage(json) {
+        let data
+        try {
+            data = JSON.parse(json);
+            logEvent(data)
+        } catch (err) {
+            log('error', `SSE message parse error: ${err?.message || err}`, 'sse');
+            return
+        }
+
+        if (data.name) {
+            switch (data.name) {
+                case 'model_downloading_status':
+                    if (data.type === 'info') {
+                        if (data.message === 'downloading') {
+                            setInteractiveControlsDisabled(true);
+                            updateStatus('Скачивание модели');
+                        } else if (data.message === 'exists') {
+                            setInteractiveControlsDisabled(false);
+                            if (eventSource) {
+                                updateStatus('Подключено');
+                            } else {
+                                initSSE();
+                            }
+                        }
+                    } else if (data.type === 'error') {
+                        if (data.message === 'exists') {
+                            setInteractiveControlsDisabled(true);
+                            updateStatus(`Ошибка получения модели: ${data.message}`);
+                        }
+                    }
+                    break;
+                case 'model_downloading_percent':
+                       setInteractiveControlsDisabled(true);
+                       updateStatus(`Скачивание модели ${data.message}%`);
+                    break;
+            }
+        }
+
     }
 
     // Инициализация
@@ -620,8 +547,6 @@
         if (els.textInput) {
             els.textInput.addEventListener('keypress', handleTextInput);
         }
-        disableInteractiveControls();
-        startModelStatusPolling();
 
         // Инициализируем элементы управления аудио
         initAudioControls();

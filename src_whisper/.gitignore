@@ -31,3 +31,4 @@ recordings_raw/
 *.log
 /models/*
 /.venv/
+.env.local

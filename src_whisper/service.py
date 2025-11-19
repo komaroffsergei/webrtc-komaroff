@@ -1,280 +1,240 @@
-"""
-Главный сервис Whisper: обработка входящих фраз и публикация результатов.
-"""
-
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import traceback
-from datetime import datetime
-from typing import Awaitable, Optional
+import signal
+import time
+from typing import Any, Optional
 
 import nats
+import numpy as np
+from faster_whisper import WhisperModel
 from nats.aio.msg import Msg
 
-from config import ServiceConfig
-from utils.nats_log_handler import NatsLogHandler
-from utils.nats_logger import NatsLogger
-from phrases import PhrasePacket, PhrasePacketError
-from transcriber import WhisperTranscriber
-from utils.model_downloader import ensure_model_available
-from pathlib import Path
-import os
+from model_downloader import ensure_model_path
+from nats_logger import NatsLogger
+from phrase_packet import PhrasePacket
 
 
-logger = logging.getLogger("whisper.service")
-SERVICE_NAME = "src_whisper"
+logger = logging.getLogger("whisper_service")
 
 
 class WhisperService:
-    def __init__(self, config: ServiceConfig):
-        self.config = config
-        self.nc: Optional[nats.NATS] = None
-        self.transcriber = WhisperTranscriber(config.whisper.model_path)
-        self.nats_logger: Optional[NatsLogger] = None
-        self._log_tasks: set[asyncio.Task[None]] = set()
+    def __init__(
+        self,
+        *,
+        service_name: str,
+        nats_url: str,
+        frames_subject: str,
+        logs_subject: str,
+        models_dir,
+        model_id: str,
+        language: str = "ru",
+        device: str = "auto",
+        compute_type: str = "default",
+        min_phrase_ms: int = 100,
+        max_concurrency: int = 1,
+        beam_size: int = 5,
+    ) -> None:
+        self._service_name = service_name
+        self._nats_url = nats_url
+        self._frames_subject = frames_subject
+        self._logs_subject = logs_subject
+        self._models_dir = models_dir
+        self._model_id = model_id
+        self._language = language
+        self._device = device
+        self._compute_type = compute_type
+        self._min_phrase_ms = max(1, min_phrase_ms)
+        self._beam_size = max(1, beam_size)
+        self._nc: Optional[nats.NATS] = None
+        self._nats_logger: Optional[NatsLogger] = None
+        self._whisper_model: Optional[WhisperModel] = None
+        self._model_lock = asyncio.Lock()
+        self._model_path: Optional[str] = None
+        self._tasks: set[asyncio.Task] = set()
+        self._stop_event = asyncio.Event()
+        self._model_task: Optional[asyncio.Task] = None
+        self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
 
     async def run(self) -> None:
         await self._connect()
-        await self._setup_logging()
-        # start async model init and status logging
-        asyncio.create_task(self._ensure_model_ready(), name="ensure_model_ready")
+        self._register_signals()
+        await self._stop_event.wait()
+        await self._shutdown()
 
-        assert self.nc is not None
-        subject = self.config.nats.whisper_subject
-        await self.nc.subscribe(subject, cb=self._handle_phrase)
-        logger.info("Listening for phrases on %s", subject)
+    def stop(self) -> None:
+        self._stop_event.set()
 
-        await asyncio.Event().wait()
+    def _register_signals(self) -> None:
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            try:
+                loop.add_signal_handler(sig, self.stop)
+            except NotImplementedError:
+                logger.debug("Signal handlers are not supported on this platform")
 
     async def _connect(self) -> None:
-        urls = [url.strip() for url in str(self.config.nats.url).split(",") if url.strip()]
-        self.nc = await nats.connect(
-            servers=urls or [self.config.nats.url],
+        self._nc = await nats.connect(
+            servers=[self._nats_url],
+            name=self._service_name,
             max_reconnect_attempts=-1,
             reconnect_time_wait=2,
             ping_interval=10,
         )
-        logger.info("Connected to NATS: %s", self.nc.connected_url.netloc)
 
-    async def _setup_logging(self) -> None:
-        assert self.nc is not None
-        whisper_logger = logging.getLogger("whisper")
-        if not any(isinstance(handler, NatsLogHandler) for handler in whisper_logger.handlers):
-            handler = NatsLogHandler(
-                self.nc,
-                self.config.nats.logs_subject,
-                SERVICE_NAME,
-                level=logging.DEBUG,
-            )
-            handler.setFormatter(logging.Formatter("%(name)s: %(message)s"))
-            whisper_logger.addHandler(handler)
-            logger.info("NATS log handler attached")
+        self._nats_logger = NatsLogger(self._nc, self._logs_subject, self._service_name)
+        await self._nats_logger.info("Whisper Python service connected")
 
-        self.nats_logger = NatsLogger(
-            self.nc,
-            self.config.nats.logs_subject,
-            service_name=SERVICE_NAME,
-        )
+        self._model_task = asyncio.create_task(self._warmup_model())
+        self._model_task.add_done_callback(self._handle_model_task_done)
 
-    async def _handle_phrase(self, msg: Msg) -> None:
-        packet: PhrasePacket | None = None
+        await self._nc.subscribe(self._frames_subject, cb=self._handle_message)
+        await self._nats_logger.info(f"Subscribed to {self._frames_subject}")
+
+    async def _shutdown(self) -> None:
+        if self._model_task:
+            self._model_task.cancel()
+
+        for task in list(self._tasks):
+            task.cancel()
+
+        if self._nc:
+            try:
+                await self._nc.drain()
+            except Exception:
+                await self._nc.close()
+
+    def _handle_model_task_done(self, task: asyncio.Task) -> None:
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            logger.error("Model preparation failed: %s", exc, exc_info=True)
+            asyncio.create_task(self._log_error(f"Model preparation failed: {exc}"))
+            self.stop()
+
+    async def _handle_message(self, msg: Msg) -> None:
+        task = asyncio.create_task(self._process_message(msg))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+
+    async def _process_message(self, msg: Msg) -> None:
+        if not self._nats_logger:
+            return
+
         try:
             packet = PhrasePacket.from_bytes(msg.data)
-            self._schedule_log(self._log_phrase_received(packet), "phrase_received")
-        except PhrasePacketError as exc:
-            logger.error("Failed to parse phrase: %s", exc)
-            self._schedule_log(
-                self._log_error(
-                    event="phrase_parse_failed",
-                    exc=exc,
-                    payload_size=len(msg.data),
-                ),
-                "phrase_parse_failed",
-            )
-            await self._reply_with_error(msg, str(exc))
-            return
-        except Exception as exc:  # pragma: no cover
-            logger.exception("Unexpected phrase parsing error")
-            self._schedule_log(
-                self._log_error(
-                    event="phrase_receive_error",
-                    exc=exc,
-                    payload_size=len(msg.data),
-                ),
-                "phrase_receive_error",
-            )
-            await self._reply_with_error(msg, str(exc))
-            return
-
-        start_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-
-        self._schedule_log(
-            self._log_transcription_start(packet, start_timestamp),
-            "transcription_started",
-        )
-        try:
-            result = await self.transcriber.transcribe(packet.audio, packet.sample_rate)
-            end_timestamp = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]
-            payload = self._build_response(packet, result, start_timestamp, end_timestamp)
-            self._schedule_log(
-                self._log_transcription_complete(
-                    packet,
-                    result,
-                    start_timestamp,
-                    payload["end_timestamp"],
-                ),
-                "transcription_completed",
-            )
-            await self._reply(msg, payload)
-            logger.info("Transcription sent for phrase %s", packet.phrase_id or "unknown")
         except Exception as exc:
-            logger.exception("Transcription failed")
-            self._schedule_log(
-                self._log_error(
-                    event="transcription_failed",
-                    exc=exc,
-                    phrase_id=packet.phrase_id,
-                    sample_rate=packet.sample_rate,
-                    audio_duration=packet.duration,
-                ),
-                "transcription_failed",
-            )
-            await self._reply_with_error(msg, str(exc), packet.phrase_id)
-
-    async def _log_phrase_received(self, packet: PhrasePacket) -> None:
-        if not self.nats_logger:
+            logger.warning("Invalid packet: %s", exc)
+            await self._log_error(f"Invalid packet: {exc}")
+            await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
             return
-        message = (
-            "Phrase received "
-            f"phrase_id={packet.phrase_id or 'unknown'} "
-            f"sr={packet.sample_rate}Hz "
-            f"duration={packet.duration:.2f}s "
-            f"samples={int(packet.audio.size)}"
-        )
-        await self.nats_logger.log_info(message)
 
-    async def _log_transcription_start(self, packet: PhrasePacket, start_timestamp: str) -> None:
-        if not self.nats_logger:
+        try:
+            model = await self._ensure_model_loaded()
+        except Exception as exc:
+            await self._log_error(f"Model not ready: {exc}")
+            await self._reply(msg, {"phrase_id": packet.phrase_id, "error": "model_error"})
             return
-        await self.nats_logger.log_transcription_start(
-            phrase_id=packet.phrase_id,
-            duration=packet.duration,
-            samples=int(packet.audio.size),
-            sample_rate=packet.sample_rate,
-            start_timestamp=start_timestamp,
+
+        await self._nats_logger.info(
+            f"Phrase received id={packet.phrase_id} dur={packet.duration:.2f}"
         )
 
-    async def _log_transcription_complete(
-        self,
-        packet: PhrasePacket,
-        result,
-        start_ts: str,
-        end_ts: str,
-    ) -> None:
-        if not self.nats_logger or not result.text:
-            return
-        await self.nats_logger.log_transcription_complete(
-            packet.phrase_id,
-            result.text,
-            len(result.segments),
-            result.audio_duration,
-            result.transcription_time,
-            start_ts,
-            end_ts,
-        )
+        started = time.perf_counter()
+        await self._nats_logger.info(f"Transcription started phrase_id={packet.phrase_id}")
 
-    async def _log_error(
-        self,
-        *,
-        event: str,
-        exc: Exception,
-        phrase_id: str | None = None,
-        **extra,
-    ) -> None:
-        if not self.nats_logger:
-            return
-        details = [f"event={event}", f"error={type(exc).__name__}: {exc}"]
-        if phrase_id:
-            details.append(f"phrase_id={phrase_id}")
-        if extra:
-            extra_info = ", ".join(f"{key}={value}" for key, value in extra.items())
-            details.append(extra_info)
-        stack = traceback.format_exc()
-        details.append(stack)
-        await self.nats_logger.log_error(" | ".join(details))
+        async with self._semaphore:
+            try:
+                text = await asyncio.to_thread(self._transcribe, model, packet)
+            except Exception as exc:
+                logger.exception("Transcription error: %s", exc)
+                await self._log_error(f"Transcription error: {exc}")
+                await self._reply(
+                    msg,
+                    {"phrase_id": packet.phrase_id, "error": "transcription_failed", "details": str(exc)},
+                )
+                return
 
-    def _build_response(self, packet: PhrasePacket, result, start_ts: str, end_timestamp) -> dict:
-
-        return {
-            "type": "transcription",
-            "service": SERVICE_NAME,
-            "timestamp": end_timestamp,
+        transcribe_time = time.perf_counter() - started
+        message = {
             "phrase_id": packet.phrase_id,
-            "text": result.text,
-            "segments": len(result.segments),
-            "audio_duration": result.audio_duration,
-            "transcription_time": result.transcription_time,
-            "start_timestamp": start_ts,
-            "end_timestamp": end_timestamp,
+            "text": text,
+            "duration": packet.duration,
+            "transcribe_time": transcribe_time,
         }
 
-    async def _ensure_model_ready(self) -> None:
-        if not self.nats_logger:
+        await self._nats_logger.info(
+            f"Transcription finished phrase_id={packet.phrase_id} time={transcribe_time:.3f}s"
+        )
+        await self._nats_logger.info(message, name="transcription_result")
+        await self._reply(msg, message)
+
+    async def _ensure_model_loaded(self) -> WhisperModel:
+        if self._whisper_model:
+            return self._whisper_model
+
+        async with self._model_lock:
+            if self._whisper_model:
+                return self._whisper_model
+
+            assert self._nats_logger is not None
+            if not self._model_path:
+                self._model_path = await ensure_model_path(
+                    self._model_id,
+                    self._models_dir,
+                    self._nats_logger,
+                )
+
+            logger.info("Loading Whisper model from %s", self._model_path)
+            await self._nats_logger.info("Model loading", name="model_status")
+            try:
+                self._whisper_model = await asyncio.to_thread(
+                    WhisperModel,
+                    self._model_path,
+                    device=self._device,
+                    compute_type=self._compute_type,
+                )
+            except Exception as exc:
+                await self._nats_logger.error(f"Model load failed: {exc}", name="model_status")
+                raise
+
+            await self._nats_logger.info("Model ready", name="model_status")
+            return self._whisper_model
+
+    async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
+        if not msg.reply or not self._nc:
             return
-        # Determine if the model already exists (faster-whisper layout checks config.json)
-        path = Path(self.config.whisper.model_path)
-        exists = path.exists() and (path / "config.json").exists()
+        await self._nc.publish(msg.reply, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
-        if exists:
-            await self.nats_logger.log_status("ready")
-            # Load synchronously now that it is present
-            await self.transcriber.load()
-            return
+    async def _log_error(self, message: str) -> None:
+        if self._nats_logger:
+            await self._nats_logger.error(message)
 
-        await self.nats_logger.log_status("downloading")
-        loop = asyncio.get_event_loop()
-        # Download (or resolve) the model path in executor
-        resolved_path = await loop.run_in_executor(None, ensure_model_available, self.config.whisper.model_path)
-        # Update transcriber path and load
-        self.transcriber.model_path = resolved_path
-        await self.transcriber.load()
-        await self.nats_logger.log_status("ready")
+    async def _warmup_model(self) -> None:
+        try:
+            await self._ensure_model_loaded()
+        except Exception as exc:
+            logger.error("Model warmup failed: %s", exc, exc_info=True)
+            await self._log_error(f"Model warmup failed: {exc}")
+            self.stop()
 
-    async def _reply(self, msg: Msg, payload: dict) -> None:
-        assert self.nc is not None
-        body = json.dumps(payload).encode("utf-8")
-        if msg.reply:
-            await self.nc.publish(msg.reply, body)
-        else:
-            await self.nc.publish(self.config.nats.whisper_subject + ".result", body)
+    def _transcribe(self, model: WhisperModel, packet: PhrasePacket) -> str:
+        audio = np.copy(packet.audio)
+        min_samples = int(packet.sample_rate * self._min_phrase_ms / 1000)
+        if audio.size < min_samples:
+            audio = np.pad(audio, (0, min_samples - audio.size), mode="constant")
 
-    async def _reply_with_error(self, msg: Msg, error: str, phrase_id: str | None = None) -> None:
-        await self._reply(
-            msg,
-            {
-                "type": "transcription",
-                "error": error,
-                "phrase_id": phrase_id,
-            },
+        segments, _ = model.transcribe(
+            audio,
+            language=self._language,
+            beam_size=self._beam_size,
+            vad_filter=False,
+            without_timestamps=True,
         )
 
-    def _schedule_log(self, coro: Awaitable[None] | None, context: str) -> None:
-        if coro is None:
-            return
-        task = asyncio.create_task(coro, name=f"log:{context}")
-        self._log_tasks.add(task)
-
-        def _on_done(t: asyncio.Task[None], label: str) -> None:
-            self._log_tasks.discard(t)
-            try:
-                exc = t.exception()
-            except Exception:  # pragma: no cover
-                logger.exception("Failed to fetch exception from log task %s", label)
-                return
-            if exc:
-                logger.warning("Log task %s failed: %s", label, exc)
-
-        task.add_done_callback(lambda t, lbl=context: _on_done(t, lbl))
+        text_parts = [segment.text.strip() for segment in segments if segment.text]
+        return " ".join(text_parts).strip()
