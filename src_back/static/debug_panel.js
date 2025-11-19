@@ -109,12 +109,16 @@
             renderedCount = 0;
         }
 
+        const nearBottom = logContainer.scrollHeight - logContainer.scrollTop - logContainer.clientHeight < 10;
+
         for (let i = renderedCount; i < logs.length; i++) {
             logContainer.appendChild(createRow(logs[i]));
         }
 
         renderedCount = logs.length;
-        logContainer.scrollTop = logContainer.scrollHeight;
+        if (nearBottom) {
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
     }
 
     function clearLogs() {
