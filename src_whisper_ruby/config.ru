@@ -10,7 +10,7 @@ require "sinatra"
 def initialize_nats_service
   LOGGER.info "Initializing patched NATS service"
 
-  nats_url = ENV["SWARM_NATS_URL"].to_s
+  nats_url = ENV["NATS_URL"].to_s
   raise "SWARM_NATS_URL is empty!" if nats_url.empty?
 
   $nats_client = NATS.connect(
