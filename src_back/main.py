@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from aiohttp import web
 import os
@@ -42,4 +44,37 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
     logger.info("http://localhost:8000")
     port = int(os.getenv("PORT", "8000"))
+
+    async def ticker(app):
+        counter = 0
+        try:
+            while True:
+                counter += 1
+                await sse_broadcast(
+                    app,
+                    {
+                        "service": STACK_SERVICE_NAME,
+                        "type": "debug",
+                        "name": "heartbeat",
+                        "message": f"heartbeat #{counter}",
+                    },
+                    ensure_meta=False,
+                )
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            pass
+
+    async def on_startup(app):
+        app["ticker_task"] = asyncio.create_task(ticker(app))
+
+    async def on_cleanup(app):
+        task = app.get("ticker_task")
+        if task:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    app.on_startup.append(on_startup)
+    app.on_cleanup.append(on_cleanup)
+
     web.run_app(app, host="0.0.0.0", port=port)
