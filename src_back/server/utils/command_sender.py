@@ -3,6 +3,6 @@ Command Sender - утилита для отправки команд клиен�
 Обертки над специализированными SSE функциями для обратной совместимости.
 """
 
-from src_back.server.utils.sse import sse_log
+# from src_back.server.utils.sse import sse_log
 
 

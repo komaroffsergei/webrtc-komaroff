@@ -1,7 +1,7 @@
 import logging
 from aiohttp import web
 
-from src_back.server.utils.sse import sse_log
+from server.utils.sse import sse_log
 
 logger = logging.getLogger("handle_message")
 

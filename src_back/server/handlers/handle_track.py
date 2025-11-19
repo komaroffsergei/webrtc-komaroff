@@ -43,7 +43,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             source,
             app['services']['nats_client'],  # publish frames
             app['vars']['NATS_FRAMES_SUBJECT'],  # whisper input
-            on_transcription= lambda on_transcription: handle_transcription(app) ,  # whisper output
+            on_transcription= lambda data: handle_transcription(app, data) ,  # whisper output
             sample_rate=16000,
             min_speech_duration_ms=250,
             min_silence_duration_ms=500,

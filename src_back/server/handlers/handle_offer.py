@@ -5,7 +5,7 @@ from aiohttp import web
 from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
 
 from .handle_track import handle_track
-from src_back.server.utils.sse import sse_log
+from ..utils.sse import sse_log
 from ..utils.validate import get_params, validate_sdp
 logger = logging.getLogger("handle_offer")
 

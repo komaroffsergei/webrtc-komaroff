@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+ENV['RUBYOPT'] = [ENV['RUBYOPT'], 'ruby-debug-ide'].compact.join(' ')
+
 require "stack-service-base"
 require "sinatra"
 

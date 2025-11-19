@@ -1,7 +1,7 @@
-from src_back.server.utils.sse import sse_log, logger
+from ..utils.sse import sse_log, logger
 
 
-async def handle_transcription(data):
+async def handle_transcription(app, data):
     try:
         text = data.get("text", "").strip()
         if not text:

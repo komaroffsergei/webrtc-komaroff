@@ -1,17 +1,17 @@
 import logging
 from pathlib import Path
 from aiohttp import web
-from src_back.server.handlers.handle_index import handle_index
+from server.handlers.handle_index import handle_index
 
 
-from src_back.server.handlers.handle_message import message_handler
-from src_back.server.handlers.handle_offer import handle_offer
-from src_back.server.handlers.handle_shutdown import handle_shutdown
-from src_back.server.handlers.handle_startup import handle_startup
+from server.handlers.handle_message import message_handler
+from server.handlers.handle_offer import handle_offer
+from server.handlers.handle_shutdown import handle_shutdown
+from server.handlers.handle_startup import handle_startup
 import os
 
-from src_back.server.utils.config import STATIC_DIR
-from src_back.server.utils.sse import sse_handler, sse_broadcast
+from server.utils.config import STATIC_DIR
+from server.utils.sse import sse_handler, sse_broadcast
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_back")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")

@@ -379,7 +379,7 @@
                 logEvent({
                     service: DEFAULT_SERVICE + '-sse',
                     type: 'info',
-                    message: `SSE error, reconnecting: ${e?.message || e}`
+                    ;o
                 });
                 updateStatus('Переподключение...');
                 setTimeout(() => {
