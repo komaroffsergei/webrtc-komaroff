@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 from aiohttp import web
 from server.handlers.handle_index import handle_index
 
