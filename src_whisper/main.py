@@ -19,6 +19,7 @@ NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 ASR_MODELS_DIR = current_dir / Path(os.getenv("ASR_MODELS_DIR", "models/asr"))
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
+ASR_COMPUTE_TYPE = os.getenv("ASR_COMPUTE_TYPE", "float32")
 
 ASR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -38,6 +39,7 @@ async def _run_service() -> None:
         logs_subject=NATS_LOGS_SUBJECT,
         models_dir=ASR_MODELS_DIR,
         model_id=ASR_MODEL_ID,
+        compute_type=ASR_COMPUTE_TYPE,
     )
     await service.run()
 
