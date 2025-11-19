@@ -100,7 +100,7 @@ module WhisperRuby
 
           payload = JSON.parse(JSON.dump(payload))
           @nc.publish(NATS_LOGS_SUBJECT, payload.to_json)
-          @log.log("Transcription finished phrase_id=#{packet.phrase_id} time=#{transcription_time.round(3)}s")
+          @log.log("Transcription finished phrase_id=#{packet.phrase_id} text=#{text} time=#{transcription_time.round(3)}s")
         rescue => e
           @log.log("Transcription error: #{e}", type: "error")
         end
