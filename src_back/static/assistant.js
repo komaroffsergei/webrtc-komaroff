@@ -506,8 +506,8 @@
                     }
                     break;
                 case 'model_downloading_percent':
-                       setInteractiveControlsDisabled(true);
-                       updateStatus(`Скачивание модели ${data.message}%`);
+                    setInteractiveControlsDisabled(true);
+                    updateStatus(`Скачивание модели ${data.message}%`);
                     break;
             }
         }
