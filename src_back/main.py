@@ -1,14 +1,12 @@
 import logging
 from aiohttp import web
+import os
+
 from server.handlers.handle_index import handle_index
-
-
 from server.handlers.handle_message import message_handler
 from server.handlers.handle_offer import handle_offer
 from server.handlers.handle_shutdown import handle_shutdown
 from server.handlers.handle_startup import handle_startup
-import os
-
 from server.utils.config import STATIC_DIR
 from server.utils.sse import sse_handler, sse_broadcast
 
