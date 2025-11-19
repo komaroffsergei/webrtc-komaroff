@@ -11,10 +11,10 @@ require_relative "whisper_ruby/service"
 StackServiceBase.rack_setup self
 
 STACK_SERVICE_NAME=ENV["STACK_SERVICE_NAME"]
-WHISPER_MODEL_URL = ENV["WHISPER_MODEL_URL"] # https://huggingface.co/ggerganov/whisper.cpp/tree/main
-WHISPER_MODEL_SHA1 = ENV["WHISPER_MODEL_SHA1"] # https://huggingface.co/ggerganov/whisper.cpp
-MODELS_DIR = ENV["MODELS_DIR"]
-MODEL_PATH = File.join(MODELS_DIR, File.basename(WHISPER_MODEL_URL))
+ASR_MODEL_URL = ENV["ASR_MODEL_URL"] # https://huggingface.co/ggerganov/whisper.cpp/tree/main
+ASR_MODEL_SHA1 = ENV["ASR_MODEL_SHA1"] # https://huggingface.co/ggerganov/whisper.cpp
+ASR_MODELS_DIR = ENV["ASR_MODELS_DIR"]
+MODEL_PATH = File.join(ASR_MODELS_DIR, File.basename(ASR_MODEL_URL))
 NATS_LOGS_SUBJECT   = ENV["NATS_LOGS_SUBJECT"]
 NATS_FRAMES_SUBJECT = ENV["NATS_FRAMES_SUBJECT"]
 MIN_PHRASE_MS = 100

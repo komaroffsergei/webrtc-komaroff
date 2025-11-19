@@ -17,10 +17,10 @@ STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_whisper_python")
 NATS_URL = os.getenv("NATS_URL", "nats://127.0.0.1:4222")
 NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
-MODELS_DIR = current_dir / Path(os.getenv("MODELS_DIR", "models"))
-WHISPER_MODEL_ID = os.getenv("WHISPER_MODEL_ID", "Systran/faster-whisper-small")
+ASR_MODELS_DIR = current_dir / Path(os.getenv("ASR_MODELS_DIR", "models/asr"))
+ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 
-MODELS_DIR.mkdir(parents=True, exist_ok=True)
+ASR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def configure_logging() -> None:
@@ -36,8 +36,8 @@ async def _run_service() -> None:
         nats_url=NATS_URL,
         frames_subject=NATS_FRAMES_SUBJECT,
         logs_subject=NATS_LOGS_SUBJECT,
-        models_dir=MODELS_DIR,
-        model_id=WHISPER_MODEL_ID,
+        models_dir=ASR_MODELS_DIR,
+        model_id=ASR_MODEL_ID,
     )
     await service.run()
 

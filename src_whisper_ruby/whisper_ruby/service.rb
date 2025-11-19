@@ -32,9 +32,9 @@ module WhisperRuby
         begin
           WhisperRuby::ModelDownloader.download_model(
             @log,
-            model_url: WHISPER_MODEL_URL,
-            model_sha: WHISPER_MODEL_SHA1,
-            model_dir: MODELS_DIR,
+            model_url: ASR_MODEL_URL,
+            model_sha: ASR_MODEL_SHA1,
+            model_dir: ASR_MODELS_DIR,
             model_path: MODEL_PATH
           )
 
@@ -98,6 +98,7 @@ module WhisperRuby
             }
           }
 
+          payload = JSON.parse(JSON.dump(payload))
           @nc.publish(NATS_LOGS_SUBJECT, payload.to_json)
           @log.log("Transcription finished phrase_id=#{packet.phrase_id} time=#{transcription_time.round(3)}s")
         rescue => e

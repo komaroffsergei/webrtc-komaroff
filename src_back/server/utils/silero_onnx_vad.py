@@ -30,7 +30,7 @@ def ensure_model_path(model_path: str) -> str:
     if not resolved.is_file():
         raise FileNotFoundError(
             f"Silero VAD model not found at '{resolved}'. "
-            "Set SILERO_VAD_MODEL_PATH or mount the model file."
+            "Set VAD_MODEL_PATH or mount the model file."
         )
     return str(resolved)
 
@@ -61,7 +61,7 @@ def ensure_or_download_model(model_path: str, *, download: bool = True, url: Opt
     if not download:
         raise FileNotFoundError(
             f"Silero VAD model not found at '{resolved}'. "
-            "Set SILERO_VAD_MODEL_PATH or enable auto-download."
+            "Set VAD_MODEL_PATH or enable auto-download."
         )
 
     download_model_file(str(resolved), url)

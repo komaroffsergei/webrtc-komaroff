@@ -21,9 +21,7 @@ RUN bundle install --jobs $(nproc) --retry=3 && \
 RUN if [ -f package.json ]; then yarn install --frozen-lockfile || npm install; fi
 
 ENV RACK_ENV=production NODE_ENV=production \
-    WHISPER_MODEL_NAME=medium \
-    WHISPER_VAD_MODEL_NAME=silero-v5.1.2 \
-    MODELS_DIR=/app/models \
+    ASR_MODELS_DIR=/app/models/asr \
     WHISPERCPP_FORCE_CPU=1 \
     WHISPERCPP_DISABLE_GPU=1 \
     WHISPER_NO_GPU=1 \
@@ -32,11 +30,7 @@ ENV RACK_ENV=production NODE_ENV=production \
     GGML_USE_CUDA=0 \
     GGML_CUDA=0
 
-RUN mkdir -p ${MODELS_DIR} && \
-    bundle exec ruby scripts/download_model.rb \
-      --model ${WHISPER_MODEL_NAME} \
-      --vad-model ${WHISPER_VAD_MODEL_NAME} \
-      --models-dir ${MODELS_DIR}
+RUN mkdir -p ${ASR_MODELS_DIR}
 
 RUN rm -rf node_modules
 
@@ -54,9 +48,7 @@ ENV SERVER_ENV=production \
     RACK_ENV=production \
     NODE_ENV=production \
     DOCKER_CONTAINER=true \
-    WHISPER_MODEL_NAME=medium \
-    WHISPER_VAD_MODEL_NAME=silero-v5.1.2 \
-    MODELS_DIR=/app/models \
+    ASR_MODELS_DIR=/app/models/asr \
     PORT=7000 \
     WHISPERCPP_FORCE_CPU=1 \
     WHISPERCPP_DISABLE_GPU=1 \

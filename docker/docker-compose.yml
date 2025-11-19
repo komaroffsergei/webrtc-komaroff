@@ -8,9 +8,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - silero_vad_cache:/opt/silero_vad
-#    environment:
-#      - NATS_URL=${NATS_URL}
+      - vad_models:/app/models/vad
     depends_on:
       - audio_nats
 
@@ -19,18 +17,20 @@ services:
     command: ["-js"]
 
 
-#  webrtc-server-whisper:
-#    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper/${CI_COMMIT_BRANCH}
-#    build:
-#      context: ../src_whisper
-#      #      additional_contexts:
-#      #        docker: ../docker
-#      dockerfile: ../docker/python/Dockerfile
-#      target: whisper
-#    depends_on:
-#      - audio_nats
-#    ports:
-#      - "9000:9000"
+  webrtc-server-whisper-python:
+    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-python/${CI_COMMIT_BRANCH}
+    build:
+      context: ../src_whisper
+      #      additional_contexts:
+      #        docker: ../docker
+      dockerfile: ../docker/python/Dockerfile
+      target: whisper
+    volumes:
+      - asr_models_python:/app/models/asr
+    depends_on:
+      - audio_nats
+    ports:
+      - "9000:9000"
 
   webrtc-server-whisper-ruby:
     image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-ruby/${CI_COMMIT_BRANCH}
@@ -38,22 +38,14 @@ services:
       context: ../src_whisper_ruby
       dockerfile: ../docker/ruby/Dockerfile
       target: deploy
-    environment:
-      SERVICE_NAME: src_whisper_ruby
-      NATS_URL: ${NATS_URL:-nats://audio_nats:4222}
-      NATS_WHISPER_SUBJECT: ${NATS_WHISPER_SUBJECT:-whisper.transcription}
-      NATS_LOGS_SUBJECT: ${NATS_LOGS_SUBJECT:-whisper.logs}
-      WHISPER_MODEL_NAME: ${WHISPER_MODEL_NAME:-medium}
-      WHISPER_VAD_MODEL_NAME: ${WHISPER_VAD_MODEL_NAME:-silero-v5.1.2}
-      MODELS_DIR: /app/models
-      PORT: ${WHISPER_RUBY_PORT:-7000}
     volumes:
-      - whisper_ruby_models:/app/models
+      - asr_models_ruby:/app/models/asr
     depends_on:
       - audio_nats
     ports:
       - "${WHISPER_RUBY_PORT:-7000}:7000"
 
 volumes:
-  silero_vad_cache: {}
-  whisper_ruby_models: {}
+  vad_models: {}
+  asr_models_python: {}
+  asr_models_ruby: {}

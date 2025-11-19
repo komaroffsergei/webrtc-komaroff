@@ -119,25 +119,25 @@ class PhraseSegmenterNode(ConsumerNode):
         loop = asyncio.get_event_loop()
 
         def _resolve_model_path() -> str:
-            configured = os.getenv("SILERO_VAD_MODEL_PATH")
+            configured = os.getenv("VAD_MODEL_PATH")
             if configured:
                 return configured
 
-            dir_candidate = os.getenv("SILERO_VAD_DIR")
+            dir_candidate = os.getenv("VAD_MODELS_DIR")
             if dir_candidate:
                 return os.path.join(dir_candidate, "silero_vad.onnx")
 
-            project_root = Path(__file__).resolve().parents[3]
-            return str(project_root / "models" / "silero_vad.onnx")
+            project_root = Path(__file__).resolve().parents[2]
+            return str(project_root / "models" / "vad" / "silero_vad.onnx")
 
         def _load():
             model_path = _resolve_model_path()
-            auto_download = os.getenv("SILERO_VAD_AUTO_DOWNLOAD", "1").lower() not in {
+            auto_download = os.getenv("VAD_AUTO_DOWNLOAD", "1").lower() not in {
                 "0",
                 "false",
                 "no",
             }
-            model_url = os.getenv("SILERO_VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
+            model_url = os.getenv("VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
             ensure_or_download_model(model_path, download=auto_download, url=model_url)
             return SileroOnnxVAD(model_path)
 

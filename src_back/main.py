@@ -13,6 +13,7 @@ import os
 from src_back.server.utils.config import STATIC_DIR
 from src_back.server.utils.sse import sse_handler, sse_broadcast
 
+STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_back")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
@@ -36,7 +37,8 @@ if __name__ == "__main__":
     app['vars'] = {
         "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
         "NATS_LOGS_SUBJECT": NATS_LOGS_SUBJECT,
-        "NATS_URL": NATS_URL
+        "NATS_URL": NATS_URL,
+        "STACK_SERVICE_NAME": STACK_SERVICE_NAME,
     }
 
     setup_routes(app)
