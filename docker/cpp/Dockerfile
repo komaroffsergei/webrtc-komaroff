@@ -44,7 +44,8 @@ COPY --from=build /src /app
 RUN ln -s /opt/whisper/bin/whisper-server /usr/local/bin/whisper-cpp \
     && mkdir -p /app/models/asr
 
-ENV STACK_SERVICE_NAME=src_whisper_c \
+ENV LD_LIBRARY_PATH=/opt/whisper/lib:$LD_LIBRARY_PATH \
+    STACK_SERVICE_NAME=src_whisper_c \
     NATS_URL=nats://audio_nats:4222 \
     NATS_FRAMES_SUBJECT=nats.frames \
     NATS_LOGS_SUBJECT=nats.logs \
