@@ -23,3 +23,6 @@ coverage
 /models/
 /src_whisper_ruby/.bundle/
 !src_whisper_ruby/.env.local
+/src_whisper_c/models/
+/src_whisper_c/build/
+/src_whisper_c/third_party/

@@ -45,7 +45,22 @@ services:
     ports:
       - "${WHISPER_RUBY_PORT:-7000}:7000"
 
+  webrtc-server-whisper-cpp:
+    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-cpp/${CI_COMMIT_BRANCH}
+    build:
+      context: ../src_whisper_c
+      dockerfile: ../docker/cpp/Dockerfile
+    volumes:
+      - asr_models_cpp:/app/models/asr
+    depends_on:
+      - audio_nats
+    environment:
+      NATS_URL: nats://audio_nats:4222
+      NATS_FRAMES_SUBJECT: nats.frames
+      NATS_LOGS_SUBJECT: nats.logs
+
 volumes:
   vad_models: {}
   asr_models_python: {}
   asr_models_ruby: {}
+  asr_models_cpp: {}

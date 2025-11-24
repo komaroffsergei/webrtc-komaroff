@@ -2,9 +2,10 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
-    ffmpeg libsm6 libxext6 libgl1 libglib2.0-0 libavformat-dev libavcodec-dev  \
-    libavdevice-dev libavfilter-dev  libswresample-dev libswscale-dev pkg-config curl \
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libavformat-dev libavcodec-dev \
+    libavdevice-dev libavfilter-dev libswresample-dev libswscale-dev \
+    pkg-config libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

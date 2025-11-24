@@ -35,7 +35,7 @@ class WhisperService:
         compute_type: str = "default",
         min_phrase_ms: int = 100,
         max_concurrency: int = 1,
-        beam_size: int = 5,
+        beam_size: int = 1,
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url

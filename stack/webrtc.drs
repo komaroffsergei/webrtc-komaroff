@@ -32,6 +32,16 @@ Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-serve
   volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
 end
 
+Service :whisper_cpp, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-cpp/main' do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs',
+      STACK_SERVICE_NAME: 'src_whisper_c',
+      ASR_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+      ASR_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
+  volume name: 'ASR_MODELS_DIR_CPP', target: '/app/models/asr'
+end
+
 Service :audio_nats, image: 'nats:2.11.6-scratch'
 
 Service :nats_box, image: 'natsio/nats-box' do
