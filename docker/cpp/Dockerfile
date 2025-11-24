@@ -15,10 +15,15 @@ WORKDIR /src
 
 COPY . .
 
-RUN rm -rf build \
-    && cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
-    && cmake --build build --config Release \
-    && cmake --install build --prefix /opt/whisper
+ARG PROJECT_SUBDIR=src_whisper_c
+RUN set -eux; \
+    BUILD_ROOT=/src; \
+    if [ -d "/src/${PROJECT_SUBDIR}" ]; then BUILD_ROOT="/src/${PROJECT_SUBDIR}"; fi; \
+    cd "${BUILD_ROOT}"; \
+    rm -rf build; \
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release; \
+    cmake --build build --config Release; \
+    cmake --install build --prefix /opt/whisper
 
 FROM ubuntu:24.04 AS runtime
 
