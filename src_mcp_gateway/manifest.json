@@ -1,0 +1,44 @@
+{
+  "name": "mcp-gateway",
+  "description": "Инструменты доступа к авиационным данным: поиск аэродромов, статусы полос, георасчёты.",
+  "tools": [
+    {
+      "name": "search_airports",
+      "description": "Возвращает список аэродромов в пределах указанного радиуса от заданной точки.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "radius_km": { "type": "number" },
+          "lat":       { "type": "number" },
+          "lon":       { "type": "number" }
+        },
+        "required": ["radius_km", "lat", "lon"]
+      }
+    },
+    {
+      "name": "get_runway_status",
+      "description": "Возвращает список полос аэродрома и их статусы.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "airport_id": { "type": "string" }
+        },
+        "required": ["airport_id"]
+      }
+    },
+    {
+      "name": "compute_distance",
+      "description": "Вычисляет расстояние между двумя точками в километрах.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "lat1": { "type": "number" },
+          "lon1": { "type": "number" },
+          "lat2": { "type": "number" },
+          "lon2": { "type": "number" }
+        },
+        "required": ["lat1", "lon1", "lat2", "lon2"]
+      }
+    }
+  ]
+}

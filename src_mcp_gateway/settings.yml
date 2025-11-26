@@ -1,0 +1,13 @@
+services:
+  airports_api: "${AIRPORTS_API_URL}"
+  runways_api: "${RUNWAYS_API_URL}"
+
+network:
+  timeout_seconds: 5
+
+mcp:
+  host: ${MCP_HOST}
+  port: ${MCP_PORT}
+
+logging:
+  level: "${LOG_LEVEL}"
