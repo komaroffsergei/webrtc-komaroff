@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 from fastapi import FastAPI, HTTPException
@@ -5,6 +6,8 @@ from pydantic import BaseModel
 from typing import Any, Dict
 from dotenv import load_dotenv
 import uvicorn
+
+from src_mcp_gateway.tools import get_airport_by_name, error_report, get_current_position
 
 # Поднимаем переменные окружения
 load_dotenv()
@@ -29,6 +32,9 @@ TOOLS = {
     "search_airports": search_airports_run,
     "get_runway_status": get_runway_status_run,
     "compute_distance": compute_distance_run,
+    "get_airport_by_name": get_airport_by_name,
+    "error_report": error_report,
+    "get_current_position": get_current_position
 }
 
 # FastAPI
@@ -59,10 +65,14 @@ def invoke_tool(request: InvokeRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+config = uvicorn.Config(
+    "main:app",
+    host=MCP_HOST,
+    port=MCP_PORT,
+    reload=False,
+)
+
+server = uvicorn.Server(config)
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=MCP_HOST,
-        port=MCP_PORT,
-        reload=False
-    )
+    asyncio.run(server.serve())

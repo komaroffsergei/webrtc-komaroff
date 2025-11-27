@@ -8,11 +8,21 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "radius_km": { "type": "number" },
-          "lat":       { "type": "number" },
-          "lon":       { "type": "number" }
+          "radius_km": {
+            "type": "number"
+          },
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          }
         },
-        "required": ["radius_km", "lat", "lon"]
+        "required": [
+          "radius_km",
+          "lat",
+          "lon"
+        ]
       }
     },
     {
@@ -21,9 +31,13 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "airport_id": { "type": "string" }
+          "airport_id": {
+            "type": "string"
+          }
         },
-        "required": ["airport_id"]
+        "required": [
+          "airport_id"
+        ]
       }
     },
     {
@@ -32,12 +46,65 @@
       "parameters": {
         "type": "object",
         "properties": {
-          "lat1": { "type": "number" },
-          "lon1": { "type": "number" },
-          "lat2": { "type": "number" },
-          "lon2": { "type": "number" }
+          "lat1": {
+            "type": "number"
+          },
+          "lon1": {
+            "type": "number"
+          },
+          "lat2": {
+            "type": "number"
+          },
+          "lon2": {
+            "type": "number"
+          }
         },
-        "required": ["lat1", "lon1", "lat2", "lon2"]
+        "required": [
+          "lat1",
+          "lon1",
+          "lat2",
+          "lon2"
+        ]
+      }
+    },
+    {
+      "name": "get_airport_by_name",
+      "description": "Получить координаты аэропорта по названию или его части.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Название или часть названия аэропорта"
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
+      "name": "error_report",
+      "description": "Сообщить о нарушении правил или невозможности корректно сформировать ответ.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      }
+    },
+    {
+      "name": "get_current_position",
+      "description": "Возвращает текущие координаты исходной точки (например, положение пилота).",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
       }
     }
   ]

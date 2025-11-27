@@ -1,0 +1,50 @@
+Options name: 'web-rtc-komaroff'
+
+NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
+PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
+
+
+Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
+        ingress: { host: 'webrtc-komaroff.*' } do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs',
+      VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
+  volume name: 'VAD_MODELS_DIR', target: '/app/models/vad'
+end
+
+Service :whisper_python, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-python/main', ports: 9000,
+        ingress: { host: 'webrtc-komaroff-whisper.*' } do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs',
+      ASR_MODEL_ID: 'Systran/faster-whisper-small'
+  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+end
+
+Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-ruby/main', ports: 7000,
+        ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs',
+      ASR_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+      ASR_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
+  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+end
+
+Service :whisper_cpp, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-cpp/main' do
+  env NATS_URL: NATS_URL,
+      NATS_FRAMES_SUBJECT: 'nats.frames',
+      NATS_LOGS_SUBJECT: 'nats.logs',
+      STACK_SERVICE_NAME: 'src_whisper_c',
+      ASR_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
+      ASR_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
+  volume name: 'ASR_MODELS_DIR_CPP', target: '/app/models/asr'
+end
+
+Service :audio_nats, image: 'nats:2.11.6-scratch'
+
+Service :nats_box, image: 'natsio/nats-box' do
+  env NATS_URL: NATS_URL
+  entrypoint "sh -c \"sleep infinity\""
+end

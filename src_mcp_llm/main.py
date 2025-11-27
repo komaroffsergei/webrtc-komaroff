@@ -3,18 +3,17 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from llama_cpp import Llama
 from dotenv import load_dotenv
-import uvicorn
 
-# Грузим окружение
 load_dotenv()
 
 MODEL_PATH = os.getenv("MODEL_PATH", "model/Phi-3-mini-4k-instruct-q4.gguf")
 CTX_SIZE = int(os.getenv("CTX_SIZE", "4096"))
 THREADS = int(os.getenv("THREADS", "4"))
-HOST = os.getenv("LLM_HOST", "127.0.0.1")
-PORT = int(os.getenv("LLM_PORT", "6007"))
 
-# Загружаем модель (при старте файла)
+with open("system_prompt.txt", "r") as f:
+    SYSTEM_PROMPT = f.read().strip()
+
+# Загружаем модель
 llm = Llama(
     model_path=MODEL_PATH,
     n_ctx=CTX_SIZE,
@@ -24,6 +23,7 @@ llm = Llama(
     verbose=False
 )
 
+
 app = FastAPI()
 
 class Prompt(BaseModel):
@@ -32,20 +32,24 @@ class Prompt(BaseModel):
 
 @app.post("/generate")
 def generate(req: Prompt):
+    full_prompt = f"[SYSTEM]\n{SYSTEM_PROMPT}\n[/SYSTEM]\n\n{req.prompt}"
+
     output = llm(
-        req.prompt,
+        full_prompt,
         max_tokens=req.max_tokens,
         temperature=0.3,
         stop=["</s>", "###"]
     )
+
     text = output["choices"][0]["text"]
     return {"text": text.strip()}
 
-# Запуск HTTP-сервера при прямом вызове файла
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=HOST,
-        port=PORT,
-        reload=False
-    )
+
+# -------------------------
+# ПРОГРЕВ МОДЕЛИ
+# -------------------------
+try:
+    llm("Warmup", max_tokens=1)
+except Exception:
+    pass
+# -------------------------

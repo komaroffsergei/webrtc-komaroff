@@ -1,3 +1,5 @@
+import asyncio
+import math
 import random
 import json
 import os
@@ -5,7 +7,6 @@ import os
 import uvicorn
 from fastapi import FastAPI
 from dotenv import load_dotenv
-from typing import List
 
 load_dotenv()
 
@@ -23,16 +24,61 @@ with open(os.path.join(DATA_DIR, "runway_status.json"), "r") as f:
 
 app = FastAPI()
 
+@app.get("/api/airports/search_by_name")
+def find_by_name(query: str):
+    # фильтруем моковые аэропорты: если query в имени
+    matches = [a for a in AIRPORTS if query.lower() in a["name"].lower()]
+    return matches
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371  # радиус Земли
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat/2) ** 2 +
+         math.cos(math.radians(lat1)) *
+         math.cos(math.radians(lat2)) *
+         math.sin(dlon/2) ** 2)
+    return 2 * R * math.asin(math.sqrt(a))
+
 
 @app.get("/api/airports/search")
 def search_airports(radius_km: float, lat: float, lon: float):
     """
-    Возвращает случайный поднабор аэропортов.
-    Логика фильтрации НЕ РЕАЛЬНАЯ. Рыбная.
+    Возвращает аэропорты в пределах радиуса.
+    Если нет — делает fallback: возвращает ближайший + расстояние.
     """
 
-    sample = random.sample(AIRPORTS, k=min(len(AIRPORTS), random.randint(1, len(AIRPORTS))))
-    return sample
+    in_radius = []
+
+    for a in AIRPORTS:
+        dist = haversine(lat, lon, a["lat"], a["lon"])
+        if dist <= radius_km:
+            item = dict(a)
+            item["distance_km"] = round(dist, 2)
+            in_radius.append(item)
+
+    # Если что-то найдено — отдаём список
+    if in_radius:
+        return {
+            "fallback": False,
+            "results": in_radius
+        }
+
+    # FALLBACK — ищем ближайший аэропорт
+    best = None
+    best_dist = 999999
+
+    for a in AIRPORTS:
+        dist = haversine(lat, lon, a["lat"], a["lon"])
+        if dist < best_dist:
+            best_dist = dist
+            best = a
+
+    return {
+        "fallback": True,
+        "distance_km": round(best_dist, 2),
+        "airport": best
+    }
 
 
 @app.get("/api/airports/{airport_id}/runways")
@@ -56,10 +102,14 @@ def get_current_location():
     return {"lat": lat, "lon": lon}
 
 
+config = uvicorn.Config(
+    "main:app",
+    host=API_HOST,
+    port=API_PORT,
+    reload=False,
+)
+
+server = uvicorn.Server(config)
+
 if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host=API_HOST,
-        port=API_PORT,
-        reload=False
-    )
+    asyncio.run(server.serve())
