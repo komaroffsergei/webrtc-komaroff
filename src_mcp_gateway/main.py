@@ -27,14 +27,17 @@ with open(MANIFEST_PATH, "r") as f:
 from tools.search_airports import run as search_airports_run
 from tools.get_runway_status import run as get_runway_status_run
 from tools.compute_distance import run as compute_distance_run
+from tools.get_airport_by_name import run as get_airport_by_name_run
+from tools.get_current_position import run as get_current_position_run
+from tools.error_report import run as error_report_run
 
 TOOLS = {
     "search_airports": search_airports_run,
     "get_runway_status": get_runway_status_run,
     "compute_distance": compute_distance_run,
-    "get_airport_by_name": get_airport_by_name,
-    "error_report": error_report,
-    "get_current_position": get_current_position
+    "get_airport_by_name": get_airport_by_name_run,
+    "get_current_position": get_current_position_run,
+    "error_report": error_report_run,
 }
 
 # FastAPI

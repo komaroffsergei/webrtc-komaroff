@@ -3,7 +3,7 @@ import requests
 from config_loader import load_settings
 
 SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["runways_api"]
+API_URL = SETTINGS["services"]["airports_api"]
 TIMEOUT = SETTINGS["network"]["timeout_seconds"]
 
 def run(params):
