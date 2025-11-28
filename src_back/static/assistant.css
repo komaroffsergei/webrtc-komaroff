@@ -461,6 +461,11 @@ body {
     opacity: 0.9;
 }
 
+.log-level-success {
+    color: #01c22f;
+    opacity: 0.9;
+}
+
 .log-level-warning {
     color: #ff9f0a;
     font-weight: 500;

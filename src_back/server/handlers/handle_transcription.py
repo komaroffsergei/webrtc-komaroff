@@ -182,7 +182,7 @@ async def handle_transcription(app, data):
         # ←←←←←←←←←←←←←←←←←←←←←←←←←←←
         final_answer = await agent_logic(app, text)
 
-        await sse_log(app, f"Agent → Пилот: {final_answer}", level="success")
+        await sse_log(app, f"MCP answer: {final_answer}", level="success")
 
     except Exception as e:
         logger.error(f"agent crash: {e}")

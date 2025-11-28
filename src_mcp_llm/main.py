@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-from llama_cpp import Llama
+from llama_cpp import Llama, LlamaGrammar
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -74,6 +74,22 @@ def generate(req: Prompt):
     # ←←← КЛЮЧЕВОЙ МОМЕНТ: используем чат-теги, даже в простом режиме
     full_prompt = f"<|system|>\n{SYSTEM_PROMPT}<|end|>\n<|user|>\n{req.prompt}<|end|>\n<|assistant|>\n"
 
+    # ГРАММАТИКА, КОТОРАЯ ЗАСТАВЛЯЕТ ВСЕГДА ЗАКРЫВАТЬ СКОБКИ
+    JSON_GRAMMAR = LlamaGrammar.from_string(
+        r"""
+        root   ::= object
+        object ::= "{" ws "}" | "{" ws members ws "}"
+        members ::= pair (ws "," ws members)?
+        pair   ::= string ws ":" ws value
+        value  ::= object | array | string | number | "true" | "false" | "null"
+        array  ::= "[" ws "]" | "[" ws elements ws "]"
+        elements ::= value (ws "," ws elements)?
+        string ::= "\"" ( [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4}) )* "\""
+        number ::= "-"? ( "0" | [1-9][0-9]* ) ( "." [0-9]+ )? ( [eE] [+-]? [0-9]+ )?
+        ws     ::= [ \s*
+        """
+    )
+
     output = llm(
         full_prompt,
         max_tokens=req.max_tokens,
@@ -82,6 +98,7 @@ def generate(req: Prompt):
         top_k=1,
         repeat_penalty=1.1,
         stop=["<|end|>", "</s>", "<|user|>", "User:"],
+        grammar=JSON_GRAMMAR,
         echo=False,
     )
 
