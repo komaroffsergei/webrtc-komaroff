@@ -3,6 +3,8 @@ from aiohttp import web
 
 from server.utils.sse import sse_log
 
+from src_back.server.handlers.handle_transcription import handle_transcription
+
 logger = logging.getLogger("handle_message")
 
 
@@ -34,7 +36,8 @@ async def message_handler(request: web.Request):
     
     # Отправляем ответ клиенту через SSE
     await sse_log(request.app, f"Эхо: {text}", 'info')
-    
+    await handle_transcription(request.app, {"text": text})
+
     return web.json_response({
         "status": "ok",
         "uid": message_uid

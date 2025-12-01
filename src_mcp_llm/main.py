@@ -1,141 +1,146 @@
 import json
 import os
-from typing import Optional, Dict, Any
-
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from llama_cpp import Llama, LlamaGrammar
+from textwrap import dedent
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_PATH = os.getenv("MODEL_PATH", "model/Phi-3-mini-4k-instruct-q4.gguf")
-CTX_SIZE = int(os.getenv("CTX_SIZE", "4096"))
-THREADS = int(os.getenv("THREADS", "4"))
+MODEL_PATH = os.getenv("MODEL_PATH", "model/model.gguf")
 N_CTX = int(os.getenv("N_CTX", "8192"))
 N_THREADS = int(os.getenv("N_THREADS", "8"))
+N_GPU_LAYERS = int(os.getenv("N_GPU_LAYERS", "35"))
+MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "768"))
+DEFAULT_MAX_TOKENS = int(os.getenv("DEFAULT_MAX_TOKENS", "512"))
 
-with open("system_prompt.txt", "r") as f:
+with open("system_prompt.txt", "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read().strip()
 
-# Загружаем модель
+
+def clamp_max_tokens(requested: int | None) -> int:
+    if requested is None:
+        return min(DEFAULT_MAX_TOKENS, MAX_OUTPUT_TOKENS)
+    return max(64, min(requested, MAX_OUTPUT_TOKENS))
+
+
+def extract_json_from_text(text: str):
+    """
+    Возвращает первый валидный JSON-объект из текста, если он присутствует.
+    """
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    in_string = False
+    escaped = False
+    depth = 0
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    candidate = text[start : idx + 1]
+                    try:
+                        return json.loads(candidate)
+                    except json.JSONDecodeError:
+                        return None
+    return None
+
+
+# --------------------- LOAD MODEL ---------------------
 llm = Llama(
     model_path=MODEL_PATH,
     n_ctx=N_CTX,
     n_threads=N_THREADS,
+    n_gpu_layers=N_GPU_LAYERS,
     n_batch=512,
-    n_gpu_layers=35 if os.getenv("GPU", "0") != "0" else 0,
     use_mlock=True,
     use_mmap=True,
     verbose=False,
 )
 
+# # --------------------- GRAMMAR ---------------------
+# GRAMMAR_TEXT = dedent(
+#     r"""
+# root ::= response
+#
+# response ::= "{" ws "\"thought\"" ws ":" ws string ws "," ws "\"history\"" ws ":" ws string ws "," ws "\"tool_calls\"" ws ":" ws call_array ws "," ws "\"final_result\"" ws ":" ws string ws "}"
+#
+# call_array ::= "[" ws (tool_call (ws "," ws tool_call)*)? ws "]"
+#
+# tool_call ::= "{" ws "\"thought\"" ws ":" ws string ws "," ws "\"call\"" ws ":" ws call_body ws "," ws "\"result\"" ws ":" ws value ws "}"
+#
+# call_body ::= "{" ws "\"tool\"" ws ":" ws string ws "," ws "\"parameters\"" ws ":" ws object ws "}"
+#
+# object ::= "{" ws (pair (ws "," ws pair)*)? ws "}"
+#
+# pair ::= string ws ":" ws value
+#
+# array ::= "[" ws (value (ws "," ws value)*)? ws "]"
+#
+# value ::= string | number | object | array | "null" | "true" | "false"
+#
+# string ::= "\"" chars "\""
+#
+# chars ::= ([^"\\] | "\\\\" | "\\\"" )*
+#
+# number ::= "-"? [0-9]+ ("." [0-9]+)?
+#
+# ws ::= [ \t\n\r]*
+# """
+# ).strip("\n") + "\n"
+#
+# JSON_GRAMMAR = LlamaGrammar.from_string(GRAMMAR_TEXT)
+
+# --------------------- API ---------------------
 
 app = FastAPI()
 
+
 class Prompt(BaseModel):
-    prompt: str
-    max_tokens: int | None = 256
+    prompt: str = Field(..., description="Сформированный пользователем запрос/контекст")
+    max_tokens: int | None = Field(default=None, ge=64, le=MAX_OUTPUT_TOKENS)
 
-
-def extract_json_from_text(text: str) -> Optional[Dict[str, Any]]:
-    text = text.strip()
-    start = text.find("{")
-    if start == -1:
-        return None
-
-    # Обрезаем до последнего закрывающего }
-    json_candidate = text[start:]
-    depth = 0
-    end = -1
-    for i, char in enumerate(json_candidate):
-        if char == '{':
-            depth += 1
-        elif char == '}':
-            depth -= 1
-            if depth == 0:
-                end = i
-                break
-
-    if end == -1:
-        return None
-
-    try:
-        data = json.loads(json_candidate[:end+1])
-        # Проверяем, что это наш нужный формат
-        if isinstance(data, dict) and "thought" in data and "tool_calls" in data and "answer" in data:
-            return data
-    except json.JSONDecodeError:
-        pass
-    return None
 
 @app.post("/generate")
 def generate(req: Prompt):
-    # ←←← КЛЮЧЕВОЙ МОМЕНТ: используем чат-теги, даже в простом режиме
-    full_prompt = f"<|system|>\n{SYSTEM_PROMPT}<|end|>\n<|user|>\n{req.prompt}<|end|>\n<|assistant|>\n"
-
-    # ГРАММАТИКА, КОТОРАЯ ЗАСТАВЛЯЕТ ВСЕГДА ЗАКРЫВАТЬ СКОБКИ
-    JSON_GRAMMAR = LlamaGrammar.from_string(
-        r"""
-        root   ::= object
-        object ::= "{" ws "}" | "{" ws members ws "}"
-        members ::= pair (ws "," ws members)?
-        pair   ::= string ws ":" ws value
-        value  ::= object | array | string | number | "true" | "false" | "null"
-        array  ::= "[" ws "]" | "[" ws elements ws "]"
-        elements ::= value (ws "," ws elements)?
-        string ::= "\"" ( [^"\\] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4}) )* "\""
-        number ::= "-"? ( "0" | [1-9][0-9]* ) ( "." [0-9]+ )? ( [eE] [+-]? [0-9]+ )?
-        ws     ::= [ \s*
-        """
+    prompt = (
+        f"<|system|>\n{SYSTEM_PROMPT}<|end|>\n"
+        f"<|user|>\n{req.prompt}<|end|>\n"
+        f"<|assistant|>\n"
     )
 
-    output = llm(
-        full_prompt,
-        max_tokens=req.max_tokens,
+    max_tokens = clamp_max_tokens(req.max_tokens)
+    out = llm(
+        prompt,
+        max_tokens=max_tokens,
         temperature=0.0,
         top_p=0.1,
         top_k=1,
-        repeat_penalty=1.1,
-        stop=["<|end|>", "</s>", "<|user|>", "User:"],
-        grammar=JSON_GRAMMAR,
-        echo=False,
+        # grammar=JSON_GRAMMAR,
+        stop=["<|end|>", "<|user|>"],
     )
 
-    raw = output["choices"][0]["text"].strip()
-
-    parsed = extract_json_from_text(raw)
-
-    # ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-    # Если модель выдала мусор — принудительно возвращаем ошибку в нужном формате
-    # ←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←←
-    if not parsed:
-        parsed = {
-            "thought": "Модель не смогла сформировать ответ в требуемом JSON-формате.",
-            "tool_calls": [
-                {
-                    "thought": "Принудительно вызываем error_report из-за нарушения формата.",
-                    "call": {"tool": "error_report", "parameters": {"reason": "invalid response format"}},
-                    "result": None
-                }
-            ],
-            "answer": "Модель не смогла сформировать ответ в требуемом JSON-формате."
-        }
-
-    return {
-        "raw": raw,
+    text = out["choices"][0]["text"].strip()
+    parsed = extract_json_from_text(text)
+    response = {
+        "raw": text,
         "parsed": parsed,
-        "is_final": bool(parsed.get("answer", "").strip()),
-        "pending_tools": [
-            item["call"] for item in parsed.get("tool_calls", []) if item.get("result") is None
-        ]
     }
-
-# -------------------------
-# ПРОГРЕВ МОДЕЛИ
-# -------------------------
-# try:
-#     llm("Warmup", max_tokens=1)
-# except Exception:
-#     pass
-# -------------------------
+    if parsed is None:
+        response["error"] = "LLM returned an invalid JSON fragment"
+    return response
