@@ -4,15 +4,18 @@ import os
 from pathlib import Path
 from aiohttp import web
 
-from ..utils.sse import sse_log
+from shared.sse import sse_log
 from ..utils.nats_client import NatsClient
 from ..utils.silero_downloader import ensure_silero_model
 from ..utils.silero_onnx_vad import DEFAULT_SILERO_VAD_URL
+from server.utils.sse import get_sse_context
 
 logger = logging.getLogger("startup")
 
 
 async def handle_startup(app: web.Application):
+    ctx = get_sse_context(app)
+
     # NATS
     nats_client = NatsClient(app['vars']['NATS_URL'])
     await nats_client.connect()
@@ -23,7 +26,7 @@ async def handle_startup(app: web.Application):
         try:
             data = json.loads(msg.data.decode())
             await sse_log(
-                app,
+                ctx,
                 data.get("message", ""),
                 level=data.get("type", "info"),
                 service=data.get("service", "whisper"),
@@ -42,7 +45,7 @@ async def handle_startup(app: web.Application):
 
     if _auto_download_enabled():
         await ensure_silero_model(
-            app,
+            ctx,
             target_path=model_path,
             url=os.getenv("VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL),
             service=app['vars'].get("STACK_SERVICE_NAME", "src_back"),

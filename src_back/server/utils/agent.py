@@ -2,7 +2,8 @@ import json
 from .llm_client import call_llm
 from .mcp_client import call_mcp
 from .formatter import summarize_tool_result
-from ..utils.sse import sse_log
+from shared.sse import sse_log
+from server.utils.sse import get_sse_context
 
 
 class MCPAgent:
@@ -18,6 +19,8 @@ class MCPAgent:
         last_summary = None
         full_context = {}     # хранение реальных результатов инструментов
 
+        ctx = get_sse_context(self.app)
+
         for step in range(1, self.max_steps + 1):
             raw = await call_llm(step_prompt)
             parsed = raw.get("parsed")
@@ -29,7 +32,7 @@ class MCPAgent:
             answer = parsed["answer"]
             tool_calls = parsed["tool_calls"]
 
-            await sse_log(self.app, f"[AGENT THOUGHT] {thought}", level="debug")
+            await sse_log(ctx, f"[AGENT THOUGHT] {thought}", level="debug")
 
             # FINISH
             if answer:
@@ -51,7 +54,7 @@ class MCPAgent:
                 item["result"] = summary
                 last_summary = summary
 
-                await sse_log(self.app,
+                await sse_log(ctx,
                               f"[TOOL] {tool} → {summary}",
                               level="info")
 

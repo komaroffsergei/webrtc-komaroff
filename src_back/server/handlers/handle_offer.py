@@ -5,7 +5,8 @@ from aiohttp import web
 from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
 
 from .handle_track import handle_track
-from ..utils.sse import sse_log
+from shared.sse import sse_log
+from server.utils.sse import get_sse_context
 from ..utils.validate import get_params, validate_sdp
 logger = logging.getLogger("handle_offer")
 
@@ -40,8 +41,9 @@ async def handle_offer_connect(request, params):
     pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
     request.app["pcs"] = pcs
     pcs.add(pc)
+    ctx = get_sse_context(request.app)
     await sse_log(
-        request.app,
+        ctx,
         f"WebRTC: Creating peer connection (total active: {len(pcs)})",
         level="info",
     )
@@ -50,7 +52,7 @@ async def handle_offer_connect(request, params):
     @pc.on("track")
     async def on_track(track):
         await sse_log(
-            request.app,
+            ctx,
             f"WebRTC: Track received, kind={track.kind}",
             level="info",
         )
@@ -64,12 +66,12 @@ async def handle_offer_connect(request, params):
 
     try:
         resp = await establish_connection(pc, offer)
-        await sse_log(request.app, "WebRTC: Connection established successfully", level="info")
+        await sse_log(ctx, "WebRTC: Connection established successfully", level="info")
         return resp, None
     except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
         await sse_log(
-            request.app,
+            ctx,
             f"WebRTC: Connection failed - {str(e)}",
             level="error",
         )

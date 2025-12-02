@@ -19,6 +19,8 @@ from ..utils.silero_onnx_vad import (
     ensure_or_download_model,
     get_speech_timestamps as silero_get_speech_timestamps,
 )
+from shared.sse import sse_log
+from server.utils.sse import get_sse_context
 
 
 logger = logging.getLogger("audio.PhraseSegmenterNode")
@@ -281,8 +283,9 @@ class PhraseSegmenterNode(ConsumerNode):
         except NatsTimeoutError:
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
             if self.app:
+                ctx = get_sse_context(self.app)
                 await sse_log(
-                    self.app,
+                    ctx,
                     f"ASR timeout for phrase {phrase.phrase_id}",
                     level="warn",
                     service="src_back",

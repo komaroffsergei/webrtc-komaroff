@@ -1,7 +1,8 @@
 import logging
 from aiohttp import web
 
-from server.utils.sse import sse_log
+from shared.sse import sse_log
+from server.utils.sse import get_sse_context
 
 from src_back.server.handlers.handle_transcription import handle_transcription
 
@@ -29,13 +30,13 @@ async def message_handler(request: web.Request):
     if not text:
         return web.json_response({"error": "text field is required"}, status=400)
     
-    # Отправляем подтверждение получения через SSE
-    message_uid = await sse_log(request.app, text, 'info')
+    ctx = get_sse_context(request.app)
+    message_uid = await sse_log(ctx, text, 'info')
     
     logger.info(f"Message received: {text[:50]}... (uid={message_uid})")
     
     # Отправляем ответ клиенту через SSE
-    await sse_log(request.app, f"Эхо: {text}", 'info')
+    await sse_log(ctx, f"Эхо: {text}", 'info')
     await handle_transcription(request.app, {"text": text})
 
     return web.json_response({

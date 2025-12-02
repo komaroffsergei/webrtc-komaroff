@@ -485,6 +485,9 @@
 
         if (data.name) {
             switch (data.name) {
+                case 'message':
+                    addMessage(data.message);
+                    break;
                 case 'model_downloading_status':
                     if (data.type === 'info') {
                         if (data.message === 'downloading') {

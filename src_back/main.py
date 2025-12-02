@@ -3,6 +3,12 @@ import contextlib
 import logging
 from aiohttp import web
 import os
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from server.handlers.handle_index import handle_index
 from server.handlers.handle_message import message_handler
@@ -10,7 +16,8 @@ from server.handlers.handle_offer import handle_offer
 from server.handlers.handle_shutdown import handle_shutdown
 from server.handlers.handle_startup import handle_startup
 from server.utils.config import STATIC_DIR
-from server.utils.sse import sse_handler, sse_broadcast
+from server.utils.sse import sse_handler, register_sse_context
+from shared.sse import sse_broadcast, SSEContext
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_back")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
@@ -29,9 +36,10 @@ def setup_routes(app):
 if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
     app["pcs"] = set()
-    app["sse_clients"] = set()
+    sse_context = SSEContext(service_name=STACK_SERVICE_NAME)
+    register_sse_context(app, sse_context)
     app["methods"] = {
-        "sse_broadcast": lambda msg: sse_broadcast(app, msg)
+        "sse_broadcast": lambda msg: sse_broadcast(sse_context, msg)
     }
     app['vars'] = {
         "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
@@ -51,7 +59,7 @@ if __name__ == "__main__":
             while True:
                 counter += 1
                 await sse_broadcast(
-                    app,
+                    sse_context,
                     {
                         "service": STACK_SERVICE_NAME,
                         "type": "debug",
