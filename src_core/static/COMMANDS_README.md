@@ -89,10 +89,10 @@ async def my_handler(request):
 ### Отправка предупреждений
 
 ```python
-from shared.sse import sse_broadcast
+from server.utils.sse import sse_broadcast
 
 # Предупреждение об уровне звука
-await sse_broadcast(app["sse_context"], {
+await sse_broadcast({
     "type": "warning",
     "descr": "mic_too_loud"
 })
@@ -221,6 +221,6 @@ logger = logging.getLogger("commands")
 logger.setLevel(logging.DEBUG)
 
 # Логировать все SSE сообщения
-await sse_broadcast(app["sse_context"], message)
+await sse_broadcast(message)
 logger.debug(f"SSE broadcast: {message}")
 ```

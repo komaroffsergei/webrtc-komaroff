@@ -10,18 +10,20 @@ from urllib.parse import urlparse
 
 import numpy as np
 from av import AudioFrame
-from nats.errors import TimeoutError as NatsTimeoutError
+from nats.errors import (
+    NoRespondersError,
+    TimeoutError as NatsTimeoutError,
+)
 
 from .base import ConsumerNode
-from ..handlers.handle_sse import sse_log
+from ..settings import VAD_MODEL_PATH, VAD_MODEL_URL
 from ..utils.audio_utils import resample_audio
 from ..utils.silero_onnx_vad import (
     SileroOnnxVAD,
-    get_speech_timestamps as silero_get_speech_timestamps, download_model_file,
+    download_model_file,
+    get_speech_timestamps as silero_get_speech_timestamps,
 )
-from ..utils.sse import get_sse_context
-
-from ...main import VAD_MODEL_URL, VAD_MODEL_PATH
+from ..utils.sse import sse_log
 
 logger = logging.getLogger("audio.PhraseSegmenterNode")
 
@@ -125,14 +127,11 @@ class PhraseSegmenterNode(ConsumerNode):
         full_path = f"{VAD_MODEL_PATH}/{filename}"
         def _load():
             try:
-                resolved = Path(full_path).expanduser().resolve()
-                if resolved.is_file():
-                    return str(resolved)
-
-                download_model_file(full_path, VAD_MODEL_URL)
-                return str(resolved)
+                path = Path(full_path).expanduser().resolve()
+                if not path.is_file():
+                    download_model_file(full_path, VAD_MODEL_URL)
+                return SileroOnnxVAD(str(path))
             except Exception as exc:
-                logger.error("VAD model load failed: %s", exc, exc_info=True)
                 logger.error("VAD model load failed: %s", exc, exc_info=True)
                 return None
 
@@ -269,14 +268,21 @@ class PhraseSegmenterNode(ConsumerNode):
 
         except NatsTimeoutError:
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
-            if self.app:
-                ctx = get_sse_context(self.app)
-                await sse_log(
-                    ctx,
-                    f"ASR timeout for phrase {phrase.phrase_id}",
-                    level="warn",
-                    service="src_core",
-                    name="asr_timeout",
-                )
+            await sse_log(
+                f"ASR timeout for phrase {phrase.phrase_id}",
+                level="warn",
+                service="src_core",
+                name="asr_timeout",
+                app=self.app,
+            )
+        except NoRespondersError:
+            logger.error("No whisper responders for phrase %s", phrase.phrase_id)
+            await sse_log(
+                "Whisper service unavailable",
+                level="error",
+                service="src_core",
+                name="asr_no_responders",
+                app=self.app,
+            )
         except Exception as exc:
             logger.error("Failed[src_whisper] to process phrase %s: %s", phrase.phrase_id, exc, exc_info=True)

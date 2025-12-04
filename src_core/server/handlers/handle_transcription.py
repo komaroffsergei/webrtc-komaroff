@@ -1,8 +1,9 @@
 import logging
 
-from shared.sse import sse_log
+from src_core.server.settings import STACK_SERVICE_NAME
 from src_core.server.utils.agent import MCPAgent
-from src_core.server.utils.sse import get_sse_context
+from src_core.server.utils.sse import sse_log, SSEContext, register_sse_context
+
 logger = logging.getLogger("handle_transcription")
 
 
@@ -22,23 +23,21 @@ async def handle_transcription(app, payload: dict):
         logger.warning("Empty transcription payload")
         return
 
-    ctx = get_sse_context(app)
-
     # Логируем вход от пользователя
     await sse_log(
-        ctx,
         {
             "type": "user_message",
             "service": "ai_agent",
             "message": text
         },
-        level="info"
+        level="info",
+        app=app
     )
 
     logger.info("handle_transcription: '%s'", text)
 
     # Вызываем Агент
-    agent = MCPAgent(ctx)
+    agent = MCPAgent(app)
     result = await agent.run(text)
 
     # Агент гарантированно вернёт:
@@ -47,4 +46,4 @@ async def handle_transcription(app, payload: dict):
     #   "message": "...",
     #   "client_commands": [...]
     # }
-    await sse_log(ctx, result, level="info")
+    await sse_log(result, level="info", app=app)

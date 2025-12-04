@@ -7,30 +7,30 @@ from urllib.parse import urlparse
 import aiohttp
 from aiohttp.web_app import Application
 
-from src_core.main import VAD_MODEL_URL, VAD_MODEL_PATH, STACK_SERVICE_NAME
-from src_core.server.handlers.handle_sse import sse_log
+from ..settings import STACK_SERVICE_NAME, VAD_MODEL_PATH, VAD_MODEL_URL
+from .sse import sse_log
 
 CHUNK_SIZE = 1 << 16  # 64 KB
 
 
 async def ensure_silero_model(app: Application, *, url: str,
                               service: str = STACK_SERVICE_NAME) -> str:
-    filename = os.path.basename(urlparse(VAD_MODEL_URL).path)
+    filename = os.path.basename(urlparse(url).path)
     full_path = f"{VAD_MODEL_PATH}/{filename}"
     resolved = Path(full_path).expanduser().resolve()
     if os.path.exists(full_path):
-        await _log_status(app, service, "exists")
-        await _log_percent(app, service, "100")
+        await _log_status("exists")
+        await _log_percent("100")
         return str(full_path)
 
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    await _log_status(app, service, "downloading")
-    await _log_percent(app, service, "0")
+    await _log_status("downloading")
+    await _log_percent("0")
 
     await _download_file(app, service, url, resolved)
 
-    await _log_status(app, service, "exists")
-    await _log_percent(app, service, "100")
+    await _log_status("exists")
+    await _log_percent("100")
     return str(resolved)
 
 
@@ -53,17 +53,17 @@ async def _download_file(ctx: Application, service: str, url: str, target: Path)
                         percent = min(100, int(downloaded * 100 / total))
                         while last_percent < percent:
                             last_percent += 1
-                            await _log_percent(ctx, service, str(last_percent))
+                            await sse_log(str(last_percent), name="model_downloading_status")
 
     if not total:
-        await _log_percent(ctx, service, "100")
+        await sse_log("100", name="model_downloading_percent")
 
     tmp.replace(target)
 
 
-async def _log_status(app: Application, service: str, status: str) -> None:
-    await sse_log(app, status, service=service, name="model_downloading_status")
+async def _log_status(value: str) -> None:
+    await sse_log(value, name="model_downloading_status")
 
 
-async def _log_percent(app: Application, service: str, value: str) -> None:
-    await sse_log(app, value, service=service, name="model_downloading_percent")
+async def _log_percent(value: str) -> None:
+    await sse_log(value, name="model_downloading_percent",)

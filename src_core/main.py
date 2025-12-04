@@ -1,10 +1,10 @@
 import asyncio
 import contextlib
 import logging
-from aiohttp import web
-import os
 import sys
 from pathlib import Path
+
+from aiohttp import web
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -15,19 +15,17 @@ from server.handlers.handle_message import message_handler
 from server.handlers.handle_offer import handle_offer
 from server.handlers.handle_shutdown import handle_shutdown
 from server.handlers.handle_startup import handle_startup
+from server.handlers.handle_sse import sse_handler
+from server.settings import (
+    CORE_HOST,
+    CORE_PORT,
+    NATS_FRAMES_SUBJECT,
+    NATS_LOGS_SUBJECT,
+    NATS_URL,
+    STACK_SERVICE_NAME,
+)
 from server.utils.config import STATIC_DIR
-from src_core.server.handlers.handle_sse import sse_handler, sse_broadcast
-
-STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_core")
-CORE_PORT=os.getenv("CORE_PORT", 8000)
-CORE_HOST=os.getenv("CORE_HOST", "0.0.0.0")
-NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-ASR_MODELS_DIR = os.getenv("ASR_MODELS_DIR", "/app/models/asr")
-ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
-NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
-NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
-VAD_MODEL_PATH = os.getenv("VAD_MODEL_PATH", "models/vad")
-VAD_MODEL_URL = os.getenv("VAD_MODEL_URL", "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx")
+from server.utils.sse import SSEContext, register_sse_context, sse_broadcast
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -44,10 +42,8 @@ def setup_routes(app):
 if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
     app["pcs"] = set()
-    app["sse_clients"] = set()
-    app["methods"] = {
-        "sse_broadcast": lambda msg: sse_broadcast(app, msg)
-    }
+    sse_context = SSEContext(service_name=STACK_SERVICE_NAME)
+    register_sse_context(app, sse_context)
     app['vars'] = {
         "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
         "NATS_LOGS_SUBJECT": NATS_LOGS_SUBJECT,
@@ -65,14 +61,11 @@ if __name__ == "__main__":
             while True:
                 counter += 1
                 await sse_broadcast(
-                    app,
                     {
-                        "service": STACK_SERVICE_NAME,
                         "type": "debug",
                         "name": "heartbeat",
                         "message": f"heartbeat #{counter}",
-                    },
-                    ensure_meta=False,
+                    }
                 )
                 await asyncio.sleep(5)
         except asyncio.CancelledError:

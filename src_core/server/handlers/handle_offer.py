@@ -5,8 +5,7 @@ from aiohttp import web
 from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
 
 from .handle_track import handle_track
-from shared.sse import sse_log
-from server.utils.sse import get_sse_context
+from ..utils.sse import sse_log
 from ..utils.validate import get_params, validate_sdp
 logger = logging.getLogger("handle_offer")
 
@@ -38,12 +37,12 @@ async def handle_offer_connect(request, params):
     pc = RTCPeerConnection(configuration=conf)
     audio_transceiver = pc.addTransceiver("audio", direction="sendrecv")
 
-    pcs = {p for p in request.app["pcs"] if p.connectionState not in ("failed", "closed")}
-    request.app["pcs"] = pcs
+    pcs = request.app["pcs"]
+    alive = {p for p in pcs if p.connectionState not in ("failed", "closed")}
+    pcs.clear()
+    pcs.update(alive)
     pcs.add(pc)
-    ctx = get_sse_context(request.app)
     await sse_log(
-        ctx,
         f"WebRTC: Creating peer connection (total active: {len(pcs)})",
         level="info",
     )
@@ -51,11 +50,7 @@ async def handle_offer_connect(request, params):
     echo_ref = {"node": None}
     @pc.on("track")
     async def on_track(track):
-        await sse_log(
-            ctx,
-            f"WebRTC: Track received, kind={track.kind}",
-            level="info",
-        )
+        await sse_log(f"WebRTC: Track received, kind={track.kind}", level="info")
         await handle_track(
             track, 
             pc, 
@@ -66,15 +61,11 @@ async def handle_offer_connect(request, params):
 
     try:
         resp = await establish_connection(pc, offer)
-        await sse_log(ctx, "WebRTC: Connection established successfully", level="info")
+        await sse_log("WebRTC: Connection established successfully", level="info")
         return resp, None
     except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
-        await sse_log(
-            ctx,
-            f"WebRTC: Connection failed - {str(e)}",
-            level="error",
-        )
+        await sse_log(f"WebRTC: Connection failed - {str(e)}", level="error")
         try:
             await audio_transceiver.sender.replaceTrack(None)
         except Exception:

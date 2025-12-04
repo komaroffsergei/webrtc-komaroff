@@ -3,14 +3,13 @@ import logging
 
 from .handle_transcription import handle_transcription
 from ..processors import (
-    TrackSourceNode,
     PhraseSegmenterNode,
+    TrackSourceNode,
 )
 from ..processors.graph import AudioGraph
+from ..settings import NATS_FRAMES_SUBJECT
 from ..utils.pc_lifecycle import attach_pc_lifecycle
-from ..utils.sse import get_sse_context
-from shared.sse import sse_log
-from ...main import NATS_FRAMES_SUBJECT
+from ..utils.sse import sse_log
 
 logger = logging.getLogger("track")
 
@@ -19,9 +18,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     if track.kind != "audio":
         return
 
-    ctx = get_sse_context(app)
-
-    await sse_log(ctx, "Audio track connected", level="info")
+    await sse_log("Audio track connected", level="info")
 
     #
     # AUDIO GRAPH
@@ -60,4 +57,4 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
     # START GRAPH
     asyncio.create_task(graph.start())
-    await sse_log(ctx, "Audio graph started", level="info")
+    await sse_log("Audio graph started", level="info", app=app)

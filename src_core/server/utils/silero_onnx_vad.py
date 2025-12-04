@@ -15,8 +15,6 @@ from urllib.request import urlopen
 import numpy as np
 import onnxruntime as ort
 
-from src_core.main import VAD_MODEL_PATH
-
 logger = logging.getLogger(__name__)
 
 

@@ -2,14 +2,14 @@ import json
 
 from mcp.types import CallToolResult
 
-from shared.sse import sse_log
-from src_core.server.llm.llm_client import call_llm
-from src_core.server.mcp.mcp_client import call_mcp
+from ..llm.llm_client import call_llm
+from ..mcp.mcp_client import call_mcp
+from .sse import sse_log
 
 
 class MCPAgent:
-    def __init__(self, sse_context, max_steps=10):
-        self.ctx = sse_context
+    def __init__(self, app=None, max_steps=10):
+        self.app = app
         self.max_steps = max_steps
 
     async def run(self, user_text: str):
@@ -19,6 +19,8 @@ class MCPAgent:
         step_prompt = user_text
         last_summary = {}     # хранит последнее summary, если модель его вернула
         full_context = {}     # реальные результаты MCP-инструментов
+
+        await sse_log("MCPAgent.run)", level="info", app=self.app)
 
         for step in range(1, self.max_steps + 1):
             raw = await call_llm(step_prompt)
@@ -31,7 +33,7 @@ class MCPAgent:
             final_result = parsed.get("final_result", "")
             tool_calls = parsed.get("tool_calls") or []
 
-            await sse_log(self.ctx, f"[AGENT THOUGHT] {thought}", level="debug")
+            await sse_log(f"[AGENT THOUGHT] {thought}", level="debug", app=self.app)
 
             # финальное завершение
             if final_result:

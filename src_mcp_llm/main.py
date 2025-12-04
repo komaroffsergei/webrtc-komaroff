@@ -51,6 +51,5 @@ async def generate(payload: dict = Body(...)):
         data = r.json()
         result = data.get("response")
 
-        logger.log(message, level="info", name=name)
         logger.info(result, name="llm.response")
         return {"text": result}
