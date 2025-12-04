@@ -8,8 +8,10 @@ from ..processors import (
 )
 from ..processors.graph import AudioGraph
 from ..utils.pc_lifecycle import attach_pc_lifecycle
+from ..utils.sse import get_sse_context
 from shared.sse import sse_log
-from shared.sse.context import GLOBAL_SSE_CONTEXT as ctx
+from ...main import NATS_FRAMES_SUBJECT
+
 logger = logging.getLogger("track")
 
 
@@ -17,6 +19,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     if track.kind != "audio":
         return
 
+    ctx = get_sse_context(app)
 
     await sse_log(ctx, "Audio track connected", level="info")
 
@@ -43,7 +46,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
         PhraseSegmenterNode(
             source,
             app['services']['nats_client'],  # publish frames
-            app['vars']['NATS_FRAMES_SUBJECT'],  # whisper input
+            NATS_FRAMES_SUBJECT,  # whisper input
             on_transcription= lambda data: handle_transcription(app, data) ,  # whisper output
             sample_rate=16000,
             min_speech_duration_ms=250,

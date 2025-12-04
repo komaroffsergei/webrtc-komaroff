@@ -9,18 +9,15 @@ import shutil
 import warnings
 from pathlib import Path
 from typing import Callable, List, Optional
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 import numpy as np
 import onnxruntime as ort
 
+from src_core.main import VAD_MODEL_PATH
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_SILERO_VAD_URL = (
-    "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/"
-    "silero_vad/data/silero_vad.onnx"
-)
 
 
 def ensure_model_path(model_path: str) -> str:
@@ -42,7 +39,7 @@ def download_model_file(model_path: str, url: Optional[str] = None) -> str:
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_suffix(target.suffix + ".tmp")
 
-    download_url = url or DEFAULT_SILERO_VAD_URL
+    download_url = url
     logger.info("Downloading Silero VAD model from %s", download_url)
     with urlopen(download_url) as response, open(tmp_path, "wb") as dst:
         shutil.copyfileobj(response, dst)
@@ -51,21 +48,6 @@ def download_model_file(model_path: str, url: Optional[str] = None) -> str:
     return str(target)
 
 
-def ensure_or_download_model(model_path: str, *, download: bool = True, url: Optional[str] = None) -> str:
-    """Ensure that the model exists, optionally downloading it if missing."""
-
-    resolved = Path(model_path).expanduser().resolve()
-    if resolved.is_file():
-        return str(resolved)
-
-    if not download:
-        raise FileNotFoundError(
-            f"Silero VAD model not found at '{resolved}'. "
-            "Set VAD_MODEL_PATH or enable auto-download."
-        )
-
-    download_model_file(str(resolved), url)
-    return str(resolved)
 
 
 class SileroOnnxVAD:
@@ -375,7 +357,5 @@ __all__ = [
     "SileroOnnxVAD",
     "get_speech_timestamps",
     "ensure_model_path",
-    "ensure_or_download_model",
     "download_model_file",
-    "DEFAULT_SILERO_VAD_URL",
 ]

@@ -2,7 +2,7 @@ services:
   webrtc-server-back:
     image: ${REGISTRY_HOST}/webrtc-server-komaroff-back/${CI_COMMIT_BRANCH}
     build:
-      context: ../src_back
+      context: ../src_core
       dockerfile: ../docker/python/Dockerfile
       target: base
     ports:

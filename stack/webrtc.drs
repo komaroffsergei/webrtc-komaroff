@@ -10,7 +10,7 @@ Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komar
       NATS_FRAMES_SUBJECT: 'nats.frames',
       NATS_LOGS_SUBJECT: 'nats.logs',
       VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
-  volume name: 'VAD_MODELS_DIR', target: '/app/models/vad'
+  volume name: 'VAD_MODELS_PATH', target: '/app/models/vad/'
 end
 
 Service :whisper_python, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-python/main', ports: 9000,

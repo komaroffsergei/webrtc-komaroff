@@ -1,8 +1,8 @@
 import logging
 
 from shared.sse import sse_log
-from src_back.server.utils.agent import MCPAgent
-from shared.sse.context import GLOBAL_SSE_CONTEXT as ctx
+from src_core.server.utils.agent import MCPAgent
+from src_core.server.utils.sse import get_sse_context
 logger = logging.getLogger("handle_transcription")
 
 
@@ -21,6 +21,8 @@ async def handle_transcription(app, payload: dict):
     if not text:
         logger.warning("Empty transcription payload")
         return
+
+    ctx = get_sse_context(app)
 
     # Логируем вход от пользователя
     await sse_log(

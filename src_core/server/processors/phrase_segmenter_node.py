@@ -6,22 +6,22 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable, List, Optional
+from urllib.parse import urlparse
 
 import numpy as np
 from av import AudioFrame
 from nats.errors import TimeoutError as NatsTimeoutError
 
 from .base import ConsumerNode
+from ..handlers.handle_sse import sse_log
 from ..utils.audio_utils import resample_audio
 from ..utils.silero_onnx_vad import (
-    DEFAULT_SILERO_VAD_URL,
     SileroOnnxVAD,
-    ensure_or_download_model,
-    get_speech_timestamps as silero_get_speech_timestamps,
+    get_speech_timestamps as silero_get_speech_timestamps, download_model_file,
 )
-from shared.sse import sse_log
-from server.utils.sse import get_sse_context
+from ..utils.sse import get_sse_context
 
+from ...main import VAD_MODEL_URL, VAD_MODEL_PATH
 
 logger = logging.getLogger("audio.PhraseSegmenterNode")
 
@@ -121,37 +121,24 @@ class PhraseSegmenterNode(ConsumerNode):
 
     async def _load_silero_vad(self) -> None:
         loop = asyncio.get_event_loop()
-
-        def _resolve_model_path() -> str:
-            configured = os.getenv("VAD_MODEL_PATH")
-            if configured:
-                return configured
-
-            dir_candidate = os.getenv("VAD_MODELS_DIR")
-            if dir_candidate:
-                return os.path.join(dir_candidate, "silero_vad.onnx")
-
-            project_root = Path(__file__).resolve().parents[2]
-            return str(project_root / "models" / "vad" / "silero_vad.onnx")
-
+        filename = os.path.basename(urlparse(VAD_MODEL_URL).path)
+        full_path = f"{VAD_MODEL_PATH}/{filename}"
         def _load():
-            model_path = _resolve_model_path()
-            auto_download = os.getenv("VAD_AUTO_DOWNLOAD", "1").lower() not in {
-                "0",
-                "false",
-                "no",
-            }
-            model_url = os.getenv("VAD_MODEL_URL", DEFAULT_SILERO_VAD_URL)
             try:
-                ensure_or_download_model(model_path, download=auto_download, url=model_url)
-                return SileroOnnxVAD(model_path)
+                resolved = Path(full_path).expanduser().resolve()
+                if resolved.is_file():
+                    return str(resolved)
+
+                download_model_file(full_path, VAD_MODEL_URL)
+                return str(resolved)
             except Exception as exc:
+                logger.error("VAD model load failed: %s", exc, exc_info=True)
                 logger.error("VAD model load failed: %s", exc, exc_info=True)
                 return None
 
         self.vad_model = await loop.run_in_executor(None, _load)
         if self.vad_model:
-            logger.info("Silero VAD ONNX model loaded from %s", self.vad_model.model_path)
+            logger.info("Silero VAD ONNX model loaded from %s", full_path)
         else:
             logger.error("Silero VAD model is unavailable")
 
@@ -288,7 +275,7 @@ class PhraseSegmenterNode(ConsumerNode):
                     ctx,
                     f"ASR timeout for phrase {phrase.phrase_id}",
                     level="warn",
-                    service="src_back",
+                    service="src_core",
                     name="asr_timeout",
                 )
         except Exception as exc:

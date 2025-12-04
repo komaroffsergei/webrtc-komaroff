@@ -1,3 +1,4 @@
+from asyncio import run_coroutine_threadsafe
 from pathlib import Path
 
 from fastapi import FastAPI, Body
@@ -5,8 +6,7 @@ import httpx
 import logging
 import os
 
-from shared.sse import SSEContext, sse_log
-
+from utils.nats_logger import NatsLogger
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp_llm")
 
@@ -18,25 +18,15 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "osmosis-mcp-4bQ8_0")
 
 # Ограничения
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "8192"))
+DEFAULT_MAX_TOKENS = int(os.getenv("DEFAULT_MAX_TOKENS", "2048"))
 
 SSE_SERVICE_NAME = os.getenv("LLM_SERVICE_NAME", "src_mcp_llm")
-SSE_CONTEXT = SSEContext(service_name=SSE_SERVICE_NAME)
 
 # системный промпт можно задавать ENV-ом, но если пусто — грузим из файла
 SYSTEM_PROMPT_FILE = os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt")
 SYSTEM_PROMPT = Path(SYSTEM_PROMPT_FILE).read_text(encoding="utf-8").strip()
 
-async def _log(message: str, level: str = "info", name: str | None = None):
-    try:
-        await sse_log(
-            SSE_CONTEXT,
-            message,
-            level=level,
-            service=SSE_SERVICE_NAME,
-            name=name,
-        )
-    except Exception:
-        pass
+NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 
 
 @app.post("/generate")
@@ -61,4 +51,6 @@ async def generate(payload: dict = Body(...)):
         data = r.json()
         result = data.get("response")
 
+        logger.log(message, level="info", name=name)
+        logger.info(result, name="llm.response")
         return {"text": result}

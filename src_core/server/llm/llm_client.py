@@ -4,7 +4,7 @@ import os
 import httpx
 import logging
 
-from src_back.server.utils.extract_json_from_text import extract_json_from_text
+from src_core.server.utils.extract_json_from_text import extract_json_from_text
 
 logger = logging.getLogger("llm_client")
 

@@ -31,8 +31,7 @@ ENV SERVER_ENV=production \
     PORT=8000 \
     ASR_MODELS_DIR=/app/models/asr \
     ASR_MODEL_ID=Systran/faster-whisper-small \
-    VAD_MODELS_DIR=/app/models/vad \
-    VAD_MODEL_PATH=/app/models/vad/silero_vad.onnx
+    VAD_MODEL_PATH=/app/models/vad/
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "main.py"]

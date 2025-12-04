@@ -3,8 +3,8 @@ import json
 from mcp.types import CallToolResult
 
 from shared.sse import sse_log
-from src_back.server.llm.llm_client import call_llm
-from src_back.server.mcp.mcp_client import call_mcp
+from src_core.server.llm.llm_client import call_llm
+from src_core.server.mcp.mcp_client import call_mcp
 
 
 class MCPAgent:
@@ -67,9 +67,9 @@ class MCPAgent:
             #     safe = real_result
             #
 
-            # выполняем РОВНО один инструмент
+            # выходим если инструмент ничего не вернул
             if last_summary is None or real_result.get("ok") is False:
-                return "Ошибка: инструмент ничего не вернул или вернул ошибку"
+                return f"Ошибка: инструмент ничего не вернул или вернул ошибку: {real_result}"
 
 
             # создаём следующий prompt для модели
@@ -92,7 +92,7 @@ class MCPAgent:
             else:
                 res = result.get('data').content[0].text
         except Exception as e:
-            res = "Ошибка получения данных"
+            res = f"Ошибка получения данных: {e}"
         # if isinstance(result, dict):
         #     # результат твоего call_mcp: {"ok":..., "data":...}
         #     ok = result.get("ok")

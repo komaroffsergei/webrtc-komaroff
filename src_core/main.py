@@ -16,19 +16,27 @@ from server.handlers.handle_offer import handle_offer
 from server.handlers.handle_shutdown import handle_shutdown
 from server.handlers.handle_startup import handle_startup
 from server.utils.config import STATIC_DIR
-from server.utils.sse import sse_handler, register_sse_context
-from shared.sse import sse_broadcast, SSEContext
+from src_core.server.handlers.handle_sse import sse_handler, sse_broadcast
 
-STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_back")
+STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_core")
+CORE_PORT=os.getenv("CORE_PORT", 8000)
+CORE_HOST=os.getenv("CORE_HOST", "0.0.0.0")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+ASR_MODELS_DIR = os.getenv("ASR_MODELS_DIR", "/app/models/asr")
+ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
+VAD_MODEL_PATH = os.getenv("VAD_MODEL_PATH", "models/vad")
+VAD_MODEL_URL = os.getenv("VAD_MODEL_URL", "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx")
+
+logger = logging.getLogger(STACK_SERVICE_NAME)
 
 def setup_routes(app):
     app.router.add_get("/", handle_index)
     app.router.add_post("/offer", handle_offer)
     app.router.add_post("/message", message_handler)
     app.router.add_static("/static", path=STATIC_DIR)
+
     app.router.add_get("/events", sse_handler)
     app.on_startup.append(handle_startup)
     app.on_shutdown.append(handle_shutdown)
@@ -36,10 +44,9 @@ def setup_routes(app):
 if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
     app["pcs"] = set()
-    sse_context = SSEContext(service_name=STACK_SERVICE_NAME)
-    register_sse_context(app, sse_context)
+    app["sse_clients"] = set()
     app["methods"] = {
-        "sse_broadcast": lambda msg: sse_broadcast(sse_context, msg)
+        "sse_broadcast": lambda msg: sse_broadcast(app, msg)
     }
     app['vars'] = {
         "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
@@ -49,9 +56,8 @@ if __name__ == "__main__":
     }
 
     setup_routes(app)
-    logger = logging.getLogger(__name__)
-    logger.info("http://localhost:8000")
-    port = int(os.getenv("PORT", "8000"))
+
+
 
     async def ticker(app):
         counter = 0
@@ -59,7 +65,7 @@ if __name__ == "__main__":
             while True:
                 counter += 1
                 await sse_broadcast(
-                    sse_context,
+                    app,
                     {
                         "service": STACK_SERVICE_NAME,
                         "type": "debug",
@@ -68,7 +74,7 @@ if __name__ == "__main__":
                     },
                     ensure_meta=False,
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(5)
         except asyncio.CancelledError:
             pass
 
@@ -85,4 +91,4 @@ if __name__ == "__main__":
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
 
-    web.run_app(app, host="0.0.0.0", port=port)
+    web.run_app(app, host=CORE_HOST, port=CORE_PORT)

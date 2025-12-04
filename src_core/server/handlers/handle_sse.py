@@ -1,25 +1,15 @@
-from __future__ import annotations
-
-from aiohttp import web
 import asyncio
 import json
 import logging
+import uuid
+from datetime import datetime
 
-from shared.sse import SSEContext
+from aiohttp import web
+from aiohttp.web_app import Application
 
-logger = logging.getLogger("sse")
+from src_core.main import STACK_SERVICE_NAME
 
-
-def register_sse_context(app, context: SSEContext):
-    app["sse_context"] = context
-
-
-def get_sse_context(app) -> SSEContext:
-    context = app.get("sse_context")
-    if context is None:
-        raise RuntimeError("SSE context is not initialized")
-    return context
-
+logger = logging.getLogger("handle_sse")
 
 async def sse_handler(request: web.Request):
     """
@@ -28,7 +18,6 @@ async def sse_handler(request: web.Request):
     """
 
     app = request.app
-    context = get_sse_context(app)
 
     # Proper SSE headers
     resp = web.StreamResponse(
@@ -47,9 +36,9 @@ async def sse_handler(request: web.Request):
     # Each client gets its own tiny queue
     # maxsize=1 ensures slow clients cannot block the system
     q = asyncio.Queue(maxsize=1)
-    context.clients.add(q)
+    app['sse_clients'].add(q)
 
-    logger.info("SSE client connected, total=%s", len(context.clients))
+    logger.info("SSE client connected, total=%s", len(app['sse_clients']))
 
     try:
         while True:
@@ -77,8 +66,8 @@ async def sse_handler(request: web.Request):
 
     finally:
         # Clean up the client
-        context.clients.discard(q)
-        logger.info("SSE client removed, total=%s", len(context.clients))
+        app['sse_clients'].discard(q)
+        logger.info("SSE client removed, total=%s", len(app['sse_clients']))
 
     return resp
 
@@ -96,3 +85,52 @@ def make_async_callback(loop, async_func, app):
         )
 
     return callback
+
+
+
+async def sse_broadcast(app: Application, message, *, ensure_meta: bool = True):
+    if not isinstance(message, dict):
+        message = {"msg": str(message)}
+
+    payload = dict(message)
+
+    if ensure_meta:
+        payload.setdefault("timestamp", datetime.utcnow().isoformat())
+        payload.setdefault("uid", str(uuid.uuid4()))
+        payload.setdefault("service", STACK_SERVICE_NAME)
+
+
+    if not app['clients']:
+        logger.debug("No SSE clients, dropping: %s", payload)
+        return
+
+    for q in app['clients']:
+        try:
+            q.put_nowait(payload)
+        except asyncio.QueueFull:
+            try:
+                q.get_nowait()
+                q.put_nowait(payload)
+            except Exception:
+                app['clients'].discard(q)
+        except Exception:
+            app['clients'].discard(q)
+
+
+async def sse_log(
+    app: Application,
+    message: str,
+    level: str = "info",
+    *,
+    service: str | None = None,
+    log_time: str | None = None,
+    name: str | None = None,
+):
+    entry = {
+        "time": log_time or datetime.utcnow().isoformat(),
+        "service": service or STACK_SERVICE_NAME,
+        "type": level,
+        "name": name or "",
+        "message": message,
+    }
+    await sse_broadcast(app, entry, ensure_meta=False)
