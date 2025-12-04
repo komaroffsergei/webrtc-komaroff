@@ -67,6 +67,10 @@ class MCPAgent:
             #     safe = real_result
             #
 
+            # выполняем РОВНО один инструмент
+            if last_summary is None or real_result.get("ok") is False:
+                return "Ошибка: инструмент ничего не вернул или вернул ошибку"
+
 
             # создаём следующий prompt для модели
             step_prompt = self._make_next_prompt(
@@ -84,7 +88,7 @@ class MCPAgent:
         """
         try:
             if result.get('data').structured_content:
-                res = result.get('data').structured_content.get("results")
+                res = result.get('data').structured_content
             else:
                 res = result.get('data').content[0].text
         except Exception as e:
