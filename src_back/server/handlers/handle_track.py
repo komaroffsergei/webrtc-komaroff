@@ -9,8 +9,7 @@ from ..processors import (
 from ..processors.graph import AudioGraph
 from ..utils.pc_lifecycle import attach_pc_lifecycle
 from shared.sse import sse_log
-from server.utils.sse import get_sse_context
-
+from shared.sse.context import GLOBAL_SSE_CONTEXT as ctx
 logger = logging.getLogger("track")
 
 
@@ -18,7 +17,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     if track.kind != "audio":
         return
 
-    ctx = get_sse_context(app)
+
     await sse_log(ctx, "Audio track connected", level="info")
 
     #

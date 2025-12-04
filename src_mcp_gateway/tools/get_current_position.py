@@ -1,14 +1,27 @@
-import random
+import requests
+
+from src_mcp_gateway.config_loader import load_settings
+
+SETTINGS = load_settings()
+API_URL = SETTINGS["services"]["pilot_api"]
+TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+
 
 def run(params):
-    base_lat = 55.75
-    base_lon = 37.61
-    delta = 0.3
+    """
+    Текущая позиция "пилота" / исходной точки.
 
-    lat = base_lat + random.uniform(-delta, delta)
-    lon = base_lon + random.uniform(-delta, delta)
+    Вход:
+      {}  (без параметров)
+
+    Выход:
+      { "lat": float, "lon": float }
+    """
+    r = requests.get(API_URL, timeout=TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
 
     return {
-        "lat": round(lat, 6),
-        "lon": round(lon, 6)
+        "lat": float(data["lat"]),
+        "lon": float(data["lon"]),
     }

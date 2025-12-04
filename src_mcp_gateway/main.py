@@ -2,83 +2,95 @@
 MCP Gateway Server for aviation data tools.
 This server exposes aviation-related tools through the Model Context Protocol.
 """
+
 import os
 from typing import Any, Dict
+
 from dotenv import load_dotenv
-from mcp.server.fastmcp import FastMCP, Context
+from fastmcp import FastMCP, Context
+# from fastmcp.sess import FastMCP, Context
+# from mcp.server.fastmcp import FastMCP, Context
 from mcp.server.session import ServerSession
 
-# Загружаем переменные окружения
+# -----------------------------
+# ENV
+# -----------------------------
 load_dotenv()
 
 MCP_HOST = os.getenv("MCP_HOST", "127.0.0.1")
 MCP_PORT = int(os.getenv("MCP_PORT", "6006"))
-
-# Создаем MCP сервер
+import logging
+logger = logging.getLogger("mcp_gateway")
+# -----------------------------
+# MCP SERVER
+# -----------------------------
 mcp = FastMCP(
     name="Aviation MCP Gateway",
-    # description="Инструменты доступа к авиационным данным: поиск аэродромов, статусы полос, георасчёты.",
-    stateless_http=True,
-    json_response=True,
-    host=MCP_HOST,
-    port=MCP_PORT,
 )
 
-# Импортируем инструменты
-from tools.search_airports import run as search_airports_run
-from tools.get_runway_status import run as get_runway_status_run
-from tools.compute_distance import run as compute_distance_run
-from tools.get_airport_by_name import run as get_airport_by_name_run
-from tools.get_current_position import run as get_current_position_run
-from tools.error_report import run as error_report_run
+# mcp.mount
+
+# -----------------------------
+# IMPORT TOOLS IMPLEMENTATIONS
+# -----------------------------
+
+from src_mcp_gateway.tools.search_airports import run as search_airports_run
+from src_mcp_gateway.tools.get_airport_by_name import run as get_airport_by_name_run
+from src_mcp_gateway.tools.runway_info import run as runway_info_run
+from src_mcp_gateway.tools.compute_distance import run as compute_distance_run
+from src_mcp_gateway.tools.get_current_position import run as get_current_position_run
+from src_mcp_gateway.tools.airports_filter import run as airports_filter_run
+from src_mcp_gateway.tools.multi_route import run as multi_route_run
+from src_mcp_gateway.tools.get_weather_cyclones import run as get_weather_cyclones_run
+from src_mcp_gateway.tools.error_report import run as error_report_run
 
 
-# Определяем инструменты с помощью декораторов MCP
+# -----------------------------
+# MCP TOOLS
+# -----------------------------
+
 @mcp.tool()
 def search_airports(
         radius_km: float,
         lat: float,
         lon: float,
-        ctx: Context[ServerSession, None]
+        ctx: Context,
 ) -> Dict[str, Any]:
-    """
-    Возвращает список аэродромов в пределах указанного радиуса от заданной точки.
-
-    Параметры:
-    radius_km: Радиус поиска в километрах
-    lat: Широта центральной точки
-    lon: Долгота центральной точки
-    """
+    """Поиск аэропортов вокруг точки."""
     try:
-        result = search_airports_run({
+        return search_airports_run({
             "radius_km": radius_km,
             "lat": lat,
             "lon": lon
         })
-        return result
     except Exception as e:
-        ctx.error_sync(f"Error in search_airports: {str(e)}")
+        logger.error(f"search_airports failed: {e}")
         raise
 
 
 @mcp.tool()
-def get_runway_status(
-        airport_id: str,
-        ctx: Context[ServerSession, None]
+def get_airport_by_name(
+        query: str,
+        ctx: Context,
 ) -> Dict[str, Any]:
-    """
-    Возвращает список полос аэродрома и их статусы.
-
-    Параметры:
-    airport_id: Идентификатор аэропорта
-    """
+    """Поиск аэропортов по наFastMCPзванию."""
     try:
-        result = get_runway_status_run({
-            "airport_id": airport_id
-        })
-        return result
+        return get_airport_by_name_run({"query": query})
     except Exception as e:
-        ctx.error_sync(f"Error in get_runway_status: {str(e)}")
+        logger.error(f"get_airport_by_name failed: {e}")
+        raise
+
+
+@mcp.tool()
+def runway_info(
+        airport_id: str,
+        ctx: Context,
+) -> Dict[str, Any]:
+    """Получить статусы и длины ВПП аэропорта."""
+    try:
+        return runway_info_run({"airport_id": airport_id})
+    except Exception as e:
+        logger.error(f"runway_info failed: {e}")
         raise
 
 
@@ -88,88 +100,101 @@ def compute_distance(
         lon1: float,
         lat2: float,
         lon2: float,
-        ctx: Context[ServerSession, None]
+        ctx: Context,
 ) -> Dict[str, Any]:
-    """
-    Вычисляет расстояние между двумя точками в километрах.
-
-    Параметры:
-    lat1: Широта первой точки
-    lon1: Долгота первой точки
-    lat2: Широта второй точки
-    lon2: Долгота второй точки
-    """
+    """Вычислить расстояние между двумя координатами."""
     try:
-        result = compute_distance_run({
+        return compute_distance_run({
             "lat1": lat1,
             "lon1": lon1,
             "lat2": lat2,
             "lon2": lon2
         })
-        return result
     except Exception as e:
-        ctx.error_sync(f"Error in compute_distance: {str(e)}")
-        raise
-
-
-@mcp.tool()
-def get_airport_by_name(
-        query: str,
-        ctx: Context[ServerSession, None]
-) -> Dict[str, Any]:
-    """
-    Получить координаты аэропорта по названию или его части.
-
-    Параметры:
-    query: Название или часть названия аэропорта
-    """
-    try:
-        result = get_airport_by_name_run({
-            "query": query
-        })
-        return result
-    except Exception as e:
-        ctx.error_sync(f"Error in get_airport_by_name: {str(e)}")
+        logger.error(f"compute_distance failed: {e}")
         raise
 
 
 @mcp.tool()
 def get_current_position(
-        ctx: Context[ServerSession, None]
+        ctx: Context,
 ) -> Dict[str, Any]:
-    """
-    Возвращает текущие координаты исходной точки (например, положение пилота).
-    """
+    """Получить текущее положение пилота."""
     try:
-        result = get_current_position_run({})
-        return result
+        return get_current_position_run({})
     except Exception as e:
-        ctx.error_sync(f"Error in get_current_position: {str(e)}")
+        logger.error(f"get_current_position failed: {e}")
+        raise
+
+
+@mcp.tool()
+def airports_filter(
+        airports: list,
+        min_runway_length_m: float,
+        require_free_runway: bool,
+        limit: int | None,
+        ctx: Context,
+) -> Dict[str, Any]:
+    """Фильтрация списка аэропортов по условиям."""
+    try:
+        return airports_filter_run({
+            "airports": airports,
+            "min_runway_length_m": min_runway_length_m,
+            "require_free_runway": require_free_runway,
+            "limit": limit
+        })
+    except Exception as e:
+        logger.error(f"airports_filter failed: {e}")
+        raise
+
+
+@mcp.tool()
+def multi_route(
+        origin: Dict[str, float],
+        airports: list,
+        avoid_polygons: list,
+        ctx: Context
+) -> Dict[str, Any]:
+    """Построение маршрутов с обходом зон."""
+    try:
+        return multi_route_run({
+            "origin": origin,
+            "airports": airports,
+            "avoid_polygons": avoid_polygons
+        })
+    except Exception as e:
+        logger.error(f"multi_route failed: {e}")
+        raise
+
+
+@mcp.tool()
+def get_weather_cyclones(ctx: Context) -> Dict[str, Any]:
+    """Получить метеозоны (циклоны)."""
+    try:
+        return get_weather_cyclones_run({})
+    except Exception as e:
+        logger.error(f"get_weather_cyclones failed: {e}")
         raise
 
 
 @mcp.tool()
 def error_report(
         reason: str,
-        ctx: Context[ServerSession, None]
+        ctx
 ) -> Dict[str, Any]:
-    """
-    Сообщить о нарушении правил или невозможности корректно сформировать ответ.
-
-    Параметры:
-    reason: Причина ошибки или нарушения
-    """
+    """Отправить сообщение об ошибке."""
     try:
-        result = error_report_run({
-            "reason": reason
-        })
-        return result
+        return error_report_run({"reason": reason})
     except Exception as e:
-        ctx.error_sync(f"Error in error_report: {str(e)}")
+        logger.error(f"error_report failed: {e}")
         raise
 
 
-# Запуск сервера
+# -----------------------------
+# RUN SERVER
+# -----------------------------
 if __name__ == "__main__":
-    # Рекомендуемый транспорт для production
-    mcp.run(transport="streamable-http")
+    mcp.run(
+        host=MCP_HOST,
+        port=MCP_PORT,
+        transport="streamable-http")

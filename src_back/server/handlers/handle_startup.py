@@ -8,13 +8,13 @@ from shared.sse import sse_log
 from ..utils.nats_client import NatsClient
 from ..utils.silero_downloader import ensure_silero_model
 from ..utils.silero_onnx_vad import DEFAULT_SILERO_VAD_URL
-from server.utils.sse import get_sse_context
-
+from shared.sse.context import GLOBAL_SSE_CONTEXT as ctx
 logger = logging.getLogger("startup")
 
 
 async def handle_startup(app: web.Application):
-    ctx = get_sse_context(app)
+
+
 
     # NATS
     nats_client = NatsClient(app['vars']['NATS_URL'])

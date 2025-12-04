@@ -1,25 +1,24 @@
 import json
-from .llm_client import call_llm
-from .mcp_client import call_mcp
-from .formatter import summarize_tool_result
+
+from mcp.types import CallToolResult
+
 from shared.sse import sse_log
-from server.utils.sse import get_sse_context
+from src_back.server.llm.llm_client import call_llm
+from src_back.server.mcp.mcp_client import call_mcp
 
 
 class MCPAgent:
-    def __init__(self, app, max_steps=10):
-        self.app = app
+    def __init__(self, sse_context, max_steps=10):
+        self.ctx = sse_context
         self.max_steps = max_steps
 
     async def run(self, user_text: str):
         """
-        Запускает пошаговую MCP-цепочку.
+        Пошаговый MCP-агент.
         """
         step_prompt = user_text
-        last_summary = None
-        full_context = {}     # хранение реальных результатов инструментов
-
-        ctx = get_sse_context(self.app)
+        last_summary = {}     # хранит последнее summary, если модель его вернула
+        full_context = {}     # реальные результаты MCP-инструментов
 
         for step in range(1, self.max_steps + 1):
             raw = await call_llm(step_prompt)
@@ -28,37 +27,48 @@ class MCPAgent:
             if not parsed:
                 return "Ошибка: LLM вернул невалидный JSON."
 
-            thought = parsed["thought"]
-            answer = parsed["answer"]
-            tool_calls = parsed["tool_calls"]
+            thought = parsed.get("thought", "")
+            final_result = parsed.get("final_result", "")
+            tool_calls = parsed.get("tool_calls") or []
 
-            await sse_log(ctx, f"[AGENT THOUGHT] {thought}", level="debug")
+            await sse_log(self.ctx, f"[AGENT THOUGHT] {thought}", level="debug")
 
-            # FINISH
-            if answer:
-                return answer
+            # финальное завершение
+            if final_result:
+                return final_result
 
+            # если нет инструментов и нет финала
             if not tool_calls:
-                return "Ошибка: нет tool_calls и нет answer."
+                return "Ошибка: нет tool_calls и нет final_result."
 
-            # RUN TOOLS
-            last_summary = {}
-            for item in tool_calls:
-                tool = item["call"]["tool"]
-                params = item["call"]["parameters"]
+            # выполняем РОВНО один инструмент
+            if len(tool_calls) != 1:
+                return "Ошибка: агент должен вызывать ровно один инструмент на шаг."
 
-                real_result = await call_mcp(tool, params)
-                full_context[tool] = real_result
+            item = tool_calls[0]
+            tool = item["call"]["tool"]
+            params = item["call"]["parameters"]
 
-                summary = summarize_tool_result(tool, real_result)
-                item["result"] = summary
-                last_summary = summary
+            # вызов MCP инструмента
+            real_result = await call_mcp(tool, params)
+            full_context[tool] = real_result
 
-                await sse_log(ctx,
-                              f"[TOOL] {tool} → {summary}",
-                              level="info")
+            # модель получит это в следующем prompt
+            last_summary = self._summarize_tool_result(real_result)
+            item["result"] = real_result
 
-            # NEXT PROMPT
+            # if isinstance(real_result, CallToolResult):
+            #     safe = {
+            #         "status": real_result.status,
+            #         "result": real_result.result,
+            #         "error": real_result.error,
+            #     }
+            # else:
+            #     safe = real_result
+            #
+
+
+            # создаём следующий prompt для модели
             step_prompt = self._make_next_prompt(
                 user_text=user_text,
                 last_thought=thought,
@@ -67,18 +77,61 @@ class MCPAgent:
 
         return "Ошибка: слишком много шагов."
 
+    def _summarize_tool_result(self, result) -> str:
+        """
+        Преобразовать CallToolResult или dict в короткую строку
+        для передачи модели.
+        """
+        try:
+            if result.get('data').structured_content:
+                res = result.get('data').structured_content.get("results")
+            else:
+                res = result.get('data').content[0].text
+        except Exception as e:
+            res = "Ошибка получения данных"
+        # if isinstance(result, dict):
+        #     # результат твоего call_mcp: {"ok":..., "data":...}
+        #     ok = result.get("ok")
+        #     data = result.get("data")
+        #
+        #     if isinstance(data, CallToolResult):
+        #         return self._summarize_calltool(data)
+        #
+        #     return f"ok={ok}"
+        #
+        # if isinstance(result, CallToolResult):
+        #     return self._summarize_calltool(result)
+
+        # fallback
+        return res
+
+    # def _summarize_calltool(self, ct: CallToolResult) -> str:
+    #     """
+    #     Сжать CallToolResult до 1 строки.
+    #     """
+    #
+    #     if ct.is_error:
+    #         return f"ошибка инструмента: {ct.error or 'неизвестно'}"
+    #
+    #     # structured_content — JSON объект (если есть)
+    #     sc = ct.structured_content
+    #
+    #     if isinstance(sc, dict):
+    #         # Возьмём только ключевые поля
+    #         keys = list(sc.keys())[:3]
+    #         kv = ", ".join(f"{k}={sc[k]}" for k in keys)
+    #         return f"результат инструмента: {kv}"
+    #
+    #     return "инструмент выполнен"
+    #
+
     def _make_next_prompt(self, user_text, last_thought, last_summary):
         """
-        Новый промпт — короткий, только мысль и summary.
+        Новый промпт на основе предыдущего шага.
         """
         return f"""
-Ты являешься MCP-агентом.
-Ответь строго JSON с полями thought, tool_calls[], answer.
+Изначально пользовательский запрос: {user_text}
+Последний результат инструмента: Результат инструмента: {json.dumps(last_summary, ensure_ascii=False)}
+Сформируй следующий шаг агента.
 
-Последняя мысль: {last_thought}
-Краткий результат последнего инструмента: {json.dumps(last_summary, ensure_ascii=False)}
-
-Пользовательский запрос: {user_text}
-
-Продолжай.
 """

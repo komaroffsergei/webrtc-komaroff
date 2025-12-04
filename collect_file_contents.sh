@@ -33,11 +33,11 @@ models
 static
 .env.example
 __pycache__
+__init__
 agents.md
 .version
 src_whisper_ruby
 src_whisper_c
-
 src_whisper
 EOF
 )
