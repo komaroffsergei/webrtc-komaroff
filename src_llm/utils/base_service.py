@@ -91,12 +91,19 @@ class BaseService:
             return
 
         started = time.perf_counter()
-        msg_str = json.dumps(msg.data, ensure_ascii=False).encode("utf-8")
+
+        # msg.data – bytes, делаем человекочитаемую строку
+        try:
+            msg_str = msg.data.decode("utf-8", errors="replace")
+        except Exception:
+            msg_str = repr(msg.data)
+
         await self._nats_logger.info(f"Process message data={msg_str}")
 
         async with self._semaphore:
             try:
-                text = await asyncio.to_thread(self.on_message)
+                # ВАЖНО: передаём msg в on_message
+                text = await asyncio.to_thread(self.on_message, msg)
             except Exception as exc:
                 logger.exception("Process message error: %s", exc)
                 await self._log_error(f"Process message error: {exc}")
@@ -118,6 +125,7 @@ class BaseService:
         )
         await self._nats_logger.info(message, name="transcription_result")
         await self._reply(msg, message)
+
 
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
         if not msg.reply or not self._nc:
