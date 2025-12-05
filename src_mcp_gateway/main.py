@@ -73,7 +73,7 @@ def get_airport_by_name(
         query: str,
         ctx: Context,
 ) -> Dict[str, Any]:
-    """Поиск аэропортов по наFastMCPзванию."""
+    """Поиск аэропортов по названию."""
     try:
         return get_airport_by_name_run({"query": query})
     except Exception as e:

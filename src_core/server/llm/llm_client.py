@@ -1,5 +1,4 @@
 import json
-import os
 import logging
 
 from src_core.server.utils.extract_json_from_text import extract_json_from_text
@@ -11,9 +10,6 @@ from src_core.server.settings import (
 from src_core.server.utils.nats_client import NatsClient
 
 logger = logging.getLogger("llm_client")
-
-# HTTP-эндпоинт оставляем как запасной вариант
-LLM_URL = os.getenv("LLM_URL", "http://127.0.0.1:6007/generate")
 
 _NATS_CLIENT: NatsClient | None = None
 
@@ -27,7 +23,7 @@ async def _get_nats_client() -> NatsClient:
     return _NATS_CLIENT
 
 
-async def _call_llm_via_nats(text: str) -> dict:
+async def call_llm(text: str) -> dict:
     client = await _get_nats_client()
 
     request_payload = {
@@ -73,51 +69,3 @@ async def _call_llm_via_nats(text: str) -> dict:
         "raw": raw,
         "parsed": parsed,
     }
-
-
-async def _call_llm_via_http(text: str) -> dict:
-    # старый код оставляем как резерв — на случай, если NATS/LLM-сервис не поднят
-    try:
-        import httpx  # локальный импорт, чтобы не дёргать зависимость, если не используется
-    except ImportError as e:
-        logger.error("httpx is not installed, HTTP fallback unavailable: %s", e)
-        return {"raw": f"LLM HTTP client missing dependency: {e}", "parsed": None}
-
-    try:
-        async with httpx.AsyncClient(timeout=120) as client:
-            r = await client.post(LLM_URL, json={"text": text})
-            r.raise_for_status()
-            payload = r.json()
-    except Exception as e:
-        logger.error("LLM HTTP request failed: %s", e)
-        return {"raw": f"LLM HTTP error: {e}", "parsed": None}
-
-    raw = payload.get("text", "")
-
-    parsed = None
-    try:
-        parsed = extract_json_from_text(raw)
-    except Exception as e:
-        logger.error("Failed to parse JSON from LLM HTTP text: %s", e)
-        parsed = None
-
-    return {
-        "raw": raw,
-        "parsed": parsed,
-    }
-
-
-async def call_llm(text: str) -> dict:
-    """
-    Универсальный клиент к LLM-сервису (src_llm).
-
-    Ожидает от сервиса текст, старается выдернуть JSON
-    и вернуться в виде:
-        { "raw": "<сырой ответ>", "parsed": <dict | None> }
-    """
-    try:
-        return await _call_llm_via_nats(text)
-    except Exception as e:
-        logger.error("LLM NATS call failed, fallback to HTTP: %s", e)
-
-    return await _call_llm_via_http(text)
