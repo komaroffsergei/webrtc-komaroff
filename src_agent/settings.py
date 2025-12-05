@@ -13,6 +13,9 @@ AGENT_LOGS_SUBJECT = os.getenv("AGENT_LOGS_SUBJECT", "agent.logs")
 # LLM сервис слушает здесь
 LLM_FRAMES_SUBJECT = os.getenv("LLM_FRAMES_SUBJECT", "llm.frames")
 
+# LLM сервис слушает здесь
+LLM_LOGS_SUBJECT = os.getenv("LLM_LOGS_SUBJECT", "llm.logs")
+
 # Лимит токенов на один шаг
 AGENT_MAX_TOKENS = int(os.getenv("AGENT_MAX_TOKENS", "2048"))
 

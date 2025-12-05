@@ -29,15 +29,12 @@ class LLMClient:
             "max_tokens": AGENT_MAX_TOKENS,
         }
 
-        try:
-            msg = await self.nc.request(
-                LLM_FRAMES_SUBJECT,
-                json.dumps(request, ensure_ascii=False).encode(),
-                timeout=60.0,
-            )
-        except Exception as e:
-            logger.error("Invalid JSON from L!!!!!LM: %s", e)
-            return f"[LLM JSON decode !!!error: {e}]"
+        msg = await self.nc.request(
+            LLM_FRAMES_SUBJECT,
+            json.dumps(request, ensure_ascii=False).encode(),
+            timeout=60.0,
+        )
+
 
         try:
             payload = json.loads(msg.data.decode("utf-8"))
@@ -49,3 +46,4 @@ class LLMClient:
         # {"input": "...", "output": {"text": "..."}}
         out = payload.get("output") or {}
         return out.get("text", "")
+

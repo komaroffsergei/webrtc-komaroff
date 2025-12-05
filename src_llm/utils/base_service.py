@@ -22,7 +22,7 @@ class BaseService:
             nats_url: str,
             frames_subject: str,
             logs_subject: str,
-            max_concurrency: int = 1,
+            max_concurrency: int = 10,
 
     ) -> None:
         self._service_name = service_name
@@ -93,7 +93,6 @@ class BaseService:
 
         started = time.perf_counter()
 
-        # msg.data – bytes, делаем человекочитаемую строку
         try:
             msg_str = msg.data.decode("utf-8", errors="replace")
         except Exception:
@@ -103,18 +102,28 @@ class BaseService:
 
         async with self._semaphore:
             try:
-                # ВАЖНО: передаём msg в on_message
-                text = await asyncio.to_thread(self.on_message, msg)
+                # если on_message async — выполняем await напрямую
+                if asyncio.iscoroutinefunction(self.on_message):
+                    text = await self.on_message(msg)
+                else:
+                    # синхронный обработчик — в threadpool
+                    text = await asyncio.to_thread(self.on_message, msg)
+
             except Exception as exc:
                 logger.exception("Process message error: %s", exc)
                 await self._log_error(f"Process message error: {exc}")
                 await self._reply(
                     msg,
-                    {"data": msg_str, "error": "process_message", "details": str(exc)},
+                    {
+                        "data": msg_str,
+                        "error": "process_message",
+                        "details": str(exc),
+                    },
                 )
                 return
 
         transcribe_time = time.perf_counter() - started
+
         message = {
             "input": msg_str,
             "output": text,
@@ -125,7 +134,9 @@ class BaseService:
             f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
         )
         await self._nats_logger.info(message, name="transcription_result")
+
         await self._reply(msg, message)
+
 
 
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:

@@ -6,6 +6,7 @@ from typing import Any
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
+import aiohttp
 from nats.aio.msg import Msg
 
 from src_llm.settings import STACK_SERVICE_NAME
@@ -63,7 +64,13 @@ class LLMService(BaseService):
                            self.system_prompt_file, exc)
             return ""
 
-    def _call_ollama(self, prompt: str, max_tokens: int) -> str:
+    import aiohttp
+    import json
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    async def _call_ollama(self, prompt: str, max_tokens: int) -> str:
         body = {
             "model": self.ollama_model,
             "prompt": prompt,
@@ -71,34 +78,26 @@ class LLMService(BaseService):
             "stream": False,
         }
 
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-        req = Request(
-            f"{self.ollama_url}/api/generate",
-            data=data,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
+        url = f"{self.ollama_url}/api/generate"
 
         try:
-            with urlopen(req, timeout=120) as resp:
-                resp_body = resp.read().decode("utf-8", errors="replace")
-                payload = json.loads(resp_body)
-        except HTTPError as exc:
-            logger.error("OLLAMA HTTP error: %s", exc)
-            raise
-        except URLError as exc:
-            logger.error("OLLAMA URL error: %s", exc)
-            raise
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                        url,
+                        json=body,
+                        timeout=120
+                ) as resp:
+                    resp.raise_for_status()
+                    payload = await resp.json()
         except Exception as exc:
-            logger.error("OLLAMA request failed: %s", exc, exc_info=True)
+            logger.error("Ollama request failed: %s", exc)
             raise
 
         result = payload.get("response") or ""
         logger.info("LLM response length=%d", len(result))
         return result
 
-    def on_message(self, msg: Msg) -> dict[str, Any]:
-        # сюда приходят JSON-байты от src_core
+    async def on_message(self, msg: Msg) -> dict[str, Any]:
         try:
             payload = json.loads(msg.data.decode("utf-8"))
         except Exception as exc:
@@ -121,15 +120,16 @@ class LLMService(BaseService):
         max_tokens = min(max_tokens, self.max_output_tokens)
 
         system_prompt = self._get_system_prompt()
+
         prompt = (
             f"<|system|>\n{system_prompt}<|end|>\n"
             f"<|user|>\n{text}\n<|end|>\n"
         )
 
         try:
-            result = self._call_ollama(prompt, max_tokens)
+            result = await self._call_ollama(prompt, max_tokens)
         except Exception as exc:
             return {"error": "ollama_error", "details": str(exc)}
 
-        # это будет лежать в message["output"] на стороне BaseService
         return {"text": result}
+

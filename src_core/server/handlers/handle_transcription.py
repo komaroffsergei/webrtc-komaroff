@@ -1,8 +1,5 @@
 import logging
 
-from src_core.server.settings import STACK_SERVICE_NAME
-from src_core.server.utils.agent import MCPAgent
-from src_core.server.utils.sse import sse_log, SSEContext, register_sse_context
 
 logger = logging.getLogger("handle_transcription")
 
@@ -51,24 +48,11 @@ async def handle_transcription(app, payload: dict):
         "text": text,
     }
 
-    try:
-        msg = await nats_client.request(
-            AGENT_FRAMES_SUBJECT,
-            json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
-            timeout=60.0,
-        )
-    except Exception as e:
-        logger.error("NATS request to agent failed: %s", e)
-        await sse_log(
-            {
-                "type": "agent_error",
-                "service": "ai_agent",
-                "error": f"NATS request failed: {e}",
-            },
-            level="error",
-            app=app,
-        )
-        return
+    msg = await nats_client.request(
+        AGENT_FRAMES_SUBJECT,
+        json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+        timeout=60.0,
+    )
 
     try:
         response = json.loads(msg.data.decode("utf-8"))
