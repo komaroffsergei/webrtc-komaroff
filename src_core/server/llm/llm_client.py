@@ -13,7 +13,7 @@ LLM_URL = os.getenv("LLM_URL", "http://127.0.0.1:6007/generate")
 
 async def call_llm(text: str) -> dict:
     """
-    Универсальный клиент к LLM-сервису (src_mcp_llm).
+    Универсальный клиент к LLM-сервису (src_llm).
 
     Ожидает ответ вида:
         { "text": "<raw model text>" }

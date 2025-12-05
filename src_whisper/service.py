@@ -12,9 +12,10 @@ import numpy as np
 from faster_whisper import WhisperModel
 from nats.aio.msg import Msg
 
-from model_downloader import ensure_model_path
-from nats_logger import NatsLogger
-from phrase_packet import PhrasePacket
+from src_whisper.utils.model_downloader import ensure_model_path
+from src_whisper.utils.nats_logger import NatsLogger
+
+from src_whisper.utils.phrase_packet import PhrasePacket
 
 
 logger = logging.getLogger("whisper_service")
