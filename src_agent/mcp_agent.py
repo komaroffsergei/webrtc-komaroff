@@ -3,6 +3,7 @@ import logging
 from typing import Any
 
 from src_agent.llm_client import LLMClient
+from src_agent.mcp_client import call_mcp
 from src_agent.settings import STACK_SERVICE_NAME
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
@@ -14,9 +15,9 @@ class MCPAgent:
     Позже можно расширить цепочку reasoning → tools → refine.
     """
 
-    def __init__(self, llm: LLMClient, mcp_tools: dict[str, Any]):
+    def __init__(self, llm: LLMClient):
         self.llm = llm
-        self.mcp_tools = mcp_tools
+        # self.mcp_tools = mcp_tools
 
     async def run(self, user_text: str) -> dict[str, Any]:
         """

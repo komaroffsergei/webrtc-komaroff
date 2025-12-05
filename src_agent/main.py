@@ -10,14 +10,13 @@ from src_agent.service import AgentService
 
 
 async def main():
-    AgentService(
+    service = AgentService(
         service_name=STACK_SERVICE_NAME,
         nats_url=NATS_URL,
         frames_subject=AGENT_FRAMES_SUBJECT,
         logs_subject=AGENT_LOGS_SUBJECT,
     )
-    while True:
-        await asyncio.sleep(3600)
+    await service.run()
 
 
 if __name__ == "__main__":

@@ -26,3 +26,7 @@ AGENT_FRAMES_SUBJECT=os.getenv("AGENT_FRAMES_SUBJECT", "agent.frames")
 
 # Агент пишет диагностические логи в отдельный сабжект
 AGENT_LOGS_SUBJECT=os.getenv("AGENT_FRAMES_SUBJECT", "agent.logs")
+
+LLM_LOGS_SUBJECT=os.getenv("LLM_LOGS_SUBJECT", "llm.logs")
+
+LLM_FRAMES_SUBJECT=os.getenv("LLM_FRAMES_SUBJECT", "llm.frames")

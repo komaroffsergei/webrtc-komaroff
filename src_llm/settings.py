@@ -15,8 +15,8 @@ load_dotenv(env_local_file if os.path.exists(env_local_file) else env_file)
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_llm")
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
-NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
+NATS_FRAMES_SUBJECT = os.getenv("LLM_FRAMES_SUBJECT", "llm.frames")
+NATS_LOGS_SUBJECT = os.getenv("LLM_LOGS_SUBJECT", "llm.logs")
 
 # ---- OLLAMA ----
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")

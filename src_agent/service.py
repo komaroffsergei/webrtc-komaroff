@@ -3,12 +3,13 @@ import logging
 import asyncio
 from nats.aio.msg import Msg
 
-from src_llm.utils.base_service import BaseService
+
 from src_agent.settings import (
     STACK_SERVICE_NAME,
 )
 from src_agent.llm_client import LLMClient
 from src_agent.mcp_agent import MCPAgent
+from src_agent.utils.base_service import BaseService
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
