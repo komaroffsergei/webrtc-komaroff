@@ -19,3 +19,10 @@ VAD_MODEL_URL = os.getenv(
     "VAD_MODEL_URL",
     "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx",
 )
+
+
+# Агент принимает входящие запросы от src_core
+AGENT_FRAMES_SUBJECT=os.getenv("AGENT_FRAMES_SUBJECT", "agent.frames")
+
+# Агент пишет диагностические логи в отдельный сабжект
+AGENT_LOGS_SUBJECT=os.getenv("AGENT_FRAMES_SUBJECT", "agent.logs")
