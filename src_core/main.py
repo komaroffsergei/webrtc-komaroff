@@ -71,17 +71,17 @@ if __name__ == "__main__":
         except asyncio.CancelledError:
             pass
 
-    async def on_startup(app):
-        app["ticker_task"] = asyncio.create_task(ticker(app))
+    # async def on_startup(app):
+    #     app["ticker_task"] = asyncio.create_task(ticker(app))
+    #
+    # async def on_cleanup(app):
+    #     task = app.get("ticker_task")
+    #     if task:
+    #         task.cancel()
+    #         with contextlib.suppress(asyncio.CancelledError):
+    #             await task
 
-    async def on_cleanup(app):
-        task = app.get("ticker_task")
-        if task:
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-
-    app.on_startup.append(on_startup)
-    app.on_cleanup.append(on_cleanup)
+    # app.on_startup.append(on_startup)
+    # app.on_cleanup.append(on_cleanup)
 
     web.run_app(app, host=CORE_HOST, port=CORE_PORT)

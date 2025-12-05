@@ -20,7 +20,7 @@ class MCPAgent:
         last_summary = {}     # хранит последнее summary, если модель его вернула
         full_context = {}     # реальные результаты MCP-инструментов
 
-        await sse_log("MCPAgent.run)", level="info", app=self.app)
+        await sse_log("MCPAgent.run", level="info", app=self.app)
 
         for step in range(1, self.max_steps + 1):
             raw = await call_llm(step_prompt)
@@ -137,7 +137,7 @@ class MCPAgent:
         """
         return f"""
 Изначально пользовательский запрос: {user_text}
-Последний результат инструмента: Результат инструмента: {json.dumps(last_summary, ensure_ascii=False)}
+Результат инструмента: {json.dumps(last_summary, ensure_ascii=False)}
 Сформируй следующий шаг агента или закончи если результат достигнут.
-
+Если предыдущий инструмент дал финальный ответ — заверши работу.
 """

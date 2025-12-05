@@ -26,6 +26,9 @@ with open(os.path.join(DATA_DIR, "runway_status.json"), "r") as f:
 with open(os.path.join(DATA_DIR, "weather_cyclones.json"), "r") as f:
     CYCLONES = json.load(f)
 
+with open(os.path.join(DATA_DIR, "runway_lengths.json"), "r") as f:
+    RUNWAY_LENGTHS = json.load(f)
+
 app = FastAPI(title="API Gateway (mocked aviation data)")
 
 
@@ -164,6 +167,16 @@ def get_cyclones():
       }
     """
     return {"cyclones": CYCLONES}
+
+
+@app.get("/api/airports/{airport_id}/runway_lengths")
+def get_runway_lengths(airport_id: str):
+    """
+    Возвращает длины полос аэропорта.
+    В реальном сервисе выбиралось бы по airport_id,
+    но сейчас мок один на всех.
+    """
+    return {"runways": RUNWAY_LENGTHS}
 
 
 # -------------------------------------------------------------

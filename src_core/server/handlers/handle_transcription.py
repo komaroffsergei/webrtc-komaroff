@@ -46,4 +46,4 @@ async def handle_transcription(app, payload: dict):
     #   "message": "...",
     #   "client_commands": [...]
     # }
-    await sse_log(result, level="info", app=app)
+    await sse_log(result, level="info", name="message", app=app)

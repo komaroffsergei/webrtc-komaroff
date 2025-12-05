@@ -123,7 +123,7 @@ class BaseService:
         await self._nats_logger.info(
             f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
         )
-        await self._nats_logger.info(message, name="transcription_result")
+        await self._nats_logger.info(message, name="llm_result")
         await self._reply(msg, message)
 
 

@@ -19,7 +19,7 @@ class SSEContext:
         self._clients: set[asyncio.Queue] = set()
 
     def register_client(self) -> asyncio.Queue:
-        queue = asyncio.Queue(maxsize=1)
+        queue = asyncio.Queue(maxsize=100)
         self._clients.add(queue)
         return queue
 
