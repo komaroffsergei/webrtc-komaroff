@@ -271,7 +271,6 @@ class PhraseSegmenterNode(ConsumerNode):
             await sse_log(
                 f"ASR timeout for phrase {phrase.phrase_id}",
                 level="warn",
-                service="src_core",
                 name="asr_timeout",
                 app=self.app,
             )
@@ -280,7 +279,6 @@ class PhraseSegmenterNode(ConsumerNode):
             await sse_log(
                 "Whisper service unavailable",
                 level="error",
-                service="src_core",
                 name="asr_no_responders",
                 app=self.app,
             )

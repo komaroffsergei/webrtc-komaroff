@@ -7,7 +7,7 @@ from nats.aio.client import Client as NATS
 from src_agent.settings import (
     STACK_SERVICE_NAME,
     LLM_FRAMES_SUBJECT,
-    AGENT_MAX_TOKENS,
+    AGENT_MAX_TOKENS, LLM_LOGS_SUBJECT, AGENT_LOGS_SUBJECT,
 )
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
@@ -33,7 +33,6 @@ class LLMClient:
             msg = await self.nc.request(
                 LLM_FRAMES_SUBJECT,
                 json.dumps(request, ensure_ascii=False).encode(),
-                timeout=60.0,
             )
         except Exception as e:
             logger.error("Invalid JSON from L!!!!!LM: %s", e)
@@ -49,3 +48,5 @@ class LLMClient:
         # {"input": "...", "output": {"text": "..."}}
         out = payload.get("output") or {}
         return out.get("text", "")
+
+
