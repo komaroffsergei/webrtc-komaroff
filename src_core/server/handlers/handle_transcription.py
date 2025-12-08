@@ -1,29 +1,20 @@
+import json
 import logging
 
-from src_core.server.settings import STACK_SERVICE_NAME
-from src_core.server.utils.agent import MCPAgent
 from src_core.server.utils.sse import sse_log, SSEContext, register_sse_context
 
 logger = logging.getLogger("handle_transcription")
 
 
+# ... (импорты остаются)
+
 async def handle_transcription(app, payload: dict):
-    """
-    Унифицированный обработчик транскрипций / текстовых сообщений.
-
-    Делает:
-      1. Логирует входящее сообщение в SSE
-      2. Вызывает агент (agent_logic)
-      3. Шлёт результат агента в SSE
-
-    """
-
+    """Обработчик транскрипций, отправляющий запросы агенту через NATS"""
     text = (payload.get("text") or "").strip()
     if not text:
         logger.warning("Empty transcription payload")
         return
 
-    # Логируем вход от пользователя
     await sse_log(
         {
             "type": "user_message",
@@ -36,14 +27,32 @@ async def handle_transcription(app, payload: dict):
 
     logger.info("handle_transcription: '%s'", text)
 
-    # Вызываем Агент
-    agent = MCPAgent(app)
-    result = await agent.run(text)
+    # Отправляем запрос агенту через NATS
+    try:
+        nc = app['services']['nats_client']
+        request_payload = {
+            "text": text,
+            "service": app['vars']["STACK_SERVICE_NAME"]
+        }
 
-    # Агент гарантированно вернёт:
-    # {
-    #   "type": "agent_response",
-    #   "message": "...",
-    #   "client_commands": [...]
-    # }
-    await sse_log(result, level="info", name="message", app=app)
+        # Используем NATS subjects из настроек
+        agent_subject = app['vars'].get("NATS_AGENT_SUBJECT", "agent.requests")
+
+        msg = await nc.request(
+            agent_subject,
+            json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
+            timeout=120.0,  # увеличенный таймаут для сложных запросов
+        )
+
+        response = json.loads(msg.data.decode("utf-8"))
+
+        if response.get("status") == "success":
+            result = response.get("result", "")
+            await sse_log(result, level="info", name="message", app=app)
+        else:
+            error = response.get("error", "Unknown error")
+            await sse_log(f"Agent error: {error}", level="error", name="agent_error", app=app)
+
+    except Exception as e:
+        logger.error("Agent request failed: %s", e, exc_info=True)
+        await sse_log(f"Agent communication error: {str(e)}", level="error", name="agent_error", app=app)
