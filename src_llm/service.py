@@ -25,7 +25,6 @@ class LLMService(BaseService):
         ollama_url: str,
         ollama_model: str,
         system_prompt_file: str,
-        system_prompt: str,
         max_output_tokens: int,
         default_max_tokens: int,
     ) -> None:
@@ -39,7 +38,6 @@ class LLMService(BaseService):
         self.ollama_url = ollama_url
         self.ollama_model = ollama_model
         self.system_prompt_file = system_prompt_file
-        self.system_prompt = system_prompt
         self.max_output_tokens = int(max_output_tokens)
         self.default_max_tokens = int(default_max_tokens)
 
@@ -49,9 +47,6 @@ class LLMService(BaseService):
         )
 
     def _get_system_prompt(self) -> str:
-        if self.system_prompt:
-            return self.system_prompt
-
         if not self.system_prompt_file:
             return ""
 

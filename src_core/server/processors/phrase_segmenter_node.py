@@ -45,6 +45,7 @@ class PhraseSegmenterNode(ConsumerNode):
 
     def __init__(
         self,
+        app,
         source_node,
         nats_client,
         whisper_subject: str,
@@ -61,7 +62,7 @@ class PhraseSegmenterNode(ConsumerNode):
     ):
         super().__init__(source_node)
 
-        self.app = getattr(source_node, "app", None)
+        self.app = app
 
         self.nc = nats_client
         self.whisper_subject = whisper_subject

@@ -41,6 +41,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     #
     segmenter = graph.add(
         PhraseSegmenterNode(
+            app,
             source,
             app['services']['nats_client'],  # publish frames
             NATS_FRAMES_SUBJECT,  # whisper input

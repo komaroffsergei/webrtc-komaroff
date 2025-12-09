@@ -13,9 +13,7 @@ NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.frames")
 
 # MCP Gateway Configuration
-MCP_HOST = os.getenv("MCP_HOST", "127.0.0.1")
-MCP_PORT = int(os.getenv("MCP_PORT", "6006"))
-MCP_URL = os.getenv("MCP_URL", f"http://{MCP_HOST}:{MCP_PORT}/mcp")
+MCP_URL = os.getenv("MCP_URL", f"http://127.0.0.1:6006/mcp")
 
 # Agent settings
 AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))

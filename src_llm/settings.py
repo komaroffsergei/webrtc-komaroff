@@ -24,7 +24,6 @@ OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "osmosis-mcp-4bQ8_0")
 
 # ---- SYSTEM PROMPT ----
 SYSTEM_PROMPT_FILE = os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt")
-SYSTEM_PROMPT = os.getenv("SYSTEM_PROMPT", "")
 
 # ---- LIMITS ----
 MAX_OUTPUT_TOKENS = os.getenv("MAX_OUTPUT_TOKENS", 8096)

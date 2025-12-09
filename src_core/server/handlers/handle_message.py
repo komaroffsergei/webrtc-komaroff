@@ -32,9 +32,7 @@ async def message_handler(request: web.Request):
     message_uid = await sse_log(text, level='info', app=request.app)
     
     logger.info(f"Message received: {text[:50]}... (uid={message_uid})")
-    
-    # Отправляем ответ клиенту через SSE
-    await sse_log(f"Эхо: {text}", level='info', app=request.app)
+
     await handle_transcription(request.app, {"text": text})
 
     return web.json_response({

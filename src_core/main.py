@@ -19,15 +19,14 @@ from server.handlers.handle_sse import sse_handler
 from server.settings import (
     CORE_HOST,
     CORE_PORT,
-    NATS_FRAMES_SUBJECT,
-    NATS_LOGS_SUBJECT,
-    NATS_URL,
     STACK_SERVICE_NAME,
+
 )
 from server.utils.config import STATIC_DIR
 from server.utils.sse import SSEContext, register_sse_context, sse_broadcast
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
+
 
 def setup_routes(app):
     app.router.add_get("/", handle_index)
@@ -39,20 +38,14 @@ def setup_routes(app):
     app.on_startup.append(handle_startup)
     app.on_shutdown.append(handle_shutdown)
 
+
 if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
     app["pcs"] = set()
     sse_context = SSEContext(service_name=STACK_SERVICE_NAME)
     register_sse_context(app, sse_context)
-    app['vars'] = {
-        "NATS_FRAMES_SUBJECT": NATS_FRAMES_SUBJECT,
-        "NATS_LOGS_SUBJECT": NATS_LOGS_SUBJECT,
-        "NATS_URL": NATS_URL,
-        "STACK_SERVICE_NAME": STACK_SERVICE_NAME,
-    }
 
     setup_routes(app)
-
 
 
     async def ticker(app):
@@ -70,6 +63,7 @@ if __name__ == "__main__":
                 await asyncio.sleep(5)
         except asyncio.CancelledError:
             pass
+
 
     # async def on_startup(app):
     #     app["ticker_task"] = asyncio.create_task(ticker(app))

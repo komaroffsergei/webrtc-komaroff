@@ -1,6 +1,7 @@
 import json
 import logging
 
+from src_core.server.settings import NATS_AGENT_SUBJECT, STACK_SERVICE_NAME
 from src_core.server.utils.sse import sse_log, SSEContext, register_sse_context
 
 logger = logging.getLogger("handle_transcription")
@@ -32,14 +33,11 @@ async def handle_transcription(app, payload: dict):
         nc = app['services']['nats_client']
         request_payload = {
             "text": text,
-            "service": app['vars']["STACK_SERVICE_NAME"]
+            "service": STACK_SERVICE_NAME
         }
 
-        # Используем NATS subjects из настроек
-        agent_subject = app['vars'].get("NATS_AGENT_SUBJECT", "agent.requests")
-
         msg = await nc.request(
-            agent_subject,
+            NATS_AGENT_SUBJECT,
             json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
             timeout=120.0,  # увеличенный таймаут для сложных запросов
         )
