@@ -1,10 +1,5 @@
 import requests
-
-from src_mcp_gateway.config_loader import load_settings
-
-SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["routes_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+from src_agent.settings import ROUTES_API_URL, TIMEOUT_SECONDS
 
 
 def run(params):
@@ -41,7 +36,7 @@ def run(params):
     if radius_km is not None:
         query["radius_km"] = float(radius_km)
 
-    response = requests.get(API_URL, params=query, timeout=TIMEOUT)
+    response = requests.get(ROUTES_API_URL, params=query, timeout=TIMEOUT_SECONDS)
     response.raise_for_status()
     data = response.json()
 

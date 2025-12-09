@@ -1,8 +1,3 @@
 python-dotenv
 nats-py
-fastmcp
 requests
-numpy
-aiohttp
-logging
-json

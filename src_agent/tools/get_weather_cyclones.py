@@ -1,10 +1,6 @@
 import requests
 
-from src_mcp_gateway.config_loader import load_settings
-
-SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["weather_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+from src_agent.settings import WEATHER_API_URL, TIMEOUT_SECONDS
 
 
 def run(params):
@@ -25,7 +21,7 @@ def run(params):
         ]
       }
     """
-    r = requests.get(API_URL + "/cyclones", timeout=TIMEOUT)
+    r = requests.get(WEATHER_API_URL + "/cyclones", timeout=TIMEOUT_SECONDS)
     r.raise_for_status()
     data = r.json()
 

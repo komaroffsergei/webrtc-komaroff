@@ -1,9 +1,6 @@
 import requests
-from src_mcp_gateway.config_loader import load_settings
 
-SETTINGS = load_settings()
-API = SETTINGS["services"]["runways_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+from src_agent.settings import RUNWAYS_API_URL, TIMEOUT_SECONDS
 
 
 def run(params):
@@ -14,9 +11,9 @@ def run(params):
 
     airport_id = params["airport_id"]
 
-    url = f"{API}/{airport_id}/runway_lengths"
+    url = f"{RUNWAYS_API_URL}/{airport_id}/runway_lengths"
 
-    r = requests.get(url, timeout=TIMEOUT)
+    r = requests.get(url, timeout=TIMEOUT_SECONDS)
     r.raise_for_status()
 
     data = r.json()

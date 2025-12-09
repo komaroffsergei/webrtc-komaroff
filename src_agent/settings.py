@@ -12,9 +12,16 @@ NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "agent.requests")
 NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.frames")
 
-# MCP Gateway Configuration
-MCP_URL = os.getenv("MCP_URL", f"http://127.0.0.1:6006/mcp")
 
 # Agent settings
 AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
+TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "30"))
+
+
+
+AIRPORTS_API_URL = os.getenv("AIRPORTS_API_URL", "http://127.0.0.1:8100/api/airports/search")
+RUNWAYS_API_URL = os.getenv("RUNWAYS_API_URL", "http://127.0.0.1:8100/api/airports")
+PILOT_API_URL = os.getenv("PILOT_API_URL", "http://127.0.0.1:8100/api/pilot/location")
+ROUTES_API_URL = os.getenv("ROUTES_API_URL", "http://127.0.0.1:8100/api/routes/nearest")
+WEATHER_API_URL = os.getenv("ROUTES_API_URL", "http://127.0.0.1:8100/api/weather")

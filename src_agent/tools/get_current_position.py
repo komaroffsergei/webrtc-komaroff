@@ -1,10 +1,6 @@
 import requests
 
-from src_mcp_gateway.config_loader import load_settings
-
-SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["pilot_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+from src_agent.settings import PILOT_API_URL, TIMEOUT_SECONDS
 
 
 def run(params):
@@ -17,7 +13,7 @@ def run(params):
     Выход:
       { "lat": float, "lon": float }
     """
-    r = requests.get(API_URL, timeout=TIMEOUT)
+    r = requests.get(PILOT_API_URL, timeout=TIMEOUT_SECONDS)
     r.raise_for_status()
     data = r.json()
 

@@ -1,6 +1,0 @@
-[
-  {"runway_id": "01L", "status": "free"},
-  {"runway_id": "01R", "status": "busy"},
-  {"runway_id": "19L", "status": "free"},
-  {"runway_id": "19R", "status": "closed"}
-]

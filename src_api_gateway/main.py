@@ -20,15 +20,11 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 with open(os.path.join(DATA_DIR, "airports.json"), "r") as f:
     AIRPORTS: List[Dict[str, Any]] = json.load(f)
 
-with open(os.path.join(DATA_DIR, "runway_status.json"), "r") as f:
-    RUNWAYS: List[Dict[str, Any]] = json.load(f)
-
 with open(os.path.join(DATA_DIR, "weather_cyclones.json"), "r") as f:
     CYCLONES = json.load(f)
 
-with open(os.path.join(DATA_DIR, "runway_lengths.json"), "r") as f:
-    RUNWAY_LENGTHS = json.load(f)
-
+with open(os.path.join(DATA_DIR, "airport_runways.json"), "r") as f:
+    AIRPORT_RUNWAYS = json.load(f)
 app = FastAPI(title="API Gateway (mocked aviation data)")
 
 
@@ -82,10 +78,8 @@ def search_airports(
 
 @app.get("/api/airports/{airport_id}/runways")
 def get_runways(airport_id: str):
-    # Mocked: random subset of runway statuses
-    count = random.randint(1, len(RUNWAYS))
-    sample = random.sample(RUNWAYS, count)
-    return {"runways": sample}
+    runways = AIRPORT_RUNWAYS.get(airport_id, [])
+    return {"runways": runways}
 
 
 # -------------------------------------------------------------
@@ -171,12 +165,11 @@ def get_cyclones():
 
 @app.get("/api/airports/{airport_id}/runway_lengths")
 def get_runway_lengths(airport_id: str):
-    """
-    Возвращает длины полос аэропорта.
-    В реальном сервисе выбиралось бы по airport_id,
-    но сейчас мок один на всех.
-    """
-    return {"runways": RUNWAY_LENGTHS}
+    runways = AIRPORT_RUNWAYS.get(airport_id, [])
+    return {"runways": [
+        {"runway_id": r["runway_id"], "length_m": r["length_m"]}
+        for r in runways
+    ]}
 
 
 # -------------------------------------------------------------

@@ -1,8 +1,0 @@
-uvicorn
-requests
-pyyaml
-aiohttp
-fastmcp==2.11.0
-cyclopts>=5.0.0a1
-pydantic==2.11.9
-python-dotenv>=1.2.1

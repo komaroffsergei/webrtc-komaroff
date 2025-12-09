@@ -1,10 +1,6 @@
 import requests
 
-from src_mcp_gateway.config_loader import load_settings
-
-SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["airports_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+from src_agent.settings import AIRPORTS_API_URL, TIMEOUT_SECONDS
 
 
 def run(params):
@@ -22,9 +18,9 @@ def run(params):
         return {"results": []}
 
     r = requests.get(
-        API_URL + "/search_by_name",
+        AIRPORTS_API_URL + "/search_by_name",
         params={"query": query},
-        timeout=TIMEOUT,
+        timeout=TIMEOUT_SECONDS,
     )
     r.raise_for_status()
     raw = r.json()

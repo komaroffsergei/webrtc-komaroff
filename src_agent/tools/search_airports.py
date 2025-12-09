@@ -1,10 +1,11 @@
 import requests
 
-from src_mcp_gateway.config_loader import load_settings
+from src_agent.settings import AIRPORTS_API_URL, TIMEOUT_SECONDS
 
-SETTINGS = load_settings()
-API_URL = SETTINGS["services"]["airports_api"]
-TIMEOUT = SETTINGS["network"]["timeout_seconds"]
+
+#
+# API_URL = SETTINGS["services"]["airports_api"]
+# TIMEOUT = SETTINGS["network"]["timeout_seconds"]
 
 
 def run(params):
@@ -36,13 +37,14 @@ def run(params):
     radius_km = float(params["radius_km"])
 
     response = requests.get(
-        API_URL,
+
+        AIRPORTS_API_URL,
         params={
             "radius_km": radius_km,
             "lat": lat,
             "lon": lon,
         },
-        timeout=TIMEOUT,
+        timeout=TIMEOUT_SECONDS,
     )
     response.raise_for_status()
     data = response.json()

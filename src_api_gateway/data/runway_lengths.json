@@ -1,6 +1,0 @@
-[
-  {"airport_id": "UUDD", "runway_id": "01L", "length_m": 2600},
-  {"airport_id": "UUDD", "runway_id": "01R", "length_m": 3000},
-  {"airport_id": "UUWW", "runway_id": "06",  "length_m": 2500},
-  {"airport_id": "UUWW", "runway_id": "24",  "length_m": 2500}
-]

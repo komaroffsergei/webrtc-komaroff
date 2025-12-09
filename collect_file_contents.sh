@@ -30,7 +30,6 @@ docker
 stack
 model
 models
-static
 .env.example
 __pycache__
 __init__
