@@ -27,7 +27,7 @@ class WhisperService:
         *,
         service_name: str,
         nats_url: str,
-        frames_subject: str,
+        asr_subject: str,
         logs_subject: str,
         models_dir,
         model_id: str,
@@ -40,8 +40,8 @@ class WhisperService:
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
-        self._frames_subject = frames_subject
-        self._logs_subject = logs_subject
+        self._asr_subject = asr_subject
+        self._events_subject = logs_subject
         self._models_dir = models_dir
         self._model_id = model_id
         self._language = language
@@ -85,14 +85,14 @@ class WhisperService:
             ping_interval=10,
         )
 
-        self._nats_logger = NatsLogger(self._nc, self._logs_subject, self._service_name)
+        self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)
         await self._nats_logger.info("Whisper Python service connected")
 
         self._model_task = asyncio.create_task(self._warmup_model())
         self._model_task.add_done_callback(self._handle_model_task_done)
 
-        await self._nc.subscribe(self._frames_subject, cb=self._handle_message)
-        await self._nats_logger.info(f"Subscribed to {self._frames_subject}")
+        await self._nc.subscribe(self._asr_subject, cb=self._handle_message)
+        await self._nats_logger.info(f"Subscribed to {self._asr_subject}")
 
     async def _shutdown(self) -> None:
         if self._model_task:

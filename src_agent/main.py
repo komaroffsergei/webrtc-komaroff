@@ -1,8 +1,11 @@
 import asyncio
 import logging
 import os
+import sys
+
 from service import AgentServer
-from settings import STACK_SERVICE_NAME
+from settings import STACK_SERVICE_NAME, USER_ID, NATS_EVENTS_SUBJECT, AGENT_MAX_STEPS, NATS_AGENT_SUBJECT, NATS_URL, \
+    NATS_LLM_SUBJECT
 
 
 def configure_logging():
@@ -22,7 +25,13 @@ def main():
 
     logger.info(f"Starting {STACK_SERVICE_NAME} service...")
 
-    server = AgentServer()
+    server = AgentServer(
+        nats_url=NATS_URL,
+        agent_subject=f"{NATS_AGENT_SUBJECT}{USER_ID}",
+        llm_subject=f"{NATS_LLM_SUBJECT}{USER_ID}",
+        events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
+        max_steps=AGENT_MAX_STEPS,
+    )
 
     try:
         asyncio.run(server.run())

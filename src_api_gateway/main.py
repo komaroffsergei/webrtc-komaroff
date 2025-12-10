@@ -89,8 +89,10 @@ def get_runways(airport_id: str):
 @app.get("/api/pilot/location")
 def pilot_location():
     # Mocked random pilot position
-    lat = random.uniform(54.5, 56.5)
-    lon = random.uniform(36.5, 39.0)
+    # lat = random.uniform(54.5, 56.5)
+    # lon = random.uniform(36.5, 39.0)
+    lat = 54.5
+    lon = 36.5
     return {"lat": lat, "lon": lon}
 
 

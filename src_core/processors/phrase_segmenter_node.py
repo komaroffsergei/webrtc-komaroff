@@ -16,7 +16,7 @@ from nats.errors import (
 )
 
 from .base import ConsumerNode
-from ..settings import VAD_MODEL_PATH, VAD_MODEL_URL
+from src_core.settings import VAD_MODEL_PATH, VAD_MODEL_URL
 from ..utils.audio_utils import resample_audio
 from ..utils.silero_onnx_vad import (
     SileroOnnxVAD,
@@ -57,7 +57,7 @@ class PhraseSegmenterNode(ConsumerNode):
         speech_pad_ms: int = 30,
         threshold: float = 0.8,
         buffer_check_interval_s: float = 1.0,
-        request_timeout: float = 15.0,
+        request_timeout: float = 30.0,
         max_pending_tasks: int = 3,
     ):
         super().__init__(source_node)
@@ -272,7 +272,6 @@ class PhraseSegmenterNode(ConsumerNode):
             await sse_log(
                 f"ASR timeout for phrase {phrase.phrase_id}",
                 level="warn",
-                service="src_core",
                 name="asr_timeout",
                 app=self.app,
             )
@@ -281,7 +280,7 @@ class PhraseSegmenterNode(ConsumerNode):
             await sse_log(
                 "Whisper service unavailable",
                 level="error",
-                service="src_core",
+
                 name="asr_no_responders",
                 app=self.app,
             )

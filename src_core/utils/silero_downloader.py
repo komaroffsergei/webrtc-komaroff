@@ -7,7 +7,7 @@ from urllib.parse import urlparse
 import aiohttp
 from aiohttp.web_app import Application
 
-from ..settings import STACK_SERVICE_NAME, VAD_MODEL_PATH, VAD_MODEL_URL
+from src_core.settings import STACK_SERVICE_NAME, VAD_MODEL_PATH
 from .sse import sse_log
 
 CHUNK_SIZE = 1 << 16  # 64 KB

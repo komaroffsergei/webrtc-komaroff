@@ -6,8 +6,6 @@ import sys
 from nats.aio.client import Client as NATS
 from settings import (
     NATS_URL,
-    NATS_AGENT_SUBJECT,
-    NATS_LOGS_SUBJECT,
     STACK_SERVICE_NAME
 )
 from agent import MCPAgent
@@ -17,7 +15,20 @@ logger = logging.getLogger(STACK_SERVICE_NAME)
 
 
 class AgentServer:
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        nats_url: str,
+        agent_subject: str,
+        llm_subject: str,
+        events_subject: str,
+        max_steps: int = 10,
+    ):
+        self.nats_url = nats_url
+        self.agent_subject = agent_subject      # ← nats.src_agent.user123
+        self.llm_subject = llm_subject          # ← nats.src_llm.user123
+        self.events_subject = events_subject        # ← nats.events.user123
+        self.max_steps = max_steps
         self.nc = None
         self.agent = None
         self.nats_logger = None
@@ -34,17 +45,17 @@ class AgentServer:
             ping_interval=10,
         )
 
-        self.nats_logger = NatsLogger(self.nc, NATS_LOGS_SUBJECT, STACK_SERVICE_NAME)
-        self.agent = MCPAgent(self.nc)
+        self.nats_logger = NatsLogger(self.nc, self.events_subject, STACK_SERVICE_NAME)
+        self.agent = MCPAgent(self.nc, llm_subject=self.llm_subject, max_steps=self.max_steps)
 
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS")
         logger.info(f"Connected to NATS at {NATS_URL}")
 
     async def subscribe(self):
         """Подписка на темы NATS"""
-        await self.nc.subscribe(NATS_AGENT_SUBJECT, cb=self.handle_request)
-        await self.nats_logger.info(f"Subscribed to {NATS_AGENT_SUBJECT}")
-        logger.info(f"Subscribed to {NATS_AGENT_SUBJECT}")
+        await self.nc.subscribe(self.agent_subject, cb=self.handle_request)
+        await self.nats_logger.info(f"Subscribed to {self.agent_subject}")
+        logger.info(f"Subscribed to {self.agent_subject}")
 
     async def handle_request(self, msg):
         """Обработка входящего запроса на выполнение агента"""

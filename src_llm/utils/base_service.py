@@ -20,15 +20,15 @@ class BaseService:
             *,
             service_name: str,
             nats_url: str,
-            frames_subject: str,
-            logs_subject: str,
+            llm_subject: str,
+            events_subject: str,
             max_concurrency: int = 1,
 
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
-        self._frames_subject = frames_subject
-        self._logs_subject = logs_subject
+        self._llm_subject = llm_subject
+        self._events_subject = events_subject
         self._nc: nats.NATS
         self._nats_logger: NatsLogger
         self._stop_event = asyncio.Event()
@@ -51,11 +51,11 @@ class BaseService:
             ping_interval=10,
         )
 
-        self._nats_logger = NatsLogger(self._nc, self._logs_subject, self._service_name)
+        self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)
         await self._nats_logger.info(f"{STACK_SERVICE_NAME} service connected")
 
-        await self._nc.subscribe(self._frames_subject, cb=self._handle_message)
-        await self._nats_logger.info(f"Subscribed to {self._frames_subject}")
+        await self._nc.subscribe(self._llm_subject, cb=self._handle_message)
+        await self._nats_logger.info(f"Subscribed to {self._llm_subject}")
 
     async def run(self) -> None:
         await self._connect()
@@ -98,7 +98,7 @@ class BaseService:
         except Exception:
             msg_str = repr(msg.data)
 
-        await self._nats_logger.info(f"Process message data={msg_str}")
+        # await self._nats_logger.info(f"Process message data={msg_str}")
 
         async with self._semaphore:
             try:
@@ -120,10 +120,10 @@ class BaseService:
             "time": transcribe_time,
         }
 
-        await self._nats_logger.info(
-            f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
-        )
-        await self._nats_logger.info(message, name="llm_result")
+        # await self._nats_logger.info(
+        #     f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
+        # )
+        # await self._nats_logger.info(message, name="llm_result")
         await self._reply(msg, message)
 
 

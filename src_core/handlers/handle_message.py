@@ -1,9 +1,8 @@
 import logging
 from aiohttp import web
 
-from src_core.server.handlers.handle_transcription import handle_transcription
-from src_core.server.settings import STACK_SERVICE_NAME
-from src_core.server.utils.sse import sse_log, SSEContext, register_sse_context
+from src_core.handlers.handle_transcription import handle_transcription
+from src_core.utils.sse import sse_log
 
 logger = logging.getLogger("handle_message")
 

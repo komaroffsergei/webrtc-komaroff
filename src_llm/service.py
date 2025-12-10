@@ -20,8 +20,8 @@ class LLMService(BaseService):
         *,
         service_name: str,
         nats_url: str,
-        frames_subject: str,
-        logs_subject: str,
+        llm_subject: str,
+        events_subject: str,
         ollama_url: str,
         ollama_model: str,
         system_prompt_file: str,
@@ -31,8 +31,8 @@ class LLMService(BaseService):
         super().__init__(
             service_name=service_name,
             nats_url=nats_url,
-            frames_subject=frames_subject,
-            logs_subject=logs_subject,
+            llm_subject=llm_subject,
+            events_subject=events_subject,
         )
         # без запятых, нам тут не tuple нужны
         self.ollama_url = ollama_url

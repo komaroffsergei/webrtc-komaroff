@@ -4,7 +4,7 @@ import logging
 
 from aiohttp import web
 
-from src_core.server.utils.sse import get_sse_context
+from src_core.utils.sse import get_sse_context
 
 logger = logging.getLogger("handle_sse")
 

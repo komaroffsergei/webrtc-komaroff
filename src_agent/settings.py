@@ -5,20 +5,18 @@ from dotenv import load_dotenv
 current_dir = os.path.dirname(os.path.abspath(__file__))
 env_file = os.path.join(current_dir, '.env')
 load_dotenv(env_file)
+USER_ID = os.getenv("USER_ID", "user123")
 
 # NATS Configuration
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "agent.requests")
-NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
-NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.frames")
-
+NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
+NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
+NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.llm.")
 
 # Agent settings
 AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
 TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "30"))
-
-
 
 AIRPORTS_API_URL = os.getenv("AIRPORTS_API_URL", "http://127.0.0.1:8100/api/airports/search")
 RUNWAYS_API_URL = os.getenv("RUNWAYS_API_URL", "http://127.0.0.1:8100/api/airports")

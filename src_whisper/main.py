@@ -8,19 +8,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from service import WhisperService
+from src_whisper.settings import STACK_SERVICE_NAME, NATS_URL, NATS_ASR_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, \
+    ASR_MODEL_ID
+
 current_dir = Path(__file__).parent.resolve()
 env_file = current_dir / '.env'
 env_local_file = current_dir / '.env.local'
 load_dotenv(env_local_file if os.path.exists(env_local_file) else env_file)
 
-STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_whisper_python")
-NATS_URL = os.getenv("NATS_URL", "nats://127.0.0.1:4222")
-NATS_FRAMES_SUBJECT = os.getenv("NATS_FRAMES_SUBJECT", "nats.frames")
-NATS_LOGS_SUBJECT = os.getenv("NATS_LOGS_SUBJECT", "nats.logs")
 ASR_MODELS_DIR = current_dir / Path(os.getenv("ASR_MODELS_DIR", "models/asr"))
-ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
-ASR_COMPUTE_TYPE = os.getenv("ASR_COMPUTE_TYPE", "float32")
-
 ASR_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -35,11 +31,11 @@ async def _run_service() -> None:
     service = WhisperService(
         service_name=STACK_SERVICE_NAME,
         nats_url=NATS_URL,
-        frames_subject=NATS_FRAMES_SUBJECT,
-        logs_subject=NATS_LOGS_SUBJECT,
+        asr_subject=f"{NATS_ASR_SUBJECT}{USER_ID}",
+        logs_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         models_dir=ASR_MODELS_DIR,
         model_id=ASR_MODEL_ID,
-        compute_type=ASR_COMPUTE_TYPE,
+        compute_type="float32",
     )
     await service.run()
 

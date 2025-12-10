@@ -2,14 +2,13 @@ import asyncio
 import logging
 
 from .handle_transcription import handle_transcription
-from ..processors import (
+from src_core.processors import (
     PhraseSegmenterNode,
     TrackSourceNode,
 )
-from ..processors.graph import AudioGraph
-from ..settings import NATS_FRAMES_SUBJECT
-from ..utils.pc_lifecycle import attach_pc_lifecycle
-from ..utils.sse import sse_log
+from src_core.processors.graph import AudioGraph
+from src_core.utils.pc_lifecycle import attach_pc_lifecycle
+from src_core.utils.sse import sse_log
 
 logger = logging.getLogger("track")
 
@@ -44,7 +43,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             app,
             source,
             app['services']['nats_client'],  # publish frames
-            NATS_FRAMES_SUBJECT,  # whisper input
+            app['vars']['NATS_ASR_SUBJECT'],  # whisper input
             on_transcription= lambda data: handle_transcription(app, data) ,  # whisper output
             sample_rate=16000,
             min_speech_duration_ms=250,

@@ -12,8 +12,7 @@ import time
 from faster_whisper import utils as fw_utils
 from huggingface_hub import HfApi, hf_hub_download
 
-from src_mcp_llm.utils.nats_logger import NatsLogger
-
+from src_whisper.utils.nats_logger import NatsLogger
 
 ALLOW_PATTERNS = (
     "config.json",

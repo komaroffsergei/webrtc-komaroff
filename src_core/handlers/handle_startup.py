@@ -1,13 +1,11 @@
 import json
 import logging
-import os
-from pathlib import Path
 from aiohttp import web
 
-from ..settings import NATS_LOGS_SUBJECT, NATS_URL, STACK_SERVICE_NAME, VAD_MODEL_URL
-from ..utils.nats_client import NatsClient
-from ..utils.silero_downloader import ensure_silero_model
-from ..utils.sse import sse_log
+from src_core.settings import NATS_URL, STACK_SERVICE_NAME, VAD_MODEL_URL
+from src_core.utils.nats_client import NatsClient
+from src_core.utils.silero_downloader import ensure_silero_model
+from src_core.utils.sse import sse_log
 
 logger = logging.getLogger("startup")
 
@@ -31,7 +29,7 @@ async def handle_startup(app: web.Application):
         except Exception as e:
             logger.warning("Error parsing whisper log: %s", e)
 
-    await app['services']['nats_client'].subscribe(NATS_LOGS_SUBJECT, _log_cb)
+    await app['services']['nats_client'].subscribe(app['vars']['NATS_EVENTS_SUBJECT'], _log_cb)
     await ensure_silero_model(
         app,
         url=VAD_MODEL_URL,

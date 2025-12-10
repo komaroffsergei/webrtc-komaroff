@@ -5,11 +5,9 @@ import logging
 
 
 from settings import (
-    NATS_FRAMES_SUBJECT,
-    NATS_LOGS_SUBJECT,
     NATS_URL,
     STACK_SERVICE_NAME, OLLAMA_URL, OLLAMA_MODEL, SYSTEM_PROMPT_FILE, MAX_OUTPUT_TOKENS,
-    DEFAULT_MAX_TOKENS,
+    DEFAULT_MAX_TOKENS, NATS_LLM_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT,
 )
 from service import LLMService
 
@@ -26,8 +24,8 @@ async def _run_service() -> None:
     service = LLMService(
         service_name=STACK_SERVICE_NAME,
         nats_url=NATS_URL,
-        frames_subject=NATS_FRAMES_SUBJECT,
-        logs_subject=NATS_LOGS_SUBJECT,
+        llm_subject=f"{NATS_LLM_SUBJECT}{USER_ID}",
+        events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         ollama_url=OLLAMA_URL,
         ollama_model=OLLAMA_MODEL,
         system_prompt_file=SYSTEM_PROMPT_FILE,

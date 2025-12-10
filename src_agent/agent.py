@@ -8,9 +8,9 @@ logger = logging.getLogger("agent.core")
 
 
 class MCPAgent:
-    def __init__(self, nc, max_steps=AGENT_MAX_STEPS):
+    def __init__(self, nc, *, llm_subject: str, max_steps: int = 10):
         self.nc = nc
-        self.llm_client = LLMClient(nc)
+        self.llm_client = LLMClient(nc, llm_subject=llm_subject)
         self.mcp_client = MCPClient()
         self.max_steps = max_steps
 
