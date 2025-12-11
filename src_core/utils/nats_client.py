@@ -29,3 +29,7 @@ class NatsClient:
     async def request(self, subject, data, timeout=1):
         logger.info(f"NATS logs client request: {subject} `{data}`")
         return await self.nc.request(subject, data, timeout=timeout)
+
+    async def publish(self, subject: str, data: bytes) -> None:
+        logger.info("NATS publish: %s (%d bytes)", subject, len(data))
+        await self.nc.publish(subject, data)

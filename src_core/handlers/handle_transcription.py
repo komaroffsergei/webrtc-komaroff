@@ -2,7 +2,7 @@ import json
 import logging
 
 from src_core.settings import NATS_AGENT_SUBJECT, STACK_SERVICE_NAME
-from src_core.utils.sse import sse_log
+from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_transcription")
 
@@ -16,7 +16,7 @@ async def handle_transcription(app, payload: dict):
         logger.warning("Empty transcription payload")
         return
 
-    await sse_log(
+    await event_log(
         {
             "type": "user_message",
             "service": "ai_agent",
@@ -46,11 +46,11 @@ async def handle_transcription(app, payload: dict):
 
         if response.get("status") == "success":
             result = response.get("result", "")
-            await sse_log(result, level="info", name="message", app=app)
+            await event_log(result, level="info", name="message", app=app)
         else:
             error = response.get("error", "Unknown error")
-            await sse_log(f"Agent error: {error}", level="error", name="agent_error", app=app)
+            await event_log(f"Agent error: {error}", level="error", name="agent_error", app=app)
 
     except Exception as e:
         logger.error("Agent request failed: %s", e, exc_info=True)
-        await sse_log(f"Agent communication error: {str(e)}", level="error", name="agent_error", app=app)
+        await event_log(f"Agent communication error: {str(e)}", level="error", name="agent_error", app=app)

@@ -23,7 +23,7 @@ from ..utils.silero_onnx_vad import (
     download_model_file,
     get_speech_timestamps as silero_get_speech_timestamps,
 )
-from ..utils.sse import sse_log
+from ..utils.event_bus import event_log
 
 logger = logging.getLogger("audio.PhraseSegmenterNode")
 
@@ -269,7 +269,7 @@ class PhraseSegmenterNode(ConsumerNode):
 
         except NatsTimeoutError:
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
-            await sse_log(
+            await event_log(
                 f"ASR timeout for phrase {phrase.phrase_id}",
                 level="warn",
                 name="asr_timeout",
@@ -277,7 +277,7 @@ class PhraseSegmenterNode(ConsumerNode):
             )
         except NoRespondersError:
             logger.error("No whisper responders for phrase %s", phrase.phrase_id)
-            await sse_log(
+            await event_log(
                 "Whisper service unavailable",
                 level="error",
 

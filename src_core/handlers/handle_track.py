@@ -8,7 +8,7 @@ from src_core.processors import (
 )
 from src_core.processors.graph import AudioGraph
 from src_core.utils.pc_lifecycle import attach_pc_lifecycle
-from src_core.utils.sse import sse_log
+from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("track")
 
@@ -17,7 +17,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     if track.kind != "audio":
         return
 
-    await sse_log("Audio track connected", level="info")
+    await event_log("Audio track connected", level="info")
 
     #
     # AUDIO GRAPH
@@ -57,4 +57,4 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
     # START GRAPH
     asyncio.create_task(graph.start())
-    await sse_log("Audio graph started", level="info", app=app)
+    await event_log("Audio graph started", level="info", app=app)

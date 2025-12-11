@@ -2,7 +2,7 @@ import logging
 from aiohttp import web
 
 from src_core.handlers.handle_transcription import handle_transcription
-from src_core.utils.sse import sse_log
+from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_message")
 
@@ -28,7 +28,7 @@ async def message_handler(request: web.Request):
     if not text:
         return web.json_response({"error": "text field is required"}, status=400)
 
-    message_uid = await sse_log(text, level='info', app=request.app)
+    message_uid = await event_log(text, level='info', app=request.app)
     
     logger.info(f"Message received: {text[:50]}... (uid={message_uid})")
 

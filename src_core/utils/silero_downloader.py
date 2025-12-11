@@ -8,7 +8,7 @@ import aiohttp
 from aiohttp.web_app import Application
 
 from src_core.settings import STACK_SERVICE_NAME, VAD_MODEL_PATH
-from .sse import sse_log
+from .event_bus import event_log
 
 CHUNK_SIZE = 1 << 16  # 64 KB
 
@@ -53,17 +53,17 @@ async def _download_file(ctx: Application, service: str, url: str, target: Path)
                         percent = min(100, int(downloaded * 100 / total))
                         while last_percent < percent:
                             last_percent += 1
-                            await sse_log(str(last_percent), name="model_downloading_status")
+                            await event_log(str(last_percent), name="model_downloading_status")
 
     if not total:
-        await sse_log("100", name="model_downloading_percent")
+        await event_log("100", name="model_downloading_percent")
 
     tmp.replace(target)
 
 
 async def _log_status(value: str) -> None:
-    await sse_log(value, name="model_downloading_status")
+    await event_log(value, name="model_downloading_status")
 
 
 async def _log_percent(value: str) -> None:
-    await sse_log(value, name="model_downloading_percent",)
+    await event_log(value, name="model_downloading_percent",)
