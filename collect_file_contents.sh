@@ -26,15 +26,12 @@ build
 .gitignore
 README.md
 third_party
-docker
-stack
 model
 models
 .env.example
 __pycache__
 __init__
 agents.md
-static
 .version
 src_whisper_ruby
 src_whisper_c

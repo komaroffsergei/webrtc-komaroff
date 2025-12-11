@@ -1,66 +1,97 @@
 services:
-  webrtc-server-back:
-    image: ${REGISTRY_HOST}/webrtc-server-komaroff-back/${CI_COMMIT_BRANCH}
+  src_frontend:
     build:
-      context: ../src_core
-      dockerfile: ../docker/python/Dockerfile
-      target: base
+      context: ./src_frontend
+    ports:
+      - "8080:80"
+    environment:
+      - VITE_NATS_URL=ws://localhost:9222
+      - VITE_NATS_EVENTS_SUBJECT=nats.events.user123
+      - VITE_NATS_AGENT_SUBJECT=nats.agent.user123
+    depends_on:
+      - nats
+
+  nats:
+    image: nats:2.11
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"  # NATS TCP
+      - "9222:9222"  # NATS WebSocket
+    volumes:
+      - ./nats/nats.conf:/etc/nats/nats.conf:ro
+
+  api_gateway:
+    build:
+      context: ./src_api_gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8100:8100"
+    environment:
+      - API_PORT=8100
+
+  src_core:
+    build:
+      context: ./src_core
+      dockerfile: ./docker/python/Dockerfile
+    environment:
+      - USER_ID=user123
+      - NATS_URL=nats://nats:4222
+      - NATS_AGENT_SUBJECT=nats.agent.
+      - NATS_ASR_SUBJECT=nats.asr.
+      - NATS_EVENTS_SUBJECT=nats.events.
+      - CORE_PORT=8000
     ports:
       - "8000:8000"
-    volumes:
-      - vad_models:/app/models/vad
     depends_on:
-      - audio_nats
+      - nats
+      - api_gateway
 
-  audio_nats:
-    image: nats:2.11.6-scratch
-    command: ["-js"]
-
-
-  webrtc-server-whisper-python:
-    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-python/${CI_COMMIT_BRANCH}
+  src_agent:
     build:
-      context: ../src_whisper
-      #      additional_contexts:
-      #        docker: ../docker
-      dockerfile: ../docker/python/Dockerfile
-      target: whisper
-    volumes:
-      - asr_models_python:/app/models/asr
-    depends_on:
-      - audio_nats
-    ports:
-      - "9000:9000"
-
-  webrtc-server-whisper-ruby:
-    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-ruby/${CI_COMMIT_BRANCH}
-    build:
-      context: ../src_whisper_ruby
-      dockerfile: ../docker/ruby/Dockerfile
-      target: deploy
-    volumes:
-      - asr_models_ruby:/app/models/asr
-    depends_on:
-      - audio_nats
-    ports:
-      - "${WHISPER_RUBY_PORT:-7000}:7000"
-
-  webrtc-server-whisper-cpp:
-    image: ${REGISTRY_HOST}/webrtc-server-komaroff-whisper-cpp/${CI_COMMIT_BRANCH}
-    build:
-      context: ../src_whisper_c
-      dockerfile: ../docker/cpp/Dockerfile
-    volumes:
-      - asr_models_cpp:/app/models/asr
-    depends_on:
-      - audio_nats
+      context: ./src_agent
+      dockerfile: Dockerfile
     environment:
-      NATS_URL: nats://audio_nats:4222
-      NATS_FRAMES_SUBJECT: nats.frames
-      NATS_LOGS_SUBJECT: nats.logs
+      - USER_ID=user123
+      - NATS_URL=nats://nats:4222
+      - NATS_AGENT_SUBJECT=nats.agent.
+      - NATS_LLM_SUBJECT=nats.llm.
+      - NATS_EVENTS_SUBJECT=nats.events.
+      - AGENT_MAX_STEPS=10
+      - AIRPORTS_API_URL=http://api_gateway:8100/api/airports/search
+      - RUNWAYS_API_URL=http://api_gateway:8100/api/airports
+      - PILOT_API_URL=http://api_gateway:8100/api/pilot/location
+      - ROUTES_API_URL=http://api_gateway:8100/api/routes/nearest
+      - WEATHER_API_URL=http://api_gateway:8100/api/weather
+    depends_on:
+      - nats
+      - api_gateway
+
+  src_llm:
+    build:
+      context: ./src_llm
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=user123
+      - NATS_URL=nats://nats:4222
+      - NATS_LLM_SUBJECT=nats.llm.
+      - NATS_EVENTS_SUBJECT=nats.events.
+      - OLLAMA_URL=http://host.docker.internal:11435
+    depends_on:
+      - nats
+
+  src_whisper:
+    build:
+      context: ./src_whisper
+      dockerfile: Dockerfile
+    environment:
+      - USER_ID=user123
+      - NATS_URL=nats://nats:4222
+      - NATS_ASR_SUBJECT=nats.asr.
+      - NATS_EVENTS_SUBJECT=nats.events.
+      - ASR_MODEL_ID=Systran/faster-whisper-small
+    depends_on:
+      - nats
 
 volumes:
   vad_models: {}
-  asr_models_python: {}
-  asr_models_ruby: {}
-  asr_models_cpp: {}
+  asr_models: {}
