@@ -30,6 +30,7 @@ export type AppConfig = {
     };
   };
   ui: {
+    debug: boolean;
     canvas: {
       width: number;
       height: number;
@@ -88,6 +89,7 @@ export const appConfig: AppConfig = {
     },
   },
   ui: {
+    debug: true,
     canvas: {
       width: 400,
       height: 80,
