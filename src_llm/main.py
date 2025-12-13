@@ -10,7 +10,7 @@ from settings import (
     DEFAULT_MAX_TOKENS, NATS_LLM_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT,
 )
 from service import LLMService
-
+from src_llm.settings import TOOLS_MANIFEST_FILE
 
 
 def configure_logging() -> None:
@@ -30,7 +30,8 @@ async def _run_service() -> None:
         ollama_model=OLLAMA_MODEL,
         system_prompt_file=SYSTEM_PROMPT_FILE,
         max_output_tokens=MAX_OUTPUT_TOKENS,
-        default_max_tokens=DEFAULT_MAX_TOKENS
+        default_max_tokens=DEFAULT_MAX_TOKENS,
+        tools_manifest_file=TOOLS_MANIFEST_FILE
     )
     await service.run()
 

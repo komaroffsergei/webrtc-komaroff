@@ -114,17 +114,17 @@ class BaseService:
                 return
 
         transcribe_time = time.perf_counter() - started
-        message = {
-            "input": msg_str,
-            "output": text,
-            "time": transcribe_time,
-        }
+        # message = {
+        #     "input": msg_str,
+        #     "output": text,
+        #     "time": transcribe_time,
+        # }
 
-        # await self._nats_logger.info(
-        #     f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
-        # )
-        # await self._nats_logger.info(message, name="llm_result")
-        await self._reply(msg, message)
+        await self._nats_logger.info(
+            f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
+        )
+        await self._nats_logger.info(text, name="llm_result")
+        await self._reply(msg, text)
 
 
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
