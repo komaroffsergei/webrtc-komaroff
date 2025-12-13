@@ -76,6 +76,9 @@ services:
       - NATS_LLM_SUBJECT=nats.llm.
       - NATS_EVENTS_SUBJECT=nats.events.
       - OLLAMA_URL=http://host.docker.internal:11435
+      - TOOLS_MANIFEST=/app/manifest.json
+    volumes:
+      - ./src_agent/manifest.json:/app/manifest.json:ro
     depends_on:
       - nats
 

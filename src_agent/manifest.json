@@ -1,0 +1,58 @@
+{
+  "name": "agent-tools",
+  "version": "1.0.0",
+  "description": "Инструменты MCP-агента для работы с аэропортами, маршрутами и погодой",
+  "tools": [
+    {
+      "name": "search_airports",
+      "description": "Поиск аэропортов по названию или фрагменту имени",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Название аэропорта или его часть"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "get_airport_by_name",
+      "description": "Получить аэропорт по точному или частичному имени",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Имя аэропорта"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "name": "compute_distance",
+      "description": "Рассчитать расстояние между двумя точками на поверхности Земли",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lat1": { "type": "number" },
+          "lon1": { "type": "number" },
+          "lat2": { "type": "number" },
+          "lon2": { "type": "number" }
+        },
+        "required": ["lat1", "lon1", "lat2", "lon2"]
+      }
+    },
+    {
+      "name": "get_weather_cyclones",
+      "description": "Получить список погодных зон (циклонов)",
+      "input_schema": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      }
+    }
+  ]
+}

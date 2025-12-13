@@ -50,6 +50,7 @@ export class AssistantApp {
     this.registerBuiltinCommands();
 
     this.chat.addMessage("Голосовой ассистент готов к работе", "status");
+    this.chat.addMessage("Покажи аэропорты в радиусе 100км", "status");
   }
 
   /* ===========================
