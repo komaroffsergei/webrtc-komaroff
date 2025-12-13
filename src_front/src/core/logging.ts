@@ -1,50 +1,28 @@
-import type { ServerLogEntry } from "../types";
+import type { ServerLogEntry } from "./types";
+import {appConfig} from "../config/appConfig"
+export function logEvent(entry: ServerLogEntry | ServerLogEntry[]): void {
+  const list = Array.isArray(entry) ? entry : [entry];
 
-type LogListener = (entry: ServerLogEntry) => void;
+  for (const e of list) {
+    const time = e.time ?? new Date().toISOString();
+    const service = e.service ?? "client";
+    const type = e.type ?? "info";
+    const message = e.message ?? "";
 
-export class Logger {
-  private listeners = new Set<LogListener>();
+    const level = type.toLowerCase();
+    const writer =
+      (console as unknown as Record<string, (...args: unknown[]) => void>)[level] ?? console.log;
 
-  addListener(listener: LogListener): void {
-    this.listeners.add(listener);
-  }
-
-  removeListener(listener: LogListener): void {
-    this.listeners.delete(listener);
-  }
-
-  emit(entry: ServerLogEntry): void {
-    const enriched: ServerLogEntry = {
-      time: entry.time ?? new Date().toISOString(),
-      ...entry,
-    };
-
-    if (enriched.service && enriched.type && enriched.message) {
-      const level = enriched.type.toLowerCase();
-      const writer = (
-        console as unknown as Record<string, (...args: unknown[]) => void>
-      )[level];
-      (writer ?? console.log)(
-        `${enriched.time} [${enriched.service}] [${enriched.type}] ${enriched.message}`,
-      );
-    }
-
-    this.listeners.forEach((listener) => {
-      try {
-        listener(enriched);
-      } catch (err) {
-        console.warn("[logger] listener failed", err);
-      }
-    });
+    writer(`${time} [${service}] [${type}] ${message}`);
   }
 }
 
-export const logger = new Logger();
 
-export function logEvent(entry: ServerLogEntry | ServerLogEntry[]): void {
-  if (Array.isArray(entry)) {
-    entry.forEach((item) => logger.emit(item));
-    return;
-  }
-  logger.emit(entry);
+export function logError(name: string, val: any) {
+  console.error(name, val);
+}
+
+
+export function debug() {
+
 }

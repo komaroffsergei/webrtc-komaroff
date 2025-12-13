@@ -6,7 +6,7 @@ export type AppConfig = {
     iceServers: RTCIceServer[];
     iceCandidatePoolSize: number;
     bundlePolicy: "balanced" | "max-bundle" | "max-compat";
-    rtcpMuxPolicy: "require" | "negotiate";
+    rtcpMuxPolicy: "require";
     forceRelay: boolean;
     diagnostics: boolean;
     iceGatherTimeoutMs: number;
@@ -21,25 +21,15 @@ export type AppConfig = {
       echoCancellationDefault: boolean;
       noiseSuppressionDefault: boolean;
     };
-    opus: {
-      maxBitrate: number;
-    };
     analyser: {
-      fftSize: number;
-      historySeconds: number;
+      fftSizeBg: number;
+      historySecondsBg: number;
+      fftSizeMic: number;
+      historySecondsMic: number;
     };
   };
   ui: {
     debug: boolean;
-    canvas: {
-      width: number;
-      height: number;
-    };
-    colors: {
-      grid: string;
-      in: string;
-      out: string;
-    };
   };
   nats: {
     url: string;
@@ -54,8 +44,7 @@ const natsEventsSubject =
   import.meta.env.VITE_NATS_EVENTS_SUBJECT ?? "nats.events.user123";
 const natsAgentSubject =
   import.meta.env.VITE_NATS_AGENT_SUBJECT ?? "nats.agent.user123";
-const natsClientName =
-  import.meta.env.VITE_NATS_CLIENT_NAME ?? "src_front";
+const natsClientName = import.meta.env.VITE_NATS_CLIENT_NAME ?? "src_front";
 
 export const appConfig: AppConfig = {
   signaling: {
@@ -80,25 +69,15 @@ export const appConfig: AppConfig = {
       echoCancellationDefault: true,
       noiseSuppressionDefault: true,
     },
-    opus: {
-      maxBitrate: 24000,
-    },
     analyser: {
-      fftSize: 1024,
-      historySeconds: 10,
+      fftSizeBg: 512,
+      historySecondsBg: 3,
+      fftSizeMic: 256,
+      historySecondsMic: 0.5,
     },
   },
   ui: {
     debug: true,
-    canvas: {
-      width: 400,
-      height: 80,
-    },
-    colors: {
-      grid: "#ddd",
-      in: "#2b8",
-      out: "#82b",
-    },
   },
   nats: {
     url: natsUrl,
