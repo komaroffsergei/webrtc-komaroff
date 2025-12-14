@@ -130,10 +130,30 @@ class BaseService:
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
         if not msg.reply or not self._nc:
             return
-        await self._nc.publish(msg.reply, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+        await self._nc.publish(msg.reply, self.to_json_safe(payload))
 
     def on_message(self, msg: Msg) -> None:
         raise NotImplementedError
 
     async def on_run(self) -> None:
         raise NotImplementedError
+
+    def to_json_safe(self, obj):
+        if obj is None:
+            return None
+
+        if isinstance(obj, (str, int, float, bool)):
+            return obj
+
+        if isinstance(obj, dict):
+            return {k: self.to_json_safe(v) for k, v in obj.items()}
+
+        if isinstance(obj, list):
+            return [self.to_json_safe(v) for v in obj]
+
+        # SDK-объекты (Message, ToolCall и т.п.)
+        if hasattr(obj, "__dict__"):
+            return self.to_json_safe(vars(obj))
+
+        # крайний случай
+        return str(obj)
