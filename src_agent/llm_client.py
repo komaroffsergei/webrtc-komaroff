@@ -29,7 +29,7 @@ class LLMClient:
             msg = await self.nc.request(
                 self.llm_subject,
                 json.dumps(request_payload, ensure_ascii=False).encode("utf-8"),
-                timeout=60.0,
+                timeout=120.0,
             )
             payload = json.loads(msg.data.decode("utf-8"))
         except Exception as e:

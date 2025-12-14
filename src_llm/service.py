@@ -80,6 +80,7 @@ class LLMService(BaseService):
                 model=self.ollama_model,
                 messages=messages,
                 tools=self.tools or None,
+                format="json",
                 options={
                     "num_predict": max_tokens,
                 },

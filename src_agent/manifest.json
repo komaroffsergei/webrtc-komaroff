@@ -5,35 +5,98 @@
   "tools": [
     {
       "name": "search_airports",
-      "description": "Поиск аэропортов по названию или фрагменту имени",
+      "description": "Поиск аэропортов в радиусе от заданной точки.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "query": {
-            "type": "string",
-            "description": "Название аэропорта или его часть"
-          }
+          "lat": { "type": "number" },
+          "lon": { "type": "number" },
+          "radius_km": { "type": "number" }
         },
-        "required": ["query"]
+        "required": ["lat", "lon", "radius_km"]
       }
     },
     {
       "name": "get_airport_by_name",
-      "description": "Получить аэропорт по точному или частичному имени",
+      "description": "Поиск аэропорта по точному или частичному названию.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "query": {
-            "type": "string",
-            "description": "Имя аэропорта"
-          }
+          "query": { "type": "string" }
         },
         "required": ["query"]
       }
     },
     {
+      "name": "runway_info",
+      "description": "Получить статусы ВПП (свободна/занята/закрыта) для заданного аэропорта.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "airport_id": { "type": "string" }
+        },
+        "required": ["airport_id"]
+      }
+    },
+    {
+      "name": "runway_lengths",
+      "description": "Получить длины ВПП для заданного аэропорта.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "airport_id": { "type": "string" }
+        },
+        "required": ["airport_id"]
+      }
+    },
+    {
+      "name": "airports_filter",
+      "description": "Фильтрует список аэропортов: добавляет признак наличия свободной ВПП и максимальную длину.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "airports": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "lat": { "type": "number" },
+                "lon": { "type": "number" }
+              },
+              "required": ["id", "name", "lat", "lon"]
+            }
+          }
+        },
+        "required": ["airports"]
+      }
+    },
+    {
+      "name": "get_current_position",
+      "description": "Текущая (симулированная) позиция 'пилота'.",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "get_nearest_route",
+      "description": "Найти ближайший маршрут от заданной точки до аэропорта.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lat": { "type": "number" },
+          "lon": { "type": "number" },
+          "radius_km": { "type": ["number", "null"] },
+          "require_free_runway": { "type": "boolean" }
+        },
+        "required": ["lat", "lon", "require_free_runway"]
+      }
+    },
+    {
       "name": "compute_distance",
-      "description": "Рассчитать расстояние между двумя точками на поверхности Земли",
+      "description": "Вычислить расстояние между двумя точками на Земле (haversine).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -47,11 +110,10 @@
     },
     {
       "name": "get_weather_cyclones",
-      "description": "Получить список погодных зон (циклонов)",
+      "description": "Получить список метеорологических циклонов.",
       "input_schema": {
         "type": "object",
-        "properties": {},
-        "required": []
+        "properties": {}
       }
     }
   ]
