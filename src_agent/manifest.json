@@ -29,18 +29,7 @@
     },
     {
       "name": "runway_info",
-      "description": "Получить статусы ВПП (свободна/занята/закрыта) для заданного аэропорта.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "airport_id": { "type": "string" }
-        },
-        "required": ["airport_id"]
-      }
-    },
-    {
-      "name": "runway_lengths",
-      "description": "Получить длины ВПП для заданного аэропорта.",
+      "description": "Получить статусы ВПП (свободна/занята/закрыта) для заданного аэропорта, длину ВПП.",
       "input_schema": {
         "type": "object",
         "properties": {

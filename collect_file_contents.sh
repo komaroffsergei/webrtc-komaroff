@@ -35,6 +35,7 @@ agents.md
 .version
 src_whisper_ruby
 src_whisper_c
+src_front
 EOF
 )
 : "${EXCLUDE_DIRS_FILES:=$DEFAULT_EXCLUDE_DIRS_FILES}"

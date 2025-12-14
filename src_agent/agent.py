@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 from llm_client import LLMClient
@@ -84,9 +85,11 @@ class MCPAgent:
                     }
 
                 # 4. Результат tool возвращаем в LLM
+                # todo в бд
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": call["id"],
+                    "name": call["function"]["name"],
+                    "date": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
                     "content": json.dumps(tool_result, ensure_ascii=False),
                 })
 

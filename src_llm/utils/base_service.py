@@ -10,6 +10,7 @@ from nats.aio.msg import Msg
 
 from src_llm.settings import STACK_SERVICE_NAME
 from src_llm.utils.nats_logger import NatsLogger
+from src_llm.utils.nats_publisher import NatsPublisher
 
 logger = logging.getLogger(f"{STACK_SERVICE_NAME}(BaseService)")
 
@@ -50,7 +51,7 @@ class BaseService:
             reconnect_time_wait=2,
             ping_interval=10,
         )
-
+        self._publisher = NatsPublisher(self._nc)
         self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)
         await self._nats_logger.info(f"{STACK_SERVICE_NAME} service connected")
 
@@ -130,7 +131,7 @@ class BaseService:
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
         if not msg.reply or not self._nc:
             return
-        await self._nc.publish(msg.reply, self.to_json_safe(payload))
+        await self._publisher.publish(msg.reply, payload)
 
     def on_message(self, msg: Msg) -> None:
         raise NotImplementedError
