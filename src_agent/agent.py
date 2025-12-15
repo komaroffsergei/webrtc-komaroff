@@ -6,18 +6,21 @@ from typing import Any, Dict, List
 from llm_client import LLMClient
 from mcp_client import MCPClient
 from settings import AGENT_MAX_STEPS
+from src_agent.repositories.events import log_event
 
 logger = logging.getLogger("agent.core")
 
 
 class MCPAgent:
-    def __init__(self, nc, *, llm_subject: str, max_steps: int = AGENT_MAX_STEPS):
+    def __init__(self, nc, *, llm_subject: str, max_steps: int = AGENT_MAX_STEPS, db=None):
+        self.current_intent_id = None
         self.nc = nc
         self.llm_client = LLMClient(nc, llm_subject=llm_subject)
         self.mcp_client = MCPClient()
         self.max_steps = max_steps
+        self.db = db
 
-    async def run(self, user_text: str) -> Dict[str, Any]:
+    async def run(self, *, user_text: str, session_id: str) -> Dict[str, Any]:
         """
         MCP-агент с полноценным tool round-trip.
         """
@@ -30,8 +33,32 @@ class MCPAgent:
 
         for step in range(1, self.max_steps + 1):
             logger.info("Agent step %d", step)
+            await log_event(
+                self.db,
+                session_id=session_id,
+                intent_id=self.current_intent_id,
+                role="SYSTEM",
+                event_type="MESSAGE",
+                name="llm_request",
+                input={
+                    "messages": messages,
+                    "step": step,
+                },
+                output=None,
+            )
 
             llm_response = await self.llm_client.call_llm_chat(messages)
+
+            await log_event(
+                self.db,
+                session_id=session_id,
+                intent_id=self.current_intent_id,
+                role="LLM",
+                event_type="MESSAGE",
+                name="llm_response",
+                input=None,
+                output=llm_response,
+            )
 
             if not llm_response:
                 return {
@@ -72,6 +99,17 @@ class MCPAgent:
                     json.dumps(args, ensure_ascii=False),
                 )
 
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=self.current_intent_id,
+                    role="TOOL",
+                    event_type="TOOL_CALL",
+                    name=tool_name,
+                    input=args,
+                    output=None,
+                )
+
                 try:
                     tool_result = await self.mcp_client.call_tool(
                         tool_name,
@@ -83,9 +121,18 @@ class MCPAgent:
                         "status": "error",
                         "reason": str(exc),
                     }
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=self.current_intent_id,
+                    role="TOOL",
+                    event_type="TOOL_RESULT",
+                    name=tool_name,
+                    input=None,
+                    output=tool_result,
+                )
 
-                # 4. Результат tool возвращаем в LLM
-                # todo в бд
+                # Результат tool возвращаем в LLM
                 messages.append({
                     "role": "tool",
                     "name": call["function"]["name"],
@@ -94,6 +141,18 @@ class MCPAgent:
                 })
 
         logger.warning("Max steps reached")
+
+        await log_event(
+            self.db,
+            session_id=session_id,
+            intent_id=self.current_intent_id,
+            role="LLM",
+            event_type="FINAL",
+            name=None,
+            input=None,
+            output={"text": assistant_msg["content"]},
+        )
+
 
         return {
             "status": "error",

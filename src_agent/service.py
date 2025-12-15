@@ -9,7 +9,10 @@ from settings import (
     STACK_SERVICE_NAME
 )
 from agent import MCPAgent
-from utils.sse import NatsLogger
+from src_agent.utils.db import Database
+from utils.nats_logger import NatsLogger
+from src_agent.repositories.sessions import create_session
+from src_agent.repositories.events import log_event
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -23,6 +26,9 @@ class AgentServer:
         llm_subject: str,
         events_subject: str,
         max_steps: int = 10,
+        db_url: str = None,
+        user_id: str = None,
+
     ):
         self.nats_url = nats_url
         self.agent_subject = agent_subject      # ← nats.src_agent.user123
@@ -33,6 +39,9 @@ class AgentServer:
         self.agent = None
         self.nats_logger = None
         self.stop_event = asyncio.Event()
+        self.db_url = db_url
+        self.db = None
+        self.user_id = user_id
 
     async def connect(self):
         """Подключение к NATS"""
@@ -44,12 +53,12 @@ class AgentServer:
             reconnect_time_wait=2,
             ping_interval=10,
         )
-
         self.nats_logger = NatsLogger(self.nc, self.events_subject, STACK_SERVICE_NAME)
-        self.agent = MCPAgent(self.nc, llm_subject=self.llm_subject, max_steps=self.max_steps)
-
-        await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS")
-        logger.info(f"Connected to NATS at {NATS_URL}")
+        self.db = Database(db_url=self.db_url)
+        await self.db.connect()
+        await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to Database")
+        self.agent = MCPAgent(self.nc, llm_subject=self.llm_subject, max_steps=self.max_steps, db=self.db)
+        await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS {NATS_URL}")
 
     async def subscribe(self):
         """Подписка на темы NATS"""
@@ -60,8 +69,10 @@ class AgentServer:
     async def handle_request(self, msg):
         """Обработка входящего запроса на выполнение агента"""
         try:
-            data = json.loads(msg.data.decode('utf-8'))
-            user_text = data.get('text', '').strip()
+            data = json.loads(msg.data.decode("utf-8"))
+
+            user_text = data.get("text", "").strip()
+            session_id = data.get("session_id")
 
             if not user_text:
                 raise ValueError("Empty text in request")
@@ -69,12 +80,29 @@ class AgentServer:
             await self.nats_logger.info(f"Processing request: {user_text[:50]}...")
             logger.info(f"Processing request: {user_text[:50]}...")
 
+            if not session_id:
+                session_id = await create_session(self.db, self.user_id)
+
+
+            #Логируем пользовательский ввод
+            await log_event(
+                self.db,
+                session_id=session_id,
+                intent_id=None,
+                role="USER",
+                event_type="MESSAGE",
+                name=None,
+                input={"text": user_text},
+                output=None,
+            )
+
             # Запуск агента
-            result = await self.agent.run(user_text)
+            result = await self.agent.run(user_text=user_text, session_id=session_id)
 
             # Отправка результата
             response = {
                 "status": "success",
+                "session_id": session_id,
                 "result": result
             }
 

@@ -18,6 +18,9 @@ AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
 TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "30"))
 
+# Database
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")
+
 AIRPORTS_API_URL = os.getenv("AIRPORTS_API_URL", "http://127.0.0.1:8100/api/airports/search")
 RUNWAYS_API_URL = os.getenv("RUNWAYS_API_URL", "http://127.0.0.1:8100/api/airports")
 PILOT_API_URL = os.getenv("PILOT_API_URL", "http://127.0.0.1:8100/api/pilot/location")
