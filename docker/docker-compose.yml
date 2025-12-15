@@ -11,15 +11,6 @@ services:
     depends_on:
       - nats
 
-  nats:
-    image: nats:2.11
-    command: ["-c", "/etc/nats/nats.conf"]
-    ports:
-      - "4222:4222"  # NATS TCP
-      - "9222:9222"  # NATS WebSocket
-    volumes:
-      - ./nats/nats.conf:/etc/nats/nats.conf:ro
-
   api_gateway:
     build:
       context: ./src_api_gateway
@@ -95,6 +86,36 @@ services:
     depends_on:
       - nats
 
+
+  src_postgres:
+    image: postgres:16-alpine
+    container_name: src_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - mcp_pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  nats:
+    image: nats:2.11
+    command: ["-c", "/etc/nats/nats.conf"]
+    ports:
+      - "4222:4222"  # NATS TCP
+      - "9222:9222"  # NATS WebSocket
+    volumes:
+      - ./nats/nats.conf:/etc/nats/nats.conf:ro
+
+
 volumes:
-  vad_models: {}
-  asr_models: {}
+  mcp_pg_data:
+    name: mcp_pg_data
