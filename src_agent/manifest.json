@@ -4,16 +4,62 @@
   "description": "Инструменты MCP-агента для работы с аэропортами, маршрутами и погодой",
   "tools": [
     {
+      "name": "get_current_position",
+      "description": "Получает текущую географическую позицию пользователя для использования как точки отсчета",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "when_to_use": [
+        "Если пользователь не указал точку отсчета",
+        "Если запрос гео-зависимый"
+      ],
+      "provides_context": {
+        "current_position": {
+          "type": "geo_point",
+          "format": "lat_lon"
+        }
+      },
+      "creates_artifacts": [
+        {
+          "name": "current_position",
+          "type": "geo_point",
+          "scope": "session",
+          "ttl": "10m"
+        }
+      ],
+      "call_policy": {
+        "max_calls_per_session": 1,
+        "cache_result": true
+      },
+      "failure_modes": [
+        {
+          "code": "PERMISSION_DENIED",
+          "recoverable": false
+        }
+      ]
+    },
+    {
       "name": "search_airports",
       "description": "Поиск аэропортов в радиусе от заданной точки.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "lat": { "type": "number" },
-          "lon": { "type": "number" },
-          "radius_km": { "type": "number" }
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "radius_km": {
+            "type": "number"
+          }
         },
-        "required": ["lat", "lon", "radius_km"]
+        "required": [
+          "lat",
+          "lon",
+          "radius_km"
+        ]
       }
     },
     {
@@ -22,9 +68,13 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "query": { "type": "string" }
+          "query": {
+            "type": "string"
+          }
         },
-        "required": ["query"]
+        "required": [
+          "query"
+        ]
       }
     },
     {
@@ -33,9 +83,13 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "airport_id": { "type": "string" }
+          "airport_id": {
+            "type": "string"
+          }
         },
-        "required": ["airport_id"]
+        "required": [
+          "airport_id"
+        ]
       }
     },
     {
@@ -49,24 +103,31 @@
             "items": {
               "type": "object",
               "properties": {
-                "id": { "type": "string" },
-                "name": { "type": "string" },
-                "lat": { "type": "number" },
-                "lon": { "type": "number" }
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "lat": {
+                  "type": "number"
+                },
+                "lon": {
+                  "type": "number"
+                }
               },
-              "required": ["id", "name", "lat", "lon"]
+              "required": [
+                "id",
+                "name",
+                "lat",
+                "lon"
+              ]
             }
           }
         },
-        "required": ["airports"]
-      }
-    },
-    {
-      "name": "get_current_position",
-      "description": "Текущая (симулированная) позиция 'пилота'.",
-      "input_schema": {
-        "type": "object",
-        "properties": {}
+        "required": [
+          "airports"
+        ]
       }
     },
     {
@@ -75,12 +136,27 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "lat": { "type": "number" },
-          "lon": { "type": "number" },
-          "radius_km": { "type": ["number", "null"] },
-          "require_free_runway": { "type": "boolean" }
+          "lat": {
+            "type": "number"
+          },
+          "lon": {
+            "type": "number"
+          },
+          "radius_km": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "require_free_runway": {
+            "type": "boolean"
+          }
         },
-        "required": ["lat", "lon", "require_free_runway"]
+        "required": [
+          "lat",
+          "lon",
+          "require_free_runway"
+        ]
       }
     },
     {
@@ -89,12 +165,25 @@
       "input_schema": {
         "type": "object",
         "properties": {
-          "lat1": { "type": "number" },
-          "lon1": { "type": "number" },
-          "lat2": { "type": "number" },
-          "lon2": { "type": "number" }
+          "lat1": {
+            "type": "number"
+          },
+          "lon1": {
+            "type": "number"
+          },
+          "lat2": {
+            "type": "number"
+          },
+          "lon2": {
+            "type": "number"
+          }
         },
-        "required": ["lat1", "lon1", "lat2", "lon2"]
+        "required": [
+          "lat1",
+          "lon1",
+          "lat2",
+          "lon2"
+        ]
       }
     },
     {

@@ -1,6 +1,6 @@
 import json
 
-from src_agent.utils.db import Database
+from ..utils.db import Database
 from typing import Optional, Dict, Any
 
 async def next_event_seq(db: Database, session_id: str) -> int:

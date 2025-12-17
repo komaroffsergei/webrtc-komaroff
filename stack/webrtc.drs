@@ -42,7 +42,32 @@ Service :whisper_cpp, image: 'builder-registry.builder.giscloud.ru/webrtc-server
   volume name: 'ASR_MODELS_DIR_CPP', target: '/app/models/asr'
 end
 
-Service :audio_nats, image: 'nats:2.11.6-scratch'
+Service :audio_nats, image: 'nats:2.11.6-scratch' do
+  ingress host: "komaroff-nats-ws.*",  port: 9222
+  command "nats-server -c /nats.conf"
+  config target: "/nats.conf", file_content: <<~CONF
+    # Отключаем JetStream
+    jetstream: false
+
+    # Включаем WebSocket
+    websocket: {
+      listen: 0.0.0.0:9222
+      no_tls: true
+      compression: true
+    }
+  CONF
+end
+
+Service :mcp_db, image: 'postgres:13.5' do
+  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'node', POSTGRES_PASSWORD: 'node'
+  env PGDATA: '/var/lib/postgresql/data/pgdata'
+  volume 'database:/var/lib/postgresql/data'
+  command ['postgres', '--wal_level=logical']
+end
+
+# mcp_odata ...
+
+
 
 Service :nats_box, image: 'natsio/nats-box' do
   env NATS_URL: NATS_URL

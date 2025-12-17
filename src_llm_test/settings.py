@@ -1,0 +1,28 @@
+import os
+from dotenv import load_dotenv
+
+# Load environment variables
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_file = os.path.join(current_dir, '.env')
+load_dotenv(env_file)
+USER_ID = os.getenv("USER_ID", "user123")
+
+# NATS Configuration
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
+NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
+NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.llm.")
+
+# Agent settings
+AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
+STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
+TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "120"))
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")
+# Database
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")
+
+AIRPORTS_API_URL = os.getenv("AIRPORTS_API_URL", "http://127.0.0.1:8100/api/airports/search")
+RUNWAYS_API_URL = os.getenv("RUNWAYS_API_URL", "http://127.0.0.1:8100/api/airports")
+PILOT_API_URL = os.getenv("PILOT_API_URL", "http://127.0.0.1:8100/api/pilot/location")
+ROUTES_API_URL = os.getenv("ROUTES_API_URL", "http://127.0.0.1:8100/api/routes/nearest")
+WEATHER_API_URL = os.getenv("WEATHER_API_URL", "http://127.0.0.1:8100/api/weather")

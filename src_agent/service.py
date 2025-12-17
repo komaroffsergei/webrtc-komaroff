@@ -57,7 +57,11 @@ class AgentServer:
         self.db = Database(db_url=self.db_url)
         await self.db.connect()
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to Database")
-        self.agent = MCPAgent(self.nc, llm_subject=self.llm_subject, max_steps=self.max_steps, db=self.db)
+        self.agent = MCPAgent(self.nc,
+                              llm_subject=self.llm_subject,
+                              events_subject=self.events_subject,
+                              max_steps=self.max_steps,
+                              db=self.db)
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS {NATS_URL}")
 
     async def subscribe(self):

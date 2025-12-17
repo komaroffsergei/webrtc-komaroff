@@ -8,6 +8,7 @@ from urllib.error import URLError, HTTPError
 
 import ollama
 from nats.aio.msg import Msg
+from sympy.physics.units import temperature
 
 from src_llm.settings import STACK_SERVICE_NAME
 from src_llm.utils.base_service import BaseService
@@ -65,24 +66,57 @@ class LLMService(BaseService):
 
     def on_message(self, msg: Msg) -> dict[str, Any]:
         payload = json.loads(msg.data.decode("utf-8"))
-
         messages = payload["messages"]
-        max_tokens = min(
-            int(payload.get("max_tokens", self.default_max_tokens)),
-            self.max_output_tokens,
-        )
-
         system_prompt = self._get_system_prompt()
         if system_prompt and not any(m["role"] == "system" for m in messages):
             messages = [{"role": "system", "content": system_prompt}, *messages]
+
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_current_position",
+                    "description": "Возвращает текущую гео-позицию пользователя в виде координат {'lat': string, 'lon': string}.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_airports",
+                    "description": "Возвращает список аэропортов в заданном радиусе (radius_km) от центра заданного координатами (lat, lon)",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lat": {"type": "number"},
+                            "lon": {"type": "number"},
+                            "radius_km": {"type": "number"}
+                        },
+                        "required": ["lat", "lon", "radius_km"]
+                    }
+                }
+            }
+        ]
+
+
+
         try:
+            # response = self.ollama.generate(
             response = self.ollama.chat(
                 model=self.ollama_model,
                 messages=messages,
-                tools=self.tools or None,
-                format="json",
+                tools=tools,
+
+                # format="python",
                 options={
-                    "num_predict": max_tokens,
+                    # "num_predict": self.max_output_tokens,
+                    'temperature': 0.0,
+                    # "num_ctx": 32768,
+                    'top_p': 1.0,
+                    'top_k': 40
                 },
                 stream=False,
             )
@@ -90,9 +124,6 @@ class LLMService(BaseService):
         except Exception as exc:
             return {"error": "ollama_error", "details": str(exc)}
 
-        return {
-            "role": result.get("role"),
-            "content": result.get("content"),
-            "tool_calls": result.get("tool_calls"),
-            "tool_name": result.get("tool_name"),
-        }
+        logger.info('LLM Answer:')
+        logger.info(result)
+        return result
