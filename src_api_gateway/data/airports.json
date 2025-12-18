@@ -1,8 +1,62 @@
 [
-  {"id": "UUWW", "name": "Внуково", "lat": 55.5915, "lon": 37.2615},
-  {"id": "UUDD", "name": "Домодедово", "lat": 55.4146, "lon": 37.8995},
-  {"id": "UUEE", "name": "Шереметьево", "lat": 55.9726, "lon": 37.4146},
-  {"id": "UUBA", "name": "Балабаново", "lat": 55.183, "lon": 36.716},
-  {"id": "UUWW2", "name": "Случайный аэродром 1", "lat": 55.21, "lon": 38.33},
-  {"id": "UUXX", "name": "Случайный аэродром 2", "lat": 54.91, "lon": 37.99}
+  {
+    "id": "UUEE",
+    "code": "SVO",
+    "name": "Шереметьево",
+    "lat": 55.9726,
+    "lon": 37.4146,
+    "status": "open",
+    "runways": [
+      {
+        "id": "06L/24R",
+        "length_m": 3700,
+        "surface": "concrete",
+        "status": "free"
+      },
+      {
+        "id": "06R/24L",
+        "length_m": 3550,
+        "surface": "concrete",
+        "status": "busy"
+      }
+    ]
+  },
+  {
+    "id": "UUDD",
+    "code": "DME",
+    "name": "Домодедово",
+    "lat": 55.4146,
+    "lon": 37.8995,
+    "status": "open",
+    "runways": [
+      {
+        "id": "14L/32R",
+        "length_m": 3800,
+        "surface": "asphalt",
+        "status": "free"
+      },
+      {
+        "id": "14R/32L",
+        "length_m": 3500,
+        "surface": "asphalt",
+        "status": "busy"
+      }
+    ]
+  },
+  {
+    "id": "UUWW",
+    "code": "VKO",
+    "name": "Внуково",
+    "lat": 55.5915,
+    "lon": 37.2615,
+    "status": "closed",
+    "runways": [
+      {
+        "id": "01/19",
+        "length_m": 3000,
+        "surface": "concrete",
+        "status": "closed"
+      }
+    ]
+  }
 ]

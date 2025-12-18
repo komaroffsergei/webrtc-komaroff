@@ -1,162 +1,137 @@
 import requests
-from typing import Any
-
-from src_llm_test.settings import (
-    PILOT_API_URL,
-    TIMEOUT_SECONDS,
-    AIRPORTS_API_URL,
-    RUNWAYS_API_URL,
-)
 from src_llm_test.mcp_tools import mcp_tool
+
+API = "http://127.0.0.1:8100/api"
 
 ARTIFACTS = {}
 
 
-@mcp_tool(description="Фатальная ошибка. Использовать только если дальнейшая работа невозможна.")
-def display_error(msg: str):
-    return False, f"Ошибка: {msg}"
+@mcp_tool(
+    description="Получает текущую позицию пользователя",
+    provides=["current_position"]
+)
+def get_current_position():
+    r = requests.get(f"{API}/pilot/location")
+    r.raise_for_status()
+    pos = r.json()
+    ARTIFACTS["current_position"] = pos
+    return True, {
+        "status": "ok",
+        "artifact_key": "current_position"
+    }
 
 
-@mcp_tool(description="Отображает ранее найденные аэропорты.")
-def display_airports():
-    if not ARTIFACTS.get("airports"):
-        return False, "Аэропорты не найдены."
-
-    lines = []
-    for idx, a in enumerate(ARTIFACTS["airports"], start=1):
-        lines.append(
-            f"{idx}. {a.get('name', 'Без названия')} ({a.get('id', 'N/A')})\n"
-            f"   Координаты: {float(a['lat']):.4f}, {float(a['lon']):.4f}\n"
-            f"   Расстояние: {float(a.get('distance_km', 0.0)):.1f} км"
-        )
-
-    return False, "\n\n".join(lines)
-
-
-@mcp_tool(description="Ищет аэропорты в заданном радиусе от точки.")
-def search_airports(lat: float, lon: float, radius_km: float):
-    response = requests.get(
-        AIRPORTS_API_URL,
-        params={"radius_km": radius_km, "lat": lat, "lon": lon},
-        timeout=TIMEOUT_SECONDS,
+@mcp_tool(
+    description="Поиск ближайших открытых аэропортов",
+    consumes=["current_position"],
+    provides=["airports"],
+    parameters={
+        "radius_km": "Радиус поиска в километрах",
+    }
+)
+def search_nearest_airports(radius_km: float):
+    pos = ARTIFACTS["current_position"]
+    r = requests.get(
+        f"{API}/airports/nearest",
+        params={
+            "lat": pos["lat"],
+            "lon": pos["lon"],
+            "radius_km": radius_km,
+            "status": "open"
+        }
     )
-    response.raise_for_status()
-
-    data = response.json()
-    airports = data.get("results", [])
-
-    ARTIFACTS["airports"] = airports
-
-    if not airports:
-        return False, "Аэропорты не найдены."
-
+    r.raise_for_status()
+    res = r.json()["results"]
+    ARTIFACTS["airports"] = res
     return True, {
         "status": "ok",
         "artifact_key": "airports",
-        "count": len(airports),
-        "message": f"Найдено {len(airports)} аэропортов"
+        "count": len(res)
     }
 
 
-@mcp_tool(description="Возвращает информацию о ВПП аэропорта.")
-def runway_info(airport_id: str):
-    r1 = requests.get(
-        f"{RUNWAYS_API_URL}/{airport_id}/runways",
-        timeout=TIMEOUT_SECONDS,
-    )
-    r1.raise_for_status()
-    statuses = r1.json()["runways"]
-
-    r2 = requests.get(
-        f"{RUNWAYS_API_URL}/{airport_id}/runway_lengths",
-        timeout=TIMEOUT_SECONDS,
-    )
-    r2.raise_for_status()
-    lengths = r2.json()["runways"]
-
-    length_map = {x["runway_id"]: x["length_m"] for x in lengths}
-
-    final = []
-    for s in statuses:
-        rid = s["runway_id"]
-        final.append(
-            {
-                "runway_id": rid,
-                "status": s["status"],
-                "length_m": length_map.get(rid, 0),
-            }
-        )
-
-    ARTIFACTS.setdefault("runways", {})[airport_id] = final
-    return True, {"runways": final}
-
-
-@mcp_tool(description="Получает текущую гео-позицию пользователя.")
-def get_current_position():
-    r = requests.get(PILOT_API_URL, timeout=TIMEOUT_SECONDS)
-    r.raise_for_status()
-    data = r.json()
-
-    ARTIFACTS["current_position"] = data
-    return True, {
-        "status": "ok",
-        "artifact_key": "current_position",
-        "message": "Текущая позиция получена"
+@mcp_tool(
+    description=(
+        "Выбирает аэропорт с самой короткой взлётно-посадочной полосой "
+        "из ранее найденных аэропортов."
+    ),
+    consumes=["airports"],
+    provides=["airports"],
+    parameters={
+        "require_runway_status": (
+            "Если указано, учитывать только ВПП с данным статусом: "
+            "free, busy или closed"
+        ),
+        "surface": (
+            "Если указано, учитывать только ВПП с данным материалом: "
+            "concrete или asphalt"
+        ),
     }
-
-
-@mcp_tool(description="Поиск аэропорта по названию или его части.")
-def get_airport_by_name(query: str):
-    query = query.strip()
-    if not query:
-        return False, []
-
-    r = requests.get(
-        AIRPORTS_API_URL + "/search_by_name",
-        params={"query": query},
-        timeout=TIMEOUT_SECONDS,
-    )
-    r.raise_for_status()
-
-    return False, r.json()
-
-
-@mcp_tool(description="Фильтрует и агрегирует ранее найденные аэропорты.")
-def query_airports(
-    require_free_runway: bool = False,
-    min_runway_length_m: int | None = None,
-    sort_by: str | None = None,
-    limit: int | None = None,
+)
+def select_airport_with_shortest_runway(
+    require_runway_status: str | None = None,
+    surface: str | None = None,
 ):
-    results = []
+    selected = None
+    shortest_length = None
 
-    for airport in ARTIFACTS.get("airports", []):
-        aid = airport["id"]
-        runways = ARTIFACTS.get("runways", {}).get(aid, [])
+    if ARTIFACTS.get("airports") is None:
+        return True, {
+            "status": "error",
+            "message": "Необходимо сначала выполнить поиск аэродромов"
+        }
 
-        free = [r for r in runways if r["status"] == "free"]
-        if require_free_runway and not free:
-            continue
+    for airport in ARTIFACTS["airports"]:
+        for runway in airport.get("runways", []):
+            if require_runway_status and runway["status"] != require_runway_status:
+                continue
+            if surface and runway["surface"] != surface:
+                continue
 
-        max_len = max((r["length_m"] for r in free), default=0)
-        if min_runway_length_m and max_len < min_runway_length_m:
-            continue
+            length = runway["length_m"]
 
-        results.append(
-            {
-                "id": aid,
-                "name": airport.get("name"),
-                "distance_km": airport.get("distance_km"),
-                "max_free_runway_length_m": max_len,
-            }
-        )
+            if shortest_length is None or length < shortest_length:
+                shortest_length = length
+                selected = {
+                    **airport,
+                    "runways": [runway]
+                }
 
-    if sort_by == "max_free_runway_length":
-        results.sort(key=lambda x: x["max_free_runway_length_m"], reverse=True)
-    elif sort_by == "distance_km":
-        results.sort(key=lambda x: x["distance_km"])
+    if not selected:
+        return False, {
+            "status": "error",
+            "message": "Не найдено ВПП, подходящих под условия"
+        }
 
-    if limit:
-        results = results[:limit]
+    ARTIFACTS["airports"] = [selected]
 
-    return False, results
+    return False, {
+        "status": "ok",
+        "selected_airport_id": selected["id"],
+        "shortest_runway_length_m": shortest_length
+    }
+
+
+@mcp_tool(
+    description="Построение маршрута от текущей позиции до выбранного аэропорта",
+    consumes=["current_position", "airports"],
+    provides=["route"]
+)
+def build_route_to_first_airport():
+    pos = ARTIFACTS["current_position"]
+    airport = ARTIFACTS["airports"][0]
+
+    r = requests.post(
+        f"{API}/routes/build",
+        params={
+            "start_lat": pos["lat"],
+            "start_lon": pos["lon"],
+            "end_lat": airport["lat"],
+            "end_lon": airport["lon"]
+        }
+    )
+    r.raise_for_status()
+    route = r.json()
+    ARTIFACTS["route"] = route
+    return False, route
+
