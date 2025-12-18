@@ -30,6 +30,11 @@ def get_current_position():
     }
 )
 def search_nearest_airports(radius_km: float):
+    if ARTIFACTS.get("current_position") is None:
+        return True, {
+            "status": "error",
+            "message": "Необходимо сначала выполнить запрос текущей гео-позиция пользователя"
+        }
     pos = ARTIFACTS["current_position"]
     r = requests.get(
         f"{API}/airports/nearest",
@@ -42,11 +47,12 @@ def search_nearest_airports(radius_km: float):
     )
     r.raise_for_status()
     res = r.json()["results"]
-    ARTIFACTS["airports"] = res
+    ARTIFACTS["selected_airports"] = res
     return True, {
         "status": "ok",
-        "artifact_key": "airports",
-        "count": len(res)
+        "artifact_key": "selected_airports",
+        "count": len(res),
+        "message": f"Найдено {len(res)} ближайших аэродрома к заданным координатам"
     }
 
 
@@ -55,8 +61,8 @@ def search_nearest_airports(radius_km: float):
         "Выбирает аэропорт с самой короткой взлётно-посадочной полосой "
         "из ранее найденных аэропортов."
     ),
-    consumes=["airports"],
-    provides=["airports"],
+    consumes=["selected_airports"],
+    provides=["selected_airports"],
     parameters={
         "require_runway_status": (
             "Если указано, учитывать только ВПП с данным статусом: "
@@ -75,13 +81,13 @@ def select_airport_with_shortest_runway(
     selected = None
     shortest_length = None
 
-    if ARTIFACTS.get("airports") is None:
+    if ARTIFACTS.get("selected_airports") is None:
         return True, {
             "status": "error",
             "message": "Необходимо сначала выполнить поиск аэродромов"
         }
 
-    for airport in ARTIFACTS["airports"]:
+    for airport in ARTIFACTS["selected_airports"]:
         for runway in airport.get("runways", []):
             if require_runway_status and runway["status"] != require_runway_status:
                 continue
@@ -103,7 +109,7 @@ def select_airport_with_shortest_runway(
             "message": "Не найдено ВПП, подходящих под условия"
         }
 
-    ARTIFACTS["airports"] = [selected]
+    ARTIFACTS["selected_airports"] = [selected]
 
     return False, {
         "status": "ok",
@@ -114,12 +120,25 @@ def select_airport_with_shortest_runway(
 
 @mcp_tool(
     description="Построение маршрута от текущей позиции до выбранного аэропорта",
-    consumes=["current_position", "airports"],
+    consumes=["current_position", "selected_airports"],
     provides=["route"]
 )
 def build_route_to_first_airport():
+
+    if ARTIFACTS.get("current_position") is None:
+        return True, {
+            "status": "error",
+            "message": "Необходимо сначала выполнить запрос текущей гео-позиция пользователя"
+        }
+
     pos = ARTIFACTS["current_position"]
-    airport = ARTIFACTS["airports"][0]
+
+    if ARTIFACTS.get("selected_airports") is None:
+        return True, {
+            "status": "error",
+            "message": "Необходимо сначала выполнить поиск аэродромов"
+        }
+    airport = ARTIFACTS["selected_airports"][0]
 
     r = requests.post(
         f"{API}/routes/build",

@@ -18,6 +18,9 @@ AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
 TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "120"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")
+
+DEBUG = os.getenv("DEBUG", True)
+
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")
 
