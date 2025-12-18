@@ -1,7 +1,7 @@
 from typing import Any
 
-from src_langgraph.graph import build_graph
-from src_langgraph.state import AgentState
+from src_lang_graph_1.graph import build_graph
+from src_lang_graph_1.state import AgentState
 
 EXAMPLES = [
     "Найди аэропорты в радиусе 100 км",
