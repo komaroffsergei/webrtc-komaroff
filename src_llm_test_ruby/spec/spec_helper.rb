@@ -1,16 +1,19 @@
 # frozen_string_literal: true
 
 ENV['RACK_ENV'] = 'test'
+ENV['DEBUG'] = 'false'
 
 require 'rspec'
-require 'rack/test'
 
 require_relative '../service/service'
+require_relative '../service/db'
+require_relative '../service/mcp_tools'
+require_relative '../service/utils'
 
 RSpec.configure do |config|
-  config.include Rack::Test::Methods
+  config.order = :random
 
-  config.before(:suite) do
-    # Настройка тестовых данных
+  config.before do
+    LLMTestRuby::DB.reset!
   end
 end

@@ -7,12 +7,16 @@ module LLMTestRuby
   module DB
     extend self
 
-    @store = {
-      sessions: [],
-      intents: [],
-      artifacts: [],
-      events: []
-    }
+    def reset!
+      @store = {
+        sessions: [],
+        intents: [],
+        artifacts: [],
+        events: []
+      }
+    end
+
+    reset!
 
     def store
       @store
@@ -36,10 +40,10 @@ module LLMTestRuby
 
     def finish_session(session_id, status = 'COMPLETED')
       session = @store[:sessions].find { |s| s[:session_id] == session_id }
-      if session
-        session[:status] = status
-        session[:updated_at] = now
-      end
+      return unless session
+
+      session[:status] = status
+      session[:updated_at] = now
     end
 
     def create_intent(session_id:, user_id:, intent_type:)
@@ -55,12 +59,12 @@ module LLMTestRuby
       intent_id
     end
 
-    def finish_intent(session_id, intent_id, final_answer)
+    def finish_intent(_session_id, intent_id, final_answer)
       intent = @store[:intents].find { |i| i[:intent_id] == intent_id }
-      if intent
-        intent[:status] = 'COMPLETED'
-        intent[:result] = final_answer
-      end
+      return unless intent
+
+      intent[:status] = 'COMPLETED'
+      intent[:result] = final_answer
     end
 
     def log_event(session_id:, intent_id:, seq:, role:, event_type:, name:, input_data:, output_data:)

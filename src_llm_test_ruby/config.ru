@@ -16,7 +16,7 @@ run lambda { |env|
   elsif req.post? && req.path == '/query'
     begin
       params = JSON.parse(req.body.read)
-      model = params['model'] || 'qwen3:0.6b'
+      model = params['model']
       user_query = params['query']
       user_id = params['user_id'] || LLMTestRuby::Settings::USER_ID
 

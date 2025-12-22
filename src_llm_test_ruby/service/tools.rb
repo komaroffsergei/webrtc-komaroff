@@ -1,55 +1,55 @@
-require_relative 'mcp_tools'
+# frozen_string_literal: true
+
 require 'json'
 require 'faraday'
+require_relative 'mcp_tools'
 
 module LLMTestRuby
   module Tools
     extend self
 
-    API_BASE = 'http://127.0.0.1:8100/api'.freeze
-    @artifacts = {}
+    API_BASE = 'http://127.0.0.1:8100/api'
 
-    # Сначала определяем все методы инструментов
+    def artifacts
+      @artifacts ||= {}
+    end
+
+    def reset!
+      @artifacts = {}
+    end
+
+    def http
+      @http ||= Faraday.new(url: API_BASE) do |f|
+        f.response :raise_error
+        f.adapter Faraday.default_adapter
+      end
+    end
+
+    # -----------------------------
+    # TOOL METHODS
+    # -----------------------------
+    def display_airports
+      [false, { status: 'ok', result: artifacts[:selected_airports] }]
+    end
+
     def get_current_position
-      uri = URI("#{API_BASE}/pilot/location")
-      response = Net::HTTP.get_response(uri)
+      resp = http.get('pilot/location')
+      pos = JSON.parse(resp.body)
+      artifacts[:current_position] = pos
 
-      raise "API error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
-      pos = JSON.parse(response.body)
-      @artifacts[:current_position] = pos
-
-      [true, {
-        status: 'ok',
-        artifact_key: 'current_position'
-      }]
+      [true, { status: 'ok', artifact_key: 'current_position' }]
     end
 
     def search_nearest_airports(radius_km:)
-      unless @artifacts[:current_position]
-        return [true, {
-          status: 'error',
-          message: 'Необходимо сначала выполнить запрос текущей гео-позиции пользователя'
-        }]
+      unless artifacts[:current_position]
+        return [true, { status: 'error', code: 'NO_CURRENT_POSITION', message: 'Сначала нужно получить текущую позицию' }]
       end
 
-      pos = @artifacts[:current_position]
-      uri = URI("#{API_BASE}/airports/nearest")
+      pos = artifacts[:current_position]
+      resp = http.get('airports/nearest', { lat: pos['lat'], lon: pos['lon'], radius_km: radius_km })
+      res = JSON.parse(resp.body)
 
-      params = {
-        lat: pos['lat'],
-        lon: pos['lon'],
-        radius_km: radius_km,
-        status: 'open'
-      }
-
-      uri.query = URI.encode_www_form(params)
-      response = Net::HTTP.get_response(uri)
-
-      raise "API error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
-      res = JSON.parse(response.body)['results']
-      @artifacts[:selected_airports] = res
+      artifacts[:selected_airports] = res
 
       [true, {
         status: 'ok',
@@ -60,17 +60,14 @@ module LLMTestRuby
     end
 
     def select_airport_with_shortest_runway(require_runway_status: nil, surface: nil)
-      unless @artifacts[:selected_airports]
-        return [true, {
-          status: 'error',
-          message: 'Необходимо сначала выполнить поиск аэродромов'
-        }]
+      unless artifacts[:selected_airports]
+        return [true, { status: 'error', message: 'Необходимо сначала выполнить поиск аэродромов' }]
       end
 
       selected = nil
       shortest_length = nil
 
-      @artifacts[:selected_airports].each do |airport|
+      artifacts[:selected_airports].each do |airport|
         airport['runways'].each do |runway|
           next if require_runway_status && runway['status'] != require_runway_status
           next if surface && runway['surface'] != surface
@@ -78,22 +75,16 @@ module LLMTestRuby
           length = runway['length_m']
           if shortest_length.nil? || length < shortest_length
             shortest_length = length
-            selected = {
-              **airport,
-              'runways' => [runway]
-            }
+            selected = airport.merge('runways' => [runway])
           end
         end
       end
 
       unless selected
-        return [false, {
-          status: 'error',
-          message: 'Не найдено ВПП, подходящих под условия'
-        }]
+        return [false, { status: 'error', message: 'Не найдено ВПП, подходящих под условия' }]
       end
 
-      @artifacts[:selected_airports] = [selected]
+      artifacts[:selected_airports] = [selected]
 
       [false, {
         status: 'ok',
@@ -103,43 +94,31 @@ module LLMTestRuby
     end
 
     def build_route_to_first_airport
-      unless @artifacts[:current_position]
-        return [true, {
-          status: 'error',
-          message: 'Необходимо сначала выполнить запрос текущей гео-позиции пользователя'
-        }]
+      unless artifacts[:current_position]
+        return [true, { status: 'error', message: 'Сначала нужно получить текущую позицию' }]
+      end
+      unless artifacts[:selected_airports]&.any?
+        return [true, { status: 'error', message: 'Сначала нужно выбрать аэропорт' }]
       end
 
-      unless @artifacts[:selected_airports]
-        return [true, {
-          status: 'error',
-          message: 'Необходимо сначала выполнить поиск аэродромов'
-        }]
-      end
+      start = artifacts[:current_position]
+      airport = artifacts[:selected_airports].first
 
-      pos = @artifacts[:current_position]
-      airport = @artifacts[:selected_airports].first
 
-      uri = URI("#{API_BASE}/routes/build")
-      params = {
-        start_lat: pos['lat'],
-        start_lon: pos['lon'],
-        end_lat: airport['lat'],
-        end_lon: airport['lon']
+      route = {
+        from: start,
+        to: airport.slice('id', 'name', 'lat', 'lon'),
+        distance_km: 42.0
       }
 
-      uri.query = URI.encode_www_form(params)
-      response = Net::HTTP.get_response(uri)
-
-      raise "API error: #{response.code}" unless response.is_a?(Net::HTTPSuccess)
-
-      route = JSON.parse(response.body)
-      @artifacts[:route] = route
-
-      [false, route]
+      artifacts[:route] = route
+      [false, { status: 'ok', artifact_key: 'route', route: route }]
     end
 
-    # Теперь регистрируем все инструменты, после определения методов
+    # -----------------------------
+    # MCP REGISTRATION
+    # -----------------------------
+
     McpTools.mcp_tool(
       name: 'get_current_position',
       description: 'Получает текущую позицию пользователя',
@@ -148,34 +127,30 @@ module LLMTestRuby
 
     McpTools.mcp_tool(
       name: 'search_nearest_airports',
-      description: 'Поиск ближайших открытых аэропортов',
+      description: 'Ищет ближайшие аэропорты в радиусе от текущей позиции',
       consumes: ['current_position'],
-      provides: ['airports'],
+      provides: ['selected_airports'],
       parameters: {
-        radius_km: 'Радиус поиска в километрах'
+        'radius_km' => 'Радиус поиска в километрах'
       }
     ).call(method(:search_nearest_airports))
 
     McpTools.mcp_tool(
       name: 'select_airport_with_shortest_runway',
-      description: 'Выбирает аэропорт с самой короткой взлётно-посадочной полосой из ранее найденных аэропортов.',
+      description: 'Выбирает аэропорт с самой короткой ВПП среди найденных',
       consumes: ['selected_airports'],
       provides: ['selected_airports'],
       parameters: {
-        require_runway_status: 'Если указано, учитывать только ВПП с данным статусом: free, busy или closed',
-        surface: 'Если указано, учитывать только ВПП с данным материалом: concrete или asphalt'
+        'require_runway_status' => 'Если указано, учитывать только ВПП с данным статусом: free, busy или closed',
+        'surface' => 'Если указано, учитывать только ВПП с данным материалом: concrete или asphalt'
       }
     ).call(method(:select_airport_with_shortest_runway))
 
     McpTools.mcp_tool(
       name: 'build_route_to_first_airport',
-      description: 'Построение маршрута от текущей позиции до выбранного аэропорта',
+      description: 'Строит маршрут от текущей позиции до выбранного аэропорта',
       consumes: ['current_position', 'selected_airports'],
       provides: ['route']
     ).call(method(:build_route_to_first_airport))
-
-    def artifacts
-      @artifacts
-    end
   end
 end

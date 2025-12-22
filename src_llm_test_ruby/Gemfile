@@ -25,7 +25,7 @@ group :test do
   gem 'rack-test'
   gem 'rspec-benchmark'
   gem 'rspec_junit_formatter'
-  gem 'async-rspec'
+  # gem 'async-rspec'
   gem "rspec-snapshot"
   gem 'testcontainers'
 

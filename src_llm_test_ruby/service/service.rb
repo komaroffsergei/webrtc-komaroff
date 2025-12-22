@@ -10,39 +10,13 @@ require_relative 'mcp_tools'
 module LLMTestRuby
   class Service
     MAX_STEPS = 10
-    SYSTEM_PROMPT = <<-PROMPT.freeze
-      Ты — MCP агент.
 
-      Правила работы:
-      - НИКОГДА НЕ возвращай JSON в content, придерживаясь вызова инструмента.
-      - НИКОГДА НЕ выдумывай значения-заглушки.
-      - НИКОГДА НЕ выдумывай параметры.
-      - НИКОГДА НЕ запрашивай значения у пользователя.
-      - НИКОГДА НЕ повторяй тот же вызов с теми же аргументами после ошибки.
-      - ВСЕГДА СТРОГО соблюдай тип данных параметров.
-
-      ПРАВИЛО ГЕОПОЗИЦИИ (ОБЯЗАТЕЛЬНО):
-      Если запрос пользователя:
-      - содержит слова: радиус, км, расстояние, ближайший, аэропорт
-      - или требует географического расчёта
-      ТО:
-      - ТЫ ОБЯЗАН первым действием вызвать get_current_position
-      - ЗАПРЕЩЕНО использовать любые координаты, полученные ранее
-      - ЗАПРЕЩЕНО продолжать рассуждение без этого вызова
-
-      Перед каждым действием пиши в content: РАССУЖДЕНИЕ: и кратко объясняй, что ты собираешься делать.
-      Ограничения:
-      - НИКОГДА НЕ пиши текст в поле content при вызове инструментов.
-      - НИКОГДА НЕ описывай вызовы инструментов обычным текстом.
-
-      В завершение: ВЕРНИ финальный ответ обычным текстом на русском языке.
-    PROMPT
 
     def initialize
       config = Ollama::Client::Config[
         base_url: Settings::OLLAMA_URL,
         output: $stdout,
-        connect_timeout: 15,
+        connect_timeout: 60,
         read_timeout: 300
       ]
 
@@ -85,9 +59,10 @@ module LLMTestRuby
           messages << message_data
 
           content = message_data[:content] || ''
+          thinking = message_data[:thinking] || ''
           tool_calls = message_data[:tool_calls] || []
 
-          Utils.log_llm_response(content, tool_calls)
+          Utils.log_llm_response(content, thinking, tool_calls)
 
           if tool_calls.any?
             tool_results = handle_tool_calls(tool_calls, session_id, intent_id)
@@ -225,7 +200,6 @@ module LLMTestRuby
         Utils.log_tool_call(tool_name, args)
 
         begin
-          # ИСПРАВЛЕНО: получаем инструмент из реестра McpTools вместо Tools.registry
           tool_info = McpTools.registry[tool_name.to_sym]
           unless tool_info
             raise "Инструмент '#{tool_name}' не найден в реестре"

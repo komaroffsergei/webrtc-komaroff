@@ -19,12 +19,15 @@ module LLMTestRuby
       puts "[DEBUG][STEP #{step}]" if Settings::DEBUG
     end
 
-    def log_llm_response(content, tool_calls)
+    def log_llm_response(content, thinking, tool_calls)
       if content
-        puts "[DEBUG][LLM][thinking]"
+        puts "[DEBUG][LLM][content]"
         puts content.strip if Settings::DEBUG
       end
-
+      if thinking
+        puts "[DEBUG][LLM][thinking]"
+        puts thinking.strip if Settings::DEBUG
+      end
       if tool_calls
         puts "[DEBUG][LLM][tool_calls]"
         puts JSON.pretty_generate(tool_calls) if Settings::DEBUG

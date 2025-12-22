@@ -30,10 +30,6 @@ GEM
       async-http (~> 0.56)
     async-pool (0.11.1)
       async (>= 2.0)
-    async-rspec (1.17.1)
-      rspec (~> 3.0)
-      rspec-files (~> 1.0)
-      rspec-memory (~> 1.0)
     async-service (0.16.0)
       async
       async-container (~> 0.16)
@@ -458,10 +454,6 @@ GEM
     rspec-expectations (3.13.5)
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
-    rspec-files (1.1.3)
-      rspec (~> 3.0)
-    rspec-memory (1.0.4)
-      rspec (~> 3.0)
     rspec-mocks (3.13.7)
       diff-lcs (>= 1.2.0, < 2.0)
       rspec-support (~> 3.13.0)
@@ -555,7 +547,6 @@ PLATFORMS
 
 DEPENDENCIES
   async
-  async-rspec
   dotenv
   falcon
   faraday
