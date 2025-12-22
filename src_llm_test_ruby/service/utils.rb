@@ -63,7 +63,7 @@ module LLMTestRuby
       tool_calls.map do |call|
         {
           name: call['function']['name'],
-          arguments: JSON.parse(call['function']['arguments'])
+          arguments: JSON.parse(call['function']['arguments'].to_json)
         }
       end
     end

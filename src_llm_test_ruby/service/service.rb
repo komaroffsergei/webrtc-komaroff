@@ -48,7 +48,6 @@ module LLMTestRuby
 
       # Initialize client using the configuration
       @client = Ollama::Client.configure_with(config)
-      # @client = Ollama::Client.new(host: Settings::OLLAMA_URL, timeout: 60)
       @log = Logger.new(STDOUT)
     end
 
@@ -80,25 +79,28 @@ module LLMTestRuby
         begin
           response = call_llm(model, messages)
           last_response = response
-          messages << response['message']
 
-          Utils.log_llm_response(
-            response['message']['content'],
-            response['message']['tool_calls']
-          )
 
-          if response['message']['tool_calls'].present?
-            tool_results = handle_tool_calls(
-              response['message']['tool_calls'],
-              session_id,
-              intent_id
-            )
+          message_data = response[:message]
+          messages << message_data
+
+          content = message_data[:content] || ''
+          tool_calls = message_data[:tool_calls] || []
+
+          Utils.log_llm_response(content, tool_calls)
+
+          if tool_calls.any?
+            tool_results = handle_tool_calls(tool_calls, session_id, intent_id)
 
             tool_results.each do |result|
+              content_str = result[:content].respond_to?(:to_json) ?
+                              result[:content].to_json :
+                              result[:content].to_s
+
               messages << {
                 role: 'tool',
-                tool_name: result[:tool_name],
-                content: result[:content].to_json
+                name: result[:tool_name],
+                content: content_str
               }
             end
 
@@ -122,7 +124,13 @@ module LLMTestRuby
         end
       end
 
-      final_answer = last_response&.dig('message', 'content') || 'Не удалось получить ответ'
+      # === ИСПРАВЛЕНО: правильное извлечение финального ответа ===
+      final_answer = if last_response
+                       extract_final_answer(last_response)
+                     else
+                       'Не удалось получить ответ'
+                     end
+
       Utils.log_final_answer(final_answer)
 
       DB.finish_intent(session_id, intent_id, final_answer)
@@ -137,12 +145,73 @@ module LLMTestRuby
     private
 
     def call_llm(model, messages)
-      @client.chat(
+      # === ИСПРАВЛЕНО: гарантируем непотоковый ответ ===
+      response = @client.chat(
         model: model,
-        messages: messages,
+        messages: sanitize_messages(messages),
         tools: McpTools.registry.values.map { |tool| tool[:schema] },
-        options: { temperature: 0.0 }
+        options: { temperature: 0.0 },
+        stream: false
       )
+
+      # Если ответ приходит в потоковом формате даже при stream: false
+      if response.is_a?(Enumerator)
+        full_response = {
+          message: {
+            role: 'assistant',
+            content: '',
+            tool_calls: []
+          },
+          model: model,
+          created_at: Time.now.utc.iso8601
+        }
+
+        response.each do |chunk|
+          if chunk.respond_to?(:message) && chunk.message.respond_to?(:content)
+            full_response[:message][:content] << chunk.message.content
+          end
+
+          if chunk.respond_to?(:message) && chunk.message.respond_to?(:tool_calls)
+            full_response[:message][:tool_calls] = chunk.message.tool_calls
+          end
+        end
+
+        return OpenStruct.new(
+          message: OpenStruct.new(
+            role: full_response[:message][:role],
+            content: full_response[:message][:content],
+            tool_calls: full_response[:message][:tool_calls]
+          ),
+          model: full_response[:model],
+          created_at: full_response[:created_at]
+        )
+      end
+
+      response
+    end
+
+    # === ИСПРАВЛЕНО: очистка сообщений для API ===
+    def sanitize_messages(messages)
+      messages.map do |msg|
+        case msg[:role] || msg['role']
+        when 'system', 'user', 'assistant'
+          {
+            role: (msg[:role] || msg['role']).to_s,
+            content: (msg[:content] || msg['content'] || '').to_s
+          }
+        when 'tool'
+          {
+            role: 'tool',
+            name: (msg[:name] || msg['name'] || '').to_s,
+            content: (msg[:content] || msg['content'] || '').to_s
+          }
+        else
+          {
+            role: 'user',
+            content: (msg[:content] || msg['content'] || msg.to_s)
+          }
+        end
+      end
     end
 
     def handle_tool_calls(tool_calls, session_id, intent_id)
@@ -156,7 +225,13 @@ module LLMTestRuby
         Utils.log_tool_call(tool_name, args)
 
         begin
-          tool = Tools.registry[tool_name.to_sym]
+          # ИСПРАВЛЕНО: получаем инструмент из реестра McpTools вместо Tools.registry
+          tool_info = McpTools.registry[tool_name.to_sym]
+          unless tool_info
+            raise "Инструмент '#{tool_name}' не найден в реестре"
+          end
+
+          tool = tool_info[:fn]
           safe_args = Utils.normalize_args(tool, args)
           continue, result = tool.call(**safe_args)
 
@@ -179,13 +254,47 @@ module LLMTestRuby
           Utils.log_error(e)
           results << {
             tool_name: tool_name,
-            content: { error: e.message },
+            content: { error: e.message, arguments: args },
             continue: false
           }
         end
       end
 
       results
+    end
+
+    # === ИСПРАВЛЕНО: обработка объектов Ollama::Response ===
+    def extract_ollama_message(response)
+      if response.respond_to?(:message)
+        {
+          role: (response.message.role rescue 'assistant'),
+          content: (response.message.content rescue response.message.thinking rescue ''),
+          tool_calls: (response.message.tool_calls rescue [])
+        }
+      elsif response.is_a?(Hash) && response.key?('message')
+        {
+          role: response['message']['role'],
+          content: response['message']['content'],
+          tool_calls: response['message']['tool_calls'] || []
+        }
+      else
+        {
+          role: 'assistant',
+          content: response.to_s,
+          tool_calls: []
+        }
+      end.transform_keys(&:to_sym)
+    end
+
+    # === ИСПРАВЛЕНО: безопасное извлечение финального ответа ===
+    def extract_final_answer(response)
+      if response.respond_to?(:message) && response.message.respond_to?(:content)
+        response.message.content.strip
+      elsif response.is_a?(Hash) && response.dig('message', 'content')
+        response.dig('message', 'content').strip
+      else
+        'Не удалось извлечь ответ из ответа модели'
+      end
     end
   end
 end

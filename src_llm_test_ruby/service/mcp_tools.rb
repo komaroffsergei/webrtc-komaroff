@@ -1,7 +1,3 @@
-# frozen_string_literal: true
-
-require 'json'
-
 module LLMTestRuby
   module McpTools
     extend self
@@ -30,15 +26,14 @@ module LLMTestRuby
       properties = {}
       required = []
 
-      # Для Ruby мы не можем легко получить типы параметров,
-      # поэтому будем использовать базовые предположения
+      # Получаем параметры метода
       fn.parameters.each do |type, param_name|
         param_info = {
           'type' => 'string' # по умолчанию
         }
 
-        if param_desc && param_desc[param_name]
-          param_info['description'] = param_desc[param_name]
+        if param_desc && param_desc[param_name.to_s]
+          param_info['description'] = param_desc[param_name.to_s]
         end
 
         properties[param_name.to_s] = param_info
