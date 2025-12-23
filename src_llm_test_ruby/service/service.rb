@@ -39,7 +39,7 @@ module LLMTestRuby
 
       steps = 0
       last_response = nil
-
+      final_result = nil
       MAX_STEPS.times do |step|
         steps += 1
         Utils.log_step(step + 1)
@@ -67,6 +67,11 @@ module LLMTestRuby
           if tool_calls.any?
             tool_results = handle_tool_calls(tool_calls, session_id, intent_id)
 
+
+
+
+
+
             tool_results.each do |result|
               content_str = result[:content].respond_to?(:to_json) ?
                               result[:content].to_json :
@@ -79,10 +84,21 @@ module LLMTestRuby
               }
             end
 
-            break unless tool_results.any? { |r| r[:continue] }
+            final_tool = tool_results.find do |r|
+              r[:continue] == false || r[:tool_name] == 'display_result'
+            end
+
+
+            if final_tool
+              final_result = final_tool[:content]
+              break
+            end
+
+
           else
-            break
+            raise "LLM finished without calling display_result. Textual final answer is forbidden."
           end
+
         rescue => e
           Utils.log_error(e)
           DB.log_event(
@@ -100,11 +116,13 @@ module LLMTestRuby
       end
 
       # === ИСПРАВЛЕНО: правильное извлечение финального ответа ===
-      final_answer = if last_response
-                       extract_final_answer(last_response)
-                     else
-                       'Не удалось получить ответ'
-                     end
+      final_answer =
+        if final_result
+          final_result
+        else
+          raise "Agent finished without display_result"
+        end
+
 
       Utils.log_final_answer(final_answer)
 
@@ -126,7 +144,8 @@ module LLMTestRuby
         messages: sanitize_messages(messages),
         tools: McpTools.registry.values.map { |tool| tool[:schema] },
         options: { temperature: 0.0 },
-        stream: false
+        stream: false,
+        # think: false
       )
 
       # Если ответ приходит в потоковом формате даже при stream: false
