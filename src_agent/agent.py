@@ -65,6 +65,17 @@ class MCPAgent:
             steps += 1
             log_step(step)
             intent_id = create_intent(session_id, self.user_id, OLLAMA_URL)
+            messages.insert(1, {
+                "role": "system",
+                "content": (
+                    "Текущий запрос пользователя:\n"
+                    f"{prompt}\n\n"
+                    "Запрещено:\n"
+                    "- добавлять новые цели\n"
+                    "- выполнять действия, не связанные с запросом\n"
+                )
+            })
+
             try:
                 resp = client.chat(
                     model=OLLAMA_MODEL,
