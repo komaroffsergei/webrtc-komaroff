@@ -1,7 +1,7 @@
 import inspect
 from typing import get_type_hints
 
-REGISTRY = {}
+REGISTRY: dict = {}
 
 
 def mcp_tool(
@@ -11,18 +11,44 @@ def mcp_tool(
     consumes: list[str] | None = None,
     parameters: dict[str, str] | None = None,
 ):
-
     def wrapper(fn):
         tool_name = name or fn.__name__
 
+        prov = provides or []
+        cons = consumes or []
+
+        desc_parts: list[str] = []
+
+        if description:
+            desc_parts.append(description.rstrip())
+
+        if cons:
+            desc_parts.append(
+                "запрашивает артефакты: " + ", ".join(cons)
+            )
+
+        if prov:
+            desc_parts.append(
+                "заполняет артефакты: " + ", ".join(prov)
+            )
+
+        full_description = "\n".join(desc_parts)
+
         REGISTRY[tool_name] = {
             "fn": fn,
-            "schema": build_schema(fn, tool_name, description),
-            "provides": provides or [],
-            "consumes": consumes or [],
+            "schema": build_schema(
+                fn,
+                tool_name,
+                full_description,
+                param_desc=parameters,
+            ),
+            "provides": prov,
+            "consumes": cons,
         }
         return fn
+
     return wrapper
+
 
 
 def build_schema(
@@ -31,9 +57,6 @@ def build_schema(
     description: str | None = None,
     param_desc: dict[str, str] | None = None,
 ):
-    import inspect
-    from typing import get_type_hints
-
     sig = inspect.signature(fn)
     hints = get_type_hints(fn)
 
@@ -41,24 +64,24 @@ def build_schema(
     required: list[str] = []
 
     for param in sig.parameters.values():
-        param_name = param.name
-        param_type = hints.get(param_name)
+        pname = param.name
+        ptype = hints.get(pname)
 
-        schema_prop = python_type_to_schema(param_type)
+        schema_prop = python_type_to_schema(ptype)
 
-        if param_desc and param_name in param_desc:
-            schema_prop["description"] = param_desc[param_name]
+        if param_desc and pname in param_desc:
+            schema_prop["description"] = param_desc[pname]
 
-        properties[param_name] = schema_prop
+        properties[pname] = schema_prop
 
         if param.default is inspect._empty:
-            required.append(param_name)
+            required.append(pname)
 
     return {
         "type": "function",
         "function": {
             "name": name,
-            "description": description or (fn.__doc__ or ""),
+            "description": description or "",
             "parameters": {
                 "type": "object",
                 "properties": properties,
@@ -70,6 +93,7 @@ def build_schema(
 
 from typing import get_origin, get_args, List, Dict, Any
 
+
 def python_type_to_schema(py_type):
     if py_type is None:
         return {"type": "string"}
@@ -77,42 +101,20 @@ def python_type_to_schema(py_type):
     origin = get_origin(py_type)
     args = get_args(py_type)
 
-    # List[T]
     if origin in (list, List):
-        item_type = args[0] if args else Any
-        return {
-            "type": "array",
-            "items": python_type_to_schema(item_type)
-        }
+        item = args[0] if args else Any
+        return {"type": "array", "items": python_type_to_schema(item)}
 
-    # Dict[str, Any]
     if origin in (dict, Dict):
-        return {
-            "type": "object"
-        }
+        return {"type": "object"}
 
     if py_type is str:
         return {"type": "string"}
-
     if py_type is int:
         return {"type": "integer"}
-
     if py_type is float:
         return {"type": "number"}
-
     if py_type is bool:
         return {"type": "boolean"}
 
-    # fallback
     return {"type": "string"}
-
-
-
-
-def python_type_to_json(tp):
-    return {
-        int: "number",
-        float: "number",
-        str: "string",
-        bool: "boolean",
-    }.get(tp, "string")

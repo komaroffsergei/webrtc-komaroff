@@ -106,3 +106,24 @@ def normalize_args(fn, args: dict) -> dict:
             raise ValueError(f"{name}={value} ({e})")
 
     return normalized
+
+
+def summarize_tool_result(name: str, result: dict) -> dict:
+    summary = {
+        "status": result.get("status"),
+    }
+
+    if "artifact_key" in result:
+        summary["artifact_key"] = result["artifact_key"]
+
+    if "count" in result:
+        summary["count"] = result["count"]
+
+    if "message" in result:
+        summary["message"] = result["message"]
+
+    return {
+        "role": "tool",
+        "tool_name": name,
+        "content": json.dumps(summary, ensure_ascii=False),
+    }
