@@ -85,16 +85,6 @@ class MCPAgent:
                 messages = messages[:2] + messages[-(MAX_MESSAGES - 2):]
 
             # intent_id = create_intent(session_id, self.user_id, OLLAMA_URL)
-            # messages.insert(2, {
-            #     "role": "system",
-            #     "content": (
-            #         "Текущий запрос пользователя:\n"
-            #         f"{prompt}\n\n"
-            #         "Запрещено:\n"
-            #         "- добавлять новые цели\n"
-            #         "- выполнять действия, не связанные с запросом\n"
-            #     )
-            # })
 
             try:
                 resp = client.chat(
@@ -120,21 +110,13 @@ class MCPAgent:
                 }
 
             msg = resp["message"]
-            # messages.append(msg)
 
             tool_calls = normalize_tool_calls(msg.get("tool_calls"))
             log_llm_response(msg.get("content"), tool_calls)
 
             if not tool_calls:
                 _p('>>> No tool calls found!')
-                log_final_answer(msg.get("content"))
                 msg["tool_calls"] = [{"function": {"name": "no_tool_calls", "arguments": {}}}]
-                # return {
-                #     "status": "ok",
-                #     "result": msg.get("content"),
-                #     "steps": step,
-                # }
-                # break
 
             for call in msg["tool_calls"]:
                 name = call["function"]["name"]
@@ -172,11 +154,6 @@ class MCPAgent:
                     }
 
 
-                # messages.append({
-                #     "role": "tool",
-                #     "tool_name": name,
-                #     "content": json.dumps(result, ensure_ascii=False),
-                # })
                 messages.append({
                     "role": "tool",
                     "tool_call_id": f"too_call_{name}_step_{step}",
