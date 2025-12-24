@@ -1,7 +1,7 @@
 import inspect
 import json
 import re
-
+from typing import Dict, Any, List
 
 
 def _p(msg: str):
@@ -127,3 +127,44 @@ def summarize_tool_result(name: str, result: dict) -> dict:
         "tool_name": name,
         "content": json.dumps(summary, ensure_ascii=False),
     }
+
+
+def build_tool_state_summary(
+    tool_history: List[Dict[str, Any]],
+    artifacts: Dict[str, Any],
+) -> str:
+    lines: list[str] = []
+
+    lines.append("ИСТОРИЯ ИНСТРУМЕНТОВ:\n")
+
+    if not tool_history:
+        lines.append("— инструменты ещё не вызывались")
+
+    for i, t in enumerate(tool_history, 1):
+        lines.append(f"{i}. {t['name']}")
+
+        for a in t.get("consumes", []):
+            lines.append(f"   - использован артефакт: {a}")
+
+        if t.get("produced_artifact"):
+            lines.append(
+                f"   - создан артефакт: {t['produced_artifact']}"
+            )
+
+        meta = t.get("meta", {})
+        if meta.get("count") is not None:
+            lines.append(f"   - количество: {meta['count']}")
+
+    lines.append("")
+    lines.append("ДОСТУПНЫЕ АРТЕФАКТЫ:\n")
+
+    if artifacts:
+        for k in sorted(artifacts.keys()):
+            lines.append(f"- {k}")
+    else:
+        lines.append("— нет доступных артефактов")
+
+
+
+
+    return "\n".join(lines)
