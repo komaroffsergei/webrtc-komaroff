@@ -43,7 +43,7 @@ module LLMTestRuby
       end
 
       [
-        false, # ⛔️ ФИНАЛ
+        false,
         {
           status: "ok",
           result: result

@@ -4,7 +4,9 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
+import logging
 from nats.aio.client import Client as NatsClient
+
 
 
 class NatsLogger:

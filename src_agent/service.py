@@ -9,10 +9,11 @@ from settings import (
     STACK_SERVICE_NAME
 )
 from agent import MCPAgent
-from src_agent.utils.db import Database
+from src_agent.utils.db import create_session
+# from src_agent.utils.db import Database, create_session
 from utils.nats_logger import NatsLogger
-from src_agent.repositories.sessions import create_session
-from src_agent.repositories.events import log_event
+# from src_agent.repositories.sessions import create_session
+# from src_agent.repositories.events import log_event
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -54,8 +55,8 @@ class AgentServer:
             ping_interval=10,
         )
         self.nats_logger = NatsLogger(self.nc, self.events_subject, STACK_SERVICE_NAME)
-        self.db = Database(db_url=self.db_url)
-        await self.db.connect()
+        # self.db = Database(db_url=self.db_url)
+        # await self.db.connect()
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to Database")
         self.agent = MCPAgent(self.nc,
                               llm_subject=self.llm_subject,
@@ -68,40 +69,35 @@ class AgentServer:
         """Подписка на темы NATS"""
         await self.nc.subscribe(self.agent_subject, cb=self.handle_request)
         await self.nats_logger.info(f"Subscribed to {self.agent_subject}")
-        logger.info(f"Subscribed to {self.agent_subject}")
 
     async def handle_request(self, msg):
         """Обработка входящего запроса на выполнение агента"""
         try:
             data = json.loads(msg.data.decode("utf-8"))
-
-            user_text = data.get("text", "").strip()
+            prompt = data.get("text", "").strip()
             session_id = data.get("session_id")
 
-            if not user_text:
+            if not prompt:
                 raise ValueError("Empty text in request")
-
-            await self.nats_logger.info(f"Processing request: {user_text[:50]}...")
-            logger.info(f"Processing request: {user_text[:50]}...")
-
+            #
             if not session_id:
-                session_id = await create_session(self.db, self.user_id)
+                session_id = create_session(self.user_id)
 
 
             #Логируем пользовательский ввод
-            await log_event(
-                self.db,
-                session_id=session_id,
-                intent_id=None,
-                role="USER",
-                event_type="MESSAGE",
-                name=None,
-                input={"text": user_text},
-                output=None,
-            )
+            # await log_event(
+            #     self.db,
+            #     session_id=session_id,
+            #     intent_id=None,
+            #     role="USER",
+            #     event_type="MESSAGE",
+            #     name=None,
+            #     input={"text": user_text},
+            #     output=None,
+            # )
 
             # Запуск агента
-            result = await self.agent.run(user_text=user_text, session_id=session_id)
+            result = await self.agent.run(prompt=prompt, session_id=session_id)
 
             # Отправка результата
             response = {
@@ -111,8 +107,8 @@ class AgentServer:
             }
 
             await msg.respond(json.dumps(response, ensure_ascii=False).encode('utf-8'))
-            await self.nats_logger.info(f"Request processed successfully")
-            logger.info("Request processed successfully")
+            # await self.nats_logger.info(f"Request processed successfully")
+            # logger.info("Request processed successfully")
 
         except Exception as e:
             logger.error(f"Error processing request: {e}", exc_info=True)
