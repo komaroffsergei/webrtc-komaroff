@@ -24,14 +24,14 @@ EOF
 RUN chmod +x /entrypoint.sh
 
 # Создать директории для моделей
-RUN mkdir -p /app/models/asr /app/models/vad
+RUN mkdir -p /app/models/asr /app/src_core/models/vad
 
 # Установить переменные окружения для загрузки модели
 ENV SERVER_ENV=production \
     PORT=8000 \
     ASR_MODELS_DIR=/app/models/asr \
     ASR_MODEL_ID=Systran/faster-whisper-small \
-    VAD_MODEL_PATH=/app/models/vad/
+    VAD_MODEL_PATH=/app/src_core/models/vad/
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "main.py"]

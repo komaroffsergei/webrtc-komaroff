@@ -125,12 +125,13 @@ class PhraseSegmenterNode(ConsumerNode):
     async def _load_silero_vad(self) -> None:
         loop = asyncio.get_event_loop()
         filename = os.path.basename(urlparse(VAD_MODEL_URL).path)
-        full_path = f"{VAD_MODEL_PATH}/{filename}"
+        base_path = Path(VAD_MODEL_PATH).expanduser()
+        model_path = base_path if base_path.suffix.lower() == ".onnx" else (base_path / filename)
         def _load():
             try:
-                path = Path(full_path).expanduser().resolve()
+                path = model_path.resolve()
                 if not path.is_file():
-                    download_model_file(full_path, VAD_MODEL_URL)
+                    download_model_file(str(path), VAD_MODEL_URL)
                 return SileroOnnxVAD(str(path))
             except Exception as exc:
                 logger.error("VAD model load failed: %s", exc, exc_info=True)
@@ -138,7 +139,7 @@ class PhraseSegmenterNode(ConsumerNode):
 
         self.vad_model = await loop.run_in_executor(None, _load)
         if self.vad_model:
-            logger.info("Silero VAD ONNX model loaded from %s", full_path)
+            logger.info("Silero VAD ONNX model loaded from %s", model_path)
         else:
             logger.error("Silero VAD model is unavailable")
 
