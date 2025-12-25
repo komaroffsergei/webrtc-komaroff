@@ -1,29 +1,25 @@
 import json
-import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List
 
 import ollama
 
 from settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT, MAX_STEPS, OLLAMA_MODEL
-from src_agent.tools.tools import reset_artifacts, ARTIFACTS
-from src_agent.utils.db import create_session, create_intent, finish_intent, finish_session
+from src_agent.tools.tools import *
+from src_agent.utils.db import finish_session
 
 from src_agent.utils.nats_logger import NatsLogger
 from src_agent.utils.helpers import normalize_tool_calls, normalize_args
 
-from src_agent.tools import tools
-from src_agent.utils.mcp_tools import REGISTRY, build_tool_vocabulary, check_prompt_by_vocabulary, AgentResponse
+# from src_agent.tools import tools
+from src_agent.utils.mcp_tools import REGISTRY, build_tool_vocabulary, check_prompt_by_vocabulary, AgentResponse, \
+    AGentClientCommands, AgentClientHandler, AgentRegistry
 import logging
+
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
 )
 logger = logging.getLogger("src_agent.agent")
-
-
-
 
 
 class MCPAgent:
@@ -36,7 +32,7 @@ class MCPAgent:
                  db=None,
                  user_id: str = None,
                  max_messages: int = 12,
-            ):
+                 ):
         self.user_id = user_id
         self.current_intent_id = None
         self.nc = nc
@@ -48,7 +44,6 @@ class MCPAgent:
         self.tools_vocabulary = build_tool_vocabulary()
         self.max_messages = max_messages
 
-
     async def run(self, *, prompt: str, session_id: str) -> AgentResponse:
         logger.info("[USER] ----------- New request: %s", prompt)
         reset_artifacts()
@@ -57,15 +52,16 @@ class MCPAgent:
         if not check_prompt_by_vocabulary(prompt, self.tools_vocabulary):
             logger.info("[FINAL ANSWER] %s", "Запрос не поддерживается системой")
             return {
-                "model": OLLAMA_MODEL,
-                "prompt": prompt,
-                "steps": 0,
-                "status": "UNSUPPORTED_REQUEST",
-                "error": "Запрос не поддерживается системой",
+                "success": False,
+                "error": {
+                    "type": "UNSUPPORTED_REQUEST",
+                },
                 "data": {
-                    "command": {
-                        "type": "SHOW_ERROR_MESSAGE",
-                    },
+                    "model": OLLAMA_MODEL,
+                    "prompt": prompt,
+                },
+                "client_handler": {
+                    "command": "SHOW_ERROR_MESSAGE",
                 },
             }
 
@@ -83,10 +79,8 @@ class MCPAgent:
             {"role": "user", "content": prompt},
         ]
 
-        seq = 0
         steps = 0
-        tool_history: List[Dict[str, Any]] = []
-        last_final_command: str | None = None
+        last_client_handler: AGentClientCommands | None = None
         last_provided_artifacts: list[str] = []
 
         for step in range(1, MAX_STEPS + 1):
@@ -114,16 +108,18 @@ class MCPAgent:
                 # finish_session(session_id, "FAILED")
 
                 return {
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                    "steps": steps,
-                    "total_time_sec": round(time.perf_counter() - start_ts, 3),
-                    "status": "FAILED_EXECUTE",
-                    "error": str(e),
+                    "success": False,
+                    "error": {
+                        "type": "LLM_EXCEPTION",
+                        "message": str(e)
+                    },
                     "data": {
-                        "command": {
-                            "type": "SHOW_ERROR_MESSAGE",
-                        },
+                        "model": OLLAMA_MODEL,
+                        "prompt": prompt,
+                        "steps": steps,
+                    },
+                    "client_handler": {
+                        "command": "SHOW_ERROR_MESSAGE",
                     },
                 }
 
@@ -134,7 +130,7 @@ class MCPAgent:
             logger.debug("[LLM][tool_calls]\n%s", json.dumps(tool_calls, ensure_ascii=False, indent=2))
 
             if not tool_calls:
-                logger.warning("[LLM] Модель не вернула tool_calls",)
+                logger.warning("[LLM] Модель не вернула tool_calls", )
                 msg["tool_calls"] = [{"function": {"name": "no_tool_calls", "arguments": {}}}]
 
             for call in msg["tool_calls"]:
@@ -146,27 +142,29 @@ class MCPAgent:
                     safe_args = normalize_args(self.tools_impl[name], raw_args)
                     cont, result = self.tools_impl[name](**safe_args)
                     # сохраняем финальную команду (для клиента)
-                    tool_meta = REGISTRY.get(name, {})
-                    if tool_meta.get("final_command"):
-                        last_final_command = tool_meta["final_command"]
+                    tool_meta: AgentRegistry = REGISTRY.get(name, {})
+                    if tool_meta.get("client_handler"):
+                        last_client_handler = tool_meta["client_handler"]
                         last_provided_artifacts = list(tool_meta.get("provides") or [])
 
                 except Exception as e:
                     logger.exception("ERROR: %s", str(e))
+
                     return {
-                        "model": OLLAMA_MODEL,
-                        "prompt": prompt,
-                        "steps": 0,
-                        "status": "FAILED",
-                        "error": f"Ошибка при выполнении инструмента {name}: {str(e)}",
+                        "success": False,
+                        "error": {
+                            "type": "TOOLS_EXCEPTION",
+                            "message": str(e)
+                        },
+                        "data": {
+                            "model": OLLAMA_MODEL,
+                            "prompt": prompt,
+                            "steps": steps,
+                        },
+                        "client_handler": {
+                            "command": "SHOW_ERROR_MESSAGE",
+                        },
                     }
-                    # messages.append({
-                    #     "role": "tool",
-                    #     "tool_call_id": f"too_call_{name}_step_{step}",
-                    #     "name": name,
-                    #     "content": f"ERROR: {str(e)}",
-                    # })
-                    break
 
                 logger.debug("[TOOL RESULT] %s\n%s", name, json.dumps(result, ensure_ascii=False, indent=2))
 
@@ -185,31 +183,31 @@ class MCPAgent:
                         if key in ARTIFACTS:
                             artifacts_payload[key] = ARTIFACTS[key]
 
-                    command = None
-                    if last_final_command:
-                        command = {
-                            "type": last_final_command,
-                            "params": {
-                                "artifact_key": (
+                    client_handler: AgentClientHandler | None = None
+                    if last_client_handler:
+                        client_handler: AgentClientHandler = {
+                            "command": last_client_handler,
+                            "artifacts": {
+                                "last": (
                                     last_provided_artifacts[0]
                                     if len(last_provided_artifacts) == 1
-                                    else last_provided_artifacts
-                                )
-                            }
+                                    else last_provided_artifacts[0]
+                                ),
+                                "all": last_provided_artifacts,
+                                "payload": artifacts_payload,
+                            },
                         }
 
-
                     return {
-                        "status": "OK",
-                        "model": OLLAMA_MODEL,
-                        "prompt": prompt,
-                        "steps": steps,
-                        "result": result.get("result"),
-                        "total_time_sec": round(total_time, 3),
+                        "success": True,
                         "data": {
-                            "command": command,
-                            "artifacts": artifacts_payload,
+                            "model": OLLAMA_MODEL,
+                            "prompt": prompt,
+                            "steps": steps,
+                            "total_time_sec": round(total_time, 3),
                         },
+                        "result": result.get("result"),
+                        "client_handler": client_handler
                     }
 
                 messages.append({
@@ -227,17 +225,17 @@ class MCPAgent:
 
         logger.info("[FINAL ANSWER] %s", "MAX_STEPS_EXCEEDED")
         return {
-            "status": "FAILED",
-            "model": OLLAMA_MODEL,
-            "prompt": prompt,
-            "steps": steps,
-            "error": "MAX_STEPS_EXCEEDED",
-            "total_time_sec": round(total_time, 3),
+            "success": False,
+            "error": {
+                "type": "MAX_STEPS_EXCEEDED"
+            },
             "data": {
-                "command": {
-                    "type": "SHOW_ERROR_MESSAGE",
-                },
+                "model": OLLAMA_MODEL,
+                "prompt": prompt,
+                "steps": steps,
+                "total_time_sec": round(total_time, 3),
+            },
+            "client_handler": {
+                "command": "SHOW_ERROR_MESSAGE",
             },
         }
-
-

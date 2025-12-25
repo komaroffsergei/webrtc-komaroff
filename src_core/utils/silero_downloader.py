@@ -19,22 +19,22 @@ async def ensure_silero_model(app: Application, *, url: str,
     full_path = f"{VAD_MODEL_PATH}/{filename}"
     resolved = Path(full_path).expanduser().resolve()
     if os.path.exists(full_path):
-        await _log_status("exists")
-        await _log_percent("100")
+        await _log_status("exists", app)
+        await _log_percent("100", app)
         return str(full_path)
 
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    await _log_status("downloading")
-    await _log_percent("0")
+    await _log_status("downloading", app)
+    await _log_percent("0", app)
 
-    await _download_file(app, service, url, resolved)
+    await _download_file(app, url, resolved)
 
-    await _log_status("exists")
-    await _log_percent("100")
+    await _log_status("exists", app)
+    await _log_percent("100", app)
     return str(resolved)
 
 
-async def _download_file(ctx: Application, service: str, url: str, target: Path) -> None:
+async def _download_file(app: Application, url: str, target: Path) -> None:
     tmp = target.with_suffix(target.suffix + ".tmp")
 
     async with aiohttp.ClientSession() as session:
@@ -53,17 +53,17 @@ async def _download_file(ctx: Application, service: str, url: str, target: Path)
                         percent = min(100, int(downloaded * 100 / total))
                         while last_percent < percent:
                             last_percent += 1
-                            await event_log(str(last_percent), name="model_downloading_status")
+                            await event_log(str(last_percent), name="model_downloading_status", service=STACK_SERVICE_NAME , app=app)
 
     if not total:
-        await event_log("100", name="model_downloading_percent")
+        await event_log("100", name="model_downloading_percent", service=STACK_SERVICE_NAME , app=app)
 
     tmp.replace(target)
 
 
-async def _log_status(value: str) -> None:
-    await event_log(value, name="model_downloading_status")
+async def _log_status(value: str, app) -> None:
+    await event_log(value, name="model_downloading_status", service=STACK_SERVICE_NAME , app=app)
 
 
-async def _log_percent(value: str) -> None:
-    await event_log(value, name="model_downloading_percent",)
+async def _log_percent(value: str, app) -> None:
+    await event_log(value, name="model_downloading_percent", service=STACK_SERVICE_NAME , app=app)

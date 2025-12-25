@@ -272,17 +272,14 @@ class PhraseSegmenterNode(ConsumerNode):
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
             await event_log(
                 f"ASR timeout for phrase {phrase.phrase_id}",
-                level="warn",
-                name="asr_timeout",
+                name="error",
                 app=self.app,
             )
         except NoRespondersError:
             logger.error("No whisper responders for phrase %s", phrase.phrase_id)
             await event_log(
                 "Whisper service unavailable",
-                level="error",
-
-                name="asr_no_responders",
+                name="error",
                 app=self.app,
             )
         except Exception as exc:

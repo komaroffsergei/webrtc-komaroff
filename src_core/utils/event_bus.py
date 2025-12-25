@@ -38,15 +38,16 @@ class EventBus:
         level: str = "info",
         name: str | None = None,
         event_name: str | None = None,
+        service: str | None = None,
     ) -> str:
         payload = {
             "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
-            "service": self._service_name or "src_core",
-            "type": level,
+            "service": service or self._service_name,
             "name": event_name or name or "",
             "message": message,
             "uid": str(uuid.uuid4()),
         }
+
         await self.publish(payload)
         return payload["uid"]
 
@@ -81,9 +82,9 @@ def get_event_bus(app: Application | None = None) -> EventBus:
 async def event_log(
     message: Any,
     *,
-    level: str = "info",
     name: str | None = None,
     app: Application | None = None,
+    service: str | None = None,
 ) -> str:
     bus = get_event_bus(app)
-    return await bus.log(message, level=level, event_name=name)
+    return await bus.log(message, service=service, name=name)

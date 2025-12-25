@@ -60,7 +60,6 @@ def no_tool_calls():
     }
 )
 def display_result(*, artifact_keys) -> Tuple[bool, Dict[str, Any]]:
-    # --- normalization ---
     if isinstance(artifact_keys, str):
         artifact_keys = [artifact_keys]
 
@@ -96,7 +95,7 @@ def display_result(*, artifact_keys) -> Tuple[bool, Dict[str, Any]]:
 @mcp_tool(
     description="Получает текущую позицию пользователя",
     provides=["current_position"],
-    final_command="SET_POSITION"
+    client_handler="SET_POSITION"
 )
 def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     r = requests.get(f"{API}/pilot/location", timeout=10)
@@ -118,7 +117,7 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     parameters={
         "radius_km": "Радиус поиска в километрах"
     },
-    final_command="SHOW_AIRPORTS"
+    client_handler="SHOW_AIRPORTS"
 )
 def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     pos = ARTIFACTS.get("current_position")
@@ -156,7 +155,7 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     description="Выбирает аэропорт с самой короткой ВПП без учёта статуса",
     consumes=["selected_airports"],
     provides=["selected_airports"],
-    final_command="SHOW_AIRPORTS"
+    client_handler="SHOW_AIRPORTS"
 )
 def select_airport_with_shortest_runway() -> Tuple[bool, Dict[str, Any]]:
     airports = ARTIFACTS.get("selected_airports")
@@ -204,7 +203,7 @@ def select_airport_with_shortest_runway() -> Tuple[bool, Dict[str, Any]]:
     parameters={
         "require_runway_status": "Обязательный статус ВПП: free, busy или closed"
     },
-    final_command="SHOW_AIRPORTS"
+    client_handler="SHOW_AIRPORTS"
 )
 def select_airport_with_shortest_runway_by_status(
     *,
@@ -254,7 +253,7 @@ def select_airport_with_shortest_runway_by_status(
         "surface": "Материал покрытия ВПП: concrete или asphalt",
         "require_runway_status": "Учитывать только ВПП с данным статусом"
     },
-    final_command="SHOW_AIRPORTS"
+    client_handler="SHOW_AIRPORTS"
 )
 def select_airport_with_shortest_runway_by_surface(
     *,
@@ -303,7 +302,7 @@ def select_airport_with_shortest_runway_by_surface(
     description="Строит маршрут от текущей позиции до выбранного аэропорта",
     consumes=["current_position", "selected_airports"],
     provides=["route"],
-    final_command="BUILD_ROUTE"
+    client_handler="BUILD_ROUTE"
 )
 def build_route_to_first_airport() -> Tuple[bool, Dict[str, Any]]:
     pos = ARTIFACTS.get("current_position")

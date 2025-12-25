@@ -98,16 +98,8 @@ class AgentServer:
 
             # Запуск агента
             result = await self.agent.run(prompt=prompt, session_id=session_id)
-
-            # Отправка результата
-            response = {
-                "status": "success",
-                "session_id": session_id,
-                "result": result
-            }
-
             payload = json.dumps(
-                response,
+                result,
                 ensure_ascii=False
             ).encode("utf-8")
 

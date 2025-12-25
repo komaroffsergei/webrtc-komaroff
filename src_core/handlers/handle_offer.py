@@ -7,6 +7,8 @@ from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
 from .handle_track import handle_track
 from src_core.utils.event_bus import event_log
 from src_core.utils.validate import get_params, validate_sdp
+from ..settings import STACK_SERVICE_NAME
+
 logger = logging.getLogger("handle_offer")
 
 
@@ -44,13 +46,17 @@ async def handle_offer_connect(request, params):
     pcs.add(pc)
     await event_log(
         f"WebRTC: Creating peer connection (total active: {len(pcs)})",
-        level="info",
-    )
+        name="log",
+        app=request.app,
+        service=STACK_SERVICE_NAME)
     
     echo_ref = {"node": None}
     @pc.on("track")
     async def on_track(track):
-        await event_log(f"WebRTC: Track received, kind={track.kind}", level="info")
+        await event_log(f"WebRTC: Track received, kind={track.kind}",
+                        name="log",
+                        app=request.app,
+                        service=STACK_SERVICE_NAME)
         await handle_track(
             track, 
             pc, 
@@ -61,11 +67,17 @@ async def handle_offer_connect(request, params):
 
     try:
         resp = await establish_connection(pc, offer)
-        await event_log("WebRTC: Connection established successfully", level="info")
+        await event_log("WebRTC: Connection established successfully",
+                        name="log",
+                        app=request.app,
+                        service=STACK_SERVICE_NAME)
         return resp, None
     except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
-        await event_log(f"WebRTC: Connection failed - {str(e)}", level="error")
+        await event_log(f"WebRTC: Connection failed - {str(e)}",
+                        name="error",
+                        app=request.app,
+                        service=STACK_SERVICE_NAME)
         try:
             await audio_transceiver.sender.replaceTrack(None)
         except Exception:

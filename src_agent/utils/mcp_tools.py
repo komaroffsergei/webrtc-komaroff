@@ -1,23 +1,49 @@
 import inspect
 from typing import get_origin, get_args, List, Dict, Any, get_type_hints, Literal, TypedDict
+class AgentRegistry(TypedDict, total=False):
+    fn: Any
+    schema: Dict[str, Any]
+    provides: list[str] | None
+    consumes: list[str] | None
+    client_handler: str | None
 
-REGISTRY: dict = {}
-AgentStatus = Literal[
-    "OK",
-    "FAILED_EXECUTE",
+REGISTRY: Dict[str, AgentRegistry] = {}
+AgentErrorStatus = Literal[
+    "TOOLS_EXCEPTION",
+    "LLM_EXCEPTION",
+    "MAX_STEPS_EXCEEDED",
     "UNSUPPORTED_REQUEST",
 ]
 
+AGentClientCommands = Literal[
+    "SHOW_ERROR_MESSAGE",
+    "SET_POSITION",
+    "SHOW_AIRPORTS",
+    "BUILD_ROUTE",
+] | str
+
+
+class AgentError(TypedDict, total=False):
+    type: AgentErrorStatus
+    message: str
+class AgentArtifacts(TypedDict, total=False):
+    last: str
+    all: List[str]
+    payload: Dict[str, Any]
+    # result: Any
+
+class AgentClientHandler(TypedDict, total=False):
+    command: AGentClientCommands | None
+    artifacts: AgentArtifacts
 
 class AgentResponse(TypedDict, total=False):
-    status: AgentStatus
-    model: str
-    prompt: str
-    steps: int
-    result: Any
-    error: str
-    total_time_sec: float
+    success: bool
     data: Dict[str, Any]
+    result: Any
+    error: AgentError
+    client_handler: AgentClientHandler | None
+
+
 
 
 def mcp_tool(
@@ -26,7 +52,7 @@ def mcp_tool(
     provides: list[str] | None = None,
     consumes: list[str] | None = None,
     parameters: dict[str, str] | None = None,
-    final_command: str | None = None,
+    client_handler: str | None = None,
 ):
     def wrapper(fn):
         tool_name = name or fn.__name__
@@ -51,7 +77,7 @@ def mcp_tool(
 
         full_description = "\n".join(desc_parts)
 
-        REGISTRY[tool_name] = {
+        reg:AgentRegistry = {
             "fn": fn,
             "schema": build_schema(
                 fn,
@@ -61,8 +87,10 @@ def mcp_tool(
             ),
             "provides": prov,
             "consumes": cons,
-            "final_command": final_command,
+            "client_handler": client_handler,
         }
+        REGISTRY[tool_name] = reg
+
         return fn
 
     return wrapper

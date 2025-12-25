@@ -2,6 +2,7 @@ import logging
 from aiohttp import web
 
 from src_core.handlers.handle_transcription import handle_transcription
+from src_core.settings import STACK_SERVICE_NAME
 from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_message")
@@ -23,18 +24,18 @@ async def message_handler(request: web.Request):
     except Exception as e:
         logger.error(f"Invalid JSON: {e}")
         return web.json_response({"error": "Invalid JSON"}, status=400)
-    
+
     text = data.get("text", "").strip()
     if not text:
         return web.json_response({"error": "text field is required"}, status=400)
 
-    message_uid = await event_log(text, level='info', app=request.app)
-    
-    logger.info(f"Message received: {text[:50]}... (uid={message_uid})")
+    await event_log(text,
+                    name="log",
+                    app=request.app,
+                    service=STACK_SERVICE_NAME)
 
     await handle_transcription(request.app, {"text": text})
 
     return web.json_response({
         "status": "ok",
-        "uid": message_uid
     })
