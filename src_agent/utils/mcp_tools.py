@@ -4,26 +4,21 @@ from typing import get_origin, get_args, List, Dict, Any, get_type_hints, Litera
 REGISTRY: dict = {}
 AgentStatus = Literal[
     "OK",
-    "FAILED",
+    "FAILED_EXECUTE",
     "UNSUPPORTED_REQUEST",
 ]
 
 
 class AgentResponse(TypedDict, total=False):
-    # --- обязательные поля ---
     status: AgentStatus
     model: str
     prompt: str
     steps: int
-
-    # --- при успехе ---
     result: Any
-
-    # --- при ошибке ---
     error: str
-
-    # --- служебное ---
     total_time_sec: float
+    data: Dict[str, Any]
+
 
 def mcp_tool(
     name: str | None = None,
@@ -31,6 +26,7 @@ def mcp_tool(
     provides: list[str] | None = None,
     consumes: list[str] | None = None,
     parameters: dict[str, str] | None = None,
+    final_command: str | None = None,
 ):
     def wrapper(fn):
         tool_name = name or fn.__name__
@@ -65,6 +61,7 @@ def mcp_tool(
             ),
             "provides": prov,
             "consumes": cons,
+            "final_command": final_command,
         }
         return fn
 

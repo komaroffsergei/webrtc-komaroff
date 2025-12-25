@@ -106,7 +106,12 @@ class AgentServer:
                 "result": result
             }
 
-            await msg.respond(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            payload = json.dumps(
+                response,
+                ensure_ascii=False
+            ).encode("utf-8")
+
+            await msg.respond(payload)
             # await self.nats_logger.info(f"Request processed successfully")
             # logger.info("Request processed successfully")
 

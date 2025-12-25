@@ -67,6 +67,9 @@ class MCPAgent:
                 "steps": 0,
                 "status": "UNSUPPORTED_REQUEST",
                 "error": "Запрос не поддерживается системой",
+                "data": {
+                    "command": "SHOW_ERROR_MESSAGE",
+                },
             }
 
         start_ts = time.perf_counter()
@@ -86,6 +89,8 @@ class MCPAgent:
         seq = 0
         steps = 0
         tool_history: List[Dict[str, Any]] = []
+        last_final_command: str | None = None
+        last_provided_artifacts: list[str] = []
 
         for step in range(1, MAX_STEPS + 1):
             steps += 1
@@ -116,8 +121,11 @@ class MCPAgent:
                     "prompt": prompt,
                     "steps": steps,
                     "total_time_sec": round(time.perf_counter() - start_ts, 3),
-                    "status": "FAILED",
+                    "status": "FAILED_EXECUTE",
                     "error": str(e),
+                    "data": {
+                        "command": "SHOW_ERROR_MESSAGE",
+                    },
                 }
 
             msg = resp["message"]
@@ -138,6 +146,12 @@ class MCPAgent:
                 try:
                     safe_args = normalize_args(self.tools_impl[name], raw_args)
                     cont, result = self.tools_impl[name](**safe_args)
+                    # сохраняем финальную команду (для клиента)
+                    tool_meta = REGISTRY.get(name, {})
+                    if tool_meta.get("final_command"):
+                        last_final_command = tool_meta["final_command"]
+                        last_provided_artifacts = list(tool_meta.get("provides") or [])
+
                 except Exception as e:
                     logger.exception("ERROR: %s", str(e))
                     return {
@@ -165,6 +179,27 @@ class MCPAgent:
                     total_time = time.perf_counter() - start_ts
                     logger.info("[FINAL ANSWER] %s", result.get("result"))
                     logger.info("STATS steps=%d time=%.3fs", steps, total_time)
+
+                    artifacts_payload = {}
+
+                    for key in last_provided_artifacts:
+                        if key in ARTIFACTS:
+                            artifacts_payload[key] = ARTIFACTS[key]
+
+                    command = None
+                    if last_final_command:
+                        command = {
+                            "type": last_final_command,
+                            "params": {
+                                "artifact_key": (
+                                    last_provided_artifacts[0]
+                                    if len(last_provided_artifacts) == 1
+                                    else last_provided_artifacts
+                                )
+                            }
+                        }
+
+
                     return {
                         "status": "OK",
                         "model": OLLAMA_MODEL,
@@ -172,6 +207,10 @@ class MCPAgent:
                         "steps": steps,
                         "result": result.get("result"),
                         "total_time_sec": round(total_time, 3),
+                        "data": {
+                            "command": command,
+                            "artifacts": artifacts_payload,
+                        },
                     }
 
                 messages.append({
@@ -195,6 +234,9 @@ class MCPAgent:
             "steps": steps,
             "error": "MAX_STEPS_EXCEEDED",
             "total_time_sec": round(total_time, 3),
+            "data": {
+                "command": "SHOW_ERROR_MESSAGE",
+            },
         }
 
 
