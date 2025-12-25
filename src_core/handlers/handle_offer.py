@@ -46,7 +46,7 @@ async def handle_offer_connect(request, params):
     pcs.add(pc)
     await event_log(
         f"WebRTC: Creating peer connection (total active: {len(pcs)})",
-        name="log",
+        kind="log",
         app=request.app,
         service=STACK_SERVICE_NAME)
     
@@ -54,7 +54,7 @@ async def handle_offer_connect(request, params):
     @pc.on("track")
     async def on_track(track):
         await event_log(f"WebRTC: Track received, kind={track.kind}",
-                        name="log",
+                        kind="log",
                         app=request.app,
                         service=STACK_SERVICE_NAME)
         await handle_track(
@@ -68,14 +68,14 @@ async def handle_offer_connect(request, params):
     try:
         resp = await establish_connection(pc, offer)
         await event_log("WebRTC: Connection established successfully",
-                        name="log",
+                        kind="log",
                         app=request.app,
                         service=STACK_SERVICE_NAME)
         return resp, None
     except Exception as e:
         logger.error("Failed to process SDP offer", exc_info=True)
         await event_log(f"WebRTC: Connection failed - {str(e)}",
-                        name="error",
+                        kind="error",
                         app=request.app,
                         service=STACK_SERVICE_NAME)
         try:

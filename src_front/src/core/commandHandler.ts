@@ -1,6 +1,3 @@
-import type { ServerEvent } from "./types";
-import { logEvent } from "./logging";
-
 type CommandHandlerFn = (params: unknown, uid?: string) => void | Promise<void>;
 
 export class CommandHandler {
@@ -8,7 +5,6 @@ export class CommandHandler {
 
   register(method: string, handler: CommandHandlerFn): void {
     this.handlers.set(method, handler);
-    logEvent({ service: "command", type: "info", message: `Registered ${method}` });
   }
 
   // async handleServerEvent(event: ServerEvent): Promise<boolean> {

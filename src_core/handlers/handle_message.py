@@ -30,7 +30,7 @@ async def message_handler(request: web.Request):
         return web.json_response({"error": "text field is required"}, status=400)
 
     await event_log(text,
-                    name="log",
+                    kind="log",
                     app=request.app,
                     service=STACK_SERVICE_NAME)
 

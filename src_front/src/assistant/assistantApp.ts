@@ -14,7 +14,7 @@ import { FrontendNatsClient } from "../net/natsClient";
 import { CommandHandler } from "../core/commandHandler";
 import { logError, logEvent } from "../core/logging";
 import { AgentCommandHandler } from "../agentCommands/agentCommandHandler";
-import {ServerEvent} from "../types";
+import {AgentMessage, ServerEvent} from "../types";
 
 /* ===========================
    AssistantApp
@@ -188,23 +188,8 @@ export class AssistantApp {
   }
 
   private async handleServerEvent(event: ServerEvent): Promise<void> {
-    // Логи (старый формат)
-    if (
-      event &&
-      "service" in event &&
-      "type" in event &&
-      "message" in event
-    ) {
-      logEvent({
-        service: event.service,
-        type: event.type,
-        message:
-          typeof event.message === "string"
-            ? event.message
-            : JSON.stringify(event.message),
-        time: (event as any).time,
-      });
-    }
+    // logs
+    logEvent(event);
 
     // Обычное сообщение (старый формат)
     // if (
@@ -217,11 +202,11 @@ export class AssistantApp {
     //   return;
     // }
 
-    if (event.name === "message") {
-      if (this.agentCommands.isAgentCommandEvent(event.message)) {
+    if (event.kind === "message") {
+      if ((event.message as AgentMessage)?.client_handler) {
         this.chat.removeThinking(this.pendingThinkingId);
         this.pendingThinkingId = null;
-        this.agentCommands.handle(event.message);
+        this.agentCommands.handle(event.message as AgentMessage);
         return;
       }
     }

@@ -1,16 +1,10 @@
-import type { AgentCommandContext, AgentResponse } from "../types";
+import {AgentCommandContext, AgentMessage} from "../../types";
 
 export function handleShowErrorMessage(
-  resp: AgentResponse,
+  resp: AgentMessage,
   ctx: AgentCommandContext,
 ): void {
-  const cmd = resp.data?.command;
-
-  const msg =
-    (resp.result as any)?.error ??
-    (cmd?.params?.message as string | undefined) ??
-    (resp as any)?.message ??
-    "Неизвестная ошибка";
+  const msg = resp.error?.message || resp.error?.type || "Неизвестная ошибка";
 
   ctx.chat.addMessage(`Ошибка: ${String(msg)}`, "server");
 }

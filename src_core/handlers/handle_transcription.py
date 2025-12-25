@@ -30,12 +30,12 @@ async def handle_transcription(app, payload: dict):
 
         response = json.loads(msg.data.decode("utf-8"))
         await event_log(response,
-                        name="message",
+                        kind="message",
                         app=app,
                         service=STACK_SERVICE_NAME)
 
     except Exception as e:
         await event_log(f"Agent communication error: {str(e)}",
-                        name="error",
+                        kind="error",
                         app=app,
                         service=STACK_SERVICE_NAME)

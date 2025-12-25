@@ -4,12 +4,13 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any, Mapping, Literal
 
 from aiohttp.web_app import Application
 
 logger = logging.getLogger("event_bus")
 
+EVENT_KINDS = Literal["message", "log", "error", "control"]
 
 class EventBus:
     def __init__(self) -> None:
@@ -35,15 +36,15 @@ class EventBus:
         self,
         message: Any,
         *,
-        level: str = "info",
-        name: str | None = None,
-        event_name: str | None = None,
+        name: str = "",
+        kind: EVENT_KINDS  = "log",
         service: str | None = None,
     ) -> str:
         payload = {
             "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
             "service": service or self._service_name,
-            "name": event_name or name or "",
+            "kind": kind,
+            "name": name,
             "message": message,
             "uid": str(uuid.uuid4()),
         }
@@ -82,9 +83,10 @@ def get_event_bus(app: Application | None = None) -> EventBus:
 async def event_log(
     message: Any,
     *,
-    name: str | None = None,
+    name="",
+    kind: EVENT_KINDS = "log",
     app: Application | None = None,
     service: str | None = None,
 ) -> str:
     bus = get_event_bus(app)
-    return await bus.log(message, service=service, name=name)
+    return await bus.log(message, service=service, kind=kind, name=name)

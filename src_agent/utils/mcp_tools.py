@@ -20,7 +20,7 @@ AGentClientCommands = Literal[
     "SET_POSITION",
     "SHOW_AIRPORTS",
     "BUILD_ROUTE",
-] | str
+]
 
 
 class AgentError(TypedDict, total=False):
