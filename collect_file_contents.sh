@@ -19,11 +19,14 @@ shift
 DEFAULT_EXCLUDE_DIRS_FILES=$(cat <<'EOF'
 .git
 node_modules
+dist
 build
 .venv
 .qodo
 .idea
 .gitignore
+.gitlab-ci.yml
+.gitattributes
 README.md
 third_party
 model
@@ -33,10 +36,12 @@ __pycache__
 __init__
 agents.md
 .version
+collect_file_contents.sh
 docker
 stack
+src_core
+src_agent
 src_api_gateway
-src_front
 src_lang_graph_1
 src_lang_graph_2
 src_llm

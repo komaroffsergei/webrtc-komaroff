@@ -68,7 +68,9 @@ class MCPAgent:
                 "status": "UNSUPPORTED_REQUEST",
                 "error": "Запрос не поддерживается системой",
                 "data": {
-                    "command": "SHOW_ERROR_MESSAGE",
+                    "command": {
+                        "type": "SHOW_ERROR_MESSAGE",
+                    },
                 },
             }
 
@@ -124,7 +126,9 @@ class MCPAgent:
                     "status": "FAILED_EXECUTE",
                     "error": str(e),
                     "data": {
-                        "command": "SHOW_ERROR_MESSAGE",
+                        "command": {
+                            "type": "SHOW_ERROR_MESSAGE",
+                        },
                     },
                 }
 
@@ -235,7 +239,9 @@ class MCPAgent:
             "error": "MAX_STEPS_EXCEEDED",
             "total_time_sec": round(total_time, 3),
             "data": {
-                "command": "SHOW_ERROR_MESSAGE",
+                "command": {
+                    "type": "SHOW_ERROR_MESSAGE",
+                },
             },
         }
 

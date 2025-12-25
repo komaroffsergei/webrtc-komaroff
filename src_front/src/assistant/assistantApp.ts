@@ -12,10 +12,9 @@ import {
 } from "../webrtc/session";
 import { FrontendNatsClient } from "../net/natsClient";
 import { CommandHandler } from "../core/commandHandler";
-import type { ServerEvent } from "../core/types";
 import { logError, logEvent } from "../core/logging";
-
-
+import { AgentCommandHandler } from "../agentCommands/agentCommandHandler";
+import {ServerEvent} from "../types";
 
 /* ===========================
    AssistantApp
@@ -32,6 +31,9 @@ export class AssistantApp {
   private nats = new FrontendNatsClient();
   private natsReconnectTimer: number | null = null;
 
+  private pendingThinkingId: string | null = null;
+  private agentCommands: AgentCommandHandler;
+
   constructor(private config: AppConfig) {
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
@@ -42,6 +44,11 @@ export class AssistantApp {
       document.getElementById("warningContainer") ??
       document.body.appendChild(document.createElement("div"));
     this.warning = new WarningUI(warningRoot);
+
+    this.agentCommands = new AgentCommandHandler({
+      chat: this.chat,
+      warning: this.warning,
+    });
 
     /* ---------- UI bindings ---------- */
     bindMicButton(this.el, () => this.toggleConnection());
@@ -75,12 +82,17 @@ export class AssistantApp {
       this.el.textInput!.value = "";
       this.chat.addMessage(text, "user");
 
+      // Показать "агент думает" сразу после отправки
+      this.chat.removeThinking(this.pendingThinkingId);
+      this.pendingThinkingId = this.chat.addThinking();
+
       void this.commands.sendMessage(text).catch((err) => {
+        this.chat.removeThinking(this.pendingThinkingId);
+        this.pendingThinkingId = null;
         this.warning.show({ message: String(err) });
       });
     });
   }
-
 
   /* ===========================
      CONNECTION
@@ -93,7 +105,6 @@ export class AssistantApp {
       this.chat.addMessage("Отключено", "status");
       return;
     }
-
 
     try {
       await connectSession(this.config, this.el, this.audio, (t) => {
@@ -115,8 +126,7 @@ export class AssistantApp {
 
   private registerBuiltinCommands(): void {
     this.commands.register("alert", (params) => {
-      const msg =
-        typeof params === "string" ? params : JSON.stringify(params);
+      const msg = typeof params === "string" ? params : JSON.stringify(params);
       this.warning.show({ message: msg });
     });
   }
@@ -178,6 +188,7 @@ export class AssistantApp {
   }
 
   private async handleServerEvent(event: ServerEvent): Promise<void> {
+    // Логи (старый формат)
     if (
       event &&
       "service" in event &&
@@ -195,11 +206,24 @@ export class AssistantApp {
       });
     }
 
-    if (
-      (event as any).name === "message" &&
-      typeof (event as any).message === "string"
-    ) {
-      this.chat.addMessage((event as any).message, "server");
+    // Обычное сообщение (старый формат)
+    // if (
+    //   (event as any).name === "message" &&
+    //   typeof (event as any).message === "string"
+    // ) {
+    //   this.chat.removeThinking(this.pendingThinkingId);
+    //   this.pendingThinkingId = null;
+    //   this.chat.addMessage((event as any).message, "server");
+    //   return;
+    // }
+
+    if (event.name === "message") {
+      if (this.agentCommands.isAgentCommandEvent(event.message)) {
+        this.chat.removeThinking(this.pendingThinkingId);
+        this.pendingThinkingId = null;
+        this.agentCommands.handle(event.message);
+        return;
+      }
     }
 
     // await this.commands.handleServerEvent(event);

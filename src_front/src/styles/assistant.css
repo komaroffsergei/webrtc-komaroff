@@ -118,6 +118,45 @@ body {
   border-bottom-right-radius: 4px;
 }
 
+/* ===== Thinking bubble (agent is "thinking") ===== */
+.thinking-message {
+  background: #e5e5ea;
+  color: #1d1d1f;
+  margin-right: auto;
+  border-bottom-left-radius: 4px;
+  width: fit-content;
+}
+
+.thinking-dots {
+  display: inline-block;
+  width: 1.6em;
+  text-align: left;
+}
+
+.thinking-dots::before {
+  content: "…";
+  display: inline-block;
+  animation: thinkingDots 1.1s infinite steps(4, end);
+}
+
+@keyframes thinkingDots {
+  0% {
+    content: "";
+  }
+  25% {
+    content: ".";
+  }
+  50% {
+    content: "..";
+  }
+  75% {
+    content: "...";
+  }
+  100% {
+    content: "";
+  }
+}
+
 .text-input-container {
   position: relative;
   z-index: 2;
@@ -225,7 +264,6 @@ body {
 .hidden {
   display: none;
 }
-
 
 @keyframes pulse {
   0% {
