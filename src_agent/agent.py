@@ -6,11 +6,8 @@ from typing import Any, Dict, List
 
 import ollama
 
-from llm_client import LLMClient
-from mcp_client import MCPClient
 from settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT, MAX_STEPS, OLLAMA_MODEL
 from src_agent.tools.tools import reset_artifacts, ARTIFACTS
-# from src_agent.repositories.events import log_event
 from src_agent.utils.db import create_session, create_intent, finish_intent, finish_session
 
 from src_agent.utils.nats_logger import NatsLogger
@@ -43,8 +40,6 @@ class MCPAgent:
         self.user_id = user_id
         self.current_intent_id = None
         self.nc = nc
-        self.llm_client = LLMClient(nc, llm_subject=llm_subject)
-        self.mcp_client = MCPClient()
         self.max_steps = max_steps
         self.db = db
         self.nats_logger = NatsLogger(self.nc, events_subject, STACK_SERVICE_NAME)
