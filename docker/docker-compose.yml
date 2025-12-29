@@ -100,7 +100,7 @@ services:
 
   src_front:
     build:
-      context: ..
+      context: ../src_front
       dockerfile: docker/frontend/Dockerfile
       args:
         VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
