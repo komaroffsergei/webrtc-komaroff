@@ -3,7 +3,6 @@ services:
     build:
       context: ../src_postgres
       dockerfile: Dockerfile
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_postgres:${CI_COMMIT_REF_SLUG:-latest}
     environment:
       POSTGRES_DB: mcp
       POSTGRES_USER: mcp
@@ -23,7 +22,6 @@ services:
     build:
       context: ../src_api_gateway
       dockerfile: Dockerfile
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_api_gateway:${CI_COMMIT_REF_SLUG:-latest}
     ports:
       - "8100:8100"
     environment:
@@ -34,7 +32,6 @@ services:
     build:
       context: ../src_core
       dockerfile: ../docker/python/Dockerfile
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_core:${CI_COMMIT_REF_SLUG:-latest}
     environment:
       STACK_SERVICE_NAME: src_core
       USER_ID: ${USER_ID:-user123}
@@ -58,7 +55,6 @@ services:
     build:
       context: ../src_agent
       dockerfile: Dockerfile
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_agent:${CI_COMMIT_REF_SLUG:-latest}
     environment:
       STACK_SERVICE_NAME: src_agent
       USER_ID: ${USER_ID:-user123}
@@ -86,7 +82,6 @@ services:
     build:
       context: ../src_whisper
       dockerfile: Dockerfile
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_whisper:${CI_COMMIT_REF_SLUG:-latest}
     environment:
       STACK_SERVICE_NAME: src_whisper
       USER_ID: ${USER_ID:-user123}
@@ -112,7 +107,6 @@ services:
         VITE_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
         CORE_ORIGIN: ${CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
         CI_PIPELINE_ID: ${CI_PIPELINE_ID:-local}
-    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_front:${CI_COMMIT_REF_SLUG:-latest}
     ports:
       - "8080:8000"
     environment:
