@@ -9,9 +9,9 @@ ARG CORE_ORIGIN
 ARG CI_PIPELINE_ID
 
 WORKDIR /app
-COPY src_front/package.json src_front/package-lock.json /app/
+COPY package.json package-lock.json /app/
 RUN npm ci
-COPY src_front/ /app/
+COPY . /app/
 
 ENV COM_GITLAB_CI_PIPELINE_IID=$CI_PIPELINE_ID \
     VITE_NATS_URL=$VITE_NATS_URL \
@@ -51,8 +51,8 @@ RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
-COPY docker/nginx/default.conf /etc/nginx/templates/default.conf.template
-COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY docker/nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
+COPY nginx/default.conf /etc/nginx/templates/default.conf.template
+COPY nginx/nginx.conf /etc/nginx/nginx.conf
+COPY nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
