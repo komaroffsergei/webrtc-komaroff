@@ -3,6 +3,7 @@ services:
     build:
       context: ../src_postgres
       dockerfile: Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres:${CI_COMMIT_BRANCH}
     environment:
       POSTGRES_DB: mcp
       POSTGRES_USER: mcp
@@ -22,6 +23,7 @@ services:
     build:
       context: ../src_api_gateway
       dockerfile: Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/api-gateway:${CI_COMMIT_BRANCH}
     ports:
       - "8100:8100"
     environment:
@@ -32,6 +34,7 @@ services:
     build:
       context: ../src_core
       dockerfile: ../docker/python/Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/core:${CI_COMMIT_BRANCH}
     environment:
       STACK_SERVICE_NAME: src_core
       USER_ID: ${USER_ID:-user123}
@@ -55,6 +58,7 @@ services:
     build:
       context: ../src_agent
       dockerfile: Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/agent:${CI_COMMIT_BRANCH}
     environment:
       STACK_SERVICE_NAME: src_agent
       USER_ID: ${USER_ID:-user123}
@@ -82,6 +86,7 @@ services:
     build:
       context: ../src_whisper
       dockerfile: Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/whisper:${CI_COMMIT_BRANCH}
     environment:
       STACK_SERVICE_NAME: src_whisper
       USER_ID: ${USER_ID:-user123}
@@ -95,8 +100,8 @@ services:
 
   src_front:
     build:
-      context: ../src_front
-      dockerfile: ../docker/frontend/Dockerfile
+      context: ..
+      dockerfile: docker/frontend/Dockerfile
       args:
         VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
         VITE_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
@@ -105,6 +110,7 @@ services:
         VITE_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
         CORE_ORIGIN: ${CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
         CI_PIPELINE_ID: ${CI_PIPELINE_ID:-local}
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front:${CI_COMMIT_BRANCH}
     ports:
       - "8080:8000"
     environment:
