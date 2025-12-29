@@ -89,7 +89,7 @@ end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
   ingress host: "komaroff-nats-ws.*",  port: 9222
-  command "nats-server -c /nats.conf"
+  command ['nats-server', '-c', '/nats.conf']
   config target: "/nats.conf", file_content: <<~CONF
     # Отключаем JetStream
     jetstream: false
