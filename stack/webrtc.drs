@@ -29,7 +29,7 @@ Service :src_core,
 end
 
 Service :src_api_gateway,
-        image: image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-api-gateway/main',
+        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-api-gateway/main',
         ports: 8100,
         ingress: { host: 'webrtc-komaroff-api.*' } do
   env API_HOST: '0.0.0.0',
@@ -37,7 +37,7 @@ Service :src_api_gateway,
 end
 
 Service :src_agent,
-        image: image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-agent/main'
+        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-agent/main'
 do
   env STACK_SERVICE_NAME: 'src_agent',
       USER_ID: USER_ID,
