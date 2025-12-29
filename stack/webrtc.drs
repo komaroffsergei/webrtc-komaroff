@@ -6,7 +6,9 @@ NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
 
-PublishPorts core: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
+PublishPorts core: [
+  { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
+]
 
 Service :src_core,
         image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-core/main',
@@ -37,8 +39,7 @@ Service :src_api_gateway,
 end
 
 Service :src_agent,
-        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-agent/main'
-do
+        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-agent/main' do
   env STACK_SERVICE_NAME: 'src_agent',
       USER_ID: USER_ID,
       NATS_URL: NATS_URL,
@@ -50,7 +51,10 @@ do
       TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '60'),
       OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://host.docker.internal:11435'),
       OLLAMA_MODEL: ENV.fetch('OLLAMA_MODEL', 'qwen3:1.7b'),
-      DATABASE_URL: ENV.fetch('DATABASE_URL', "postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp"),
+      DATABASE_URL: ENV.fetch(
+        'DATABASE_URL',
+        'postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp'
+      ),
       AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
       RUNWAYS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports',
       PILOT_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/pilot/location',
@@ -59,8 +63,7 @@ do
 end
 
 Service :src_whisper,
-        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-whisper/main',
-do
+        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-whisper/main' do
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
@@ -80,26 +83,26 @@ Service :src_front,
       FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
       FRONT_NATS_CLIENT_NAME: 'src_front',
       FRONT_CORE_ORIGIN: 'http://web-rtc-komaroff_src_core:8000',
-      COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'] || ENV['CI_PIPELINE_IID'] || 'local'
+      COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'] ||
+                                 ENV['CI_PIPELINE_IID'] ||
+                                 'local'
 end
 
 Service :src_postgres,
-        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-postgres/main',
-do
-  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
-  env PGDATA: '/var/lib/postgresql/data/pgdata'
+        image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-src-postgres/main' do
+  env POSTGRES_DB: 'mcp',
+      POSTGRES_USER: 'mcp',
+      POSTGRES_PASSWORD: 'mcp_pass',
+      PGDATA: '/var/lib/postgresql/data/pgdata'
   volume name: 'src_postgres_data', target: '/var/lib/postgresql/data'
   command ['postgres', '--wal_level=logical']
 end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
-  ingress host: "komaroff-nats-ws.*",  port: 9222
+  ingress host: 'komaroff-nats-ws.*', port: 9222
   command ['-c', '/nats.conf']
-  config target: "/nats.conf", file_content: <<~CONF
-    # Отключаем JetStream
+  config target: '/nats.conf', file_content: <<~CONF
     jetstream: false
-
-    # Включаем WebSocket
     websocket: {
       listen: 0.0.0.0:9222
       no_tls: true
@@ -110,5 +113,5 @@ end
 
 Service :nats_box, image: 'natsio/nats-box' do
   env NATS_URL: NATS_URL
-  entrypoint "sh -c \"sleep infinity\""
+  entrypoint 'sh -c "sleep infinity"'
 end
