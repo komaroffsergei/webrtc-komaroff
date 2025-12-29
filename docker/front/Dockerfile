@@ -51,8 +51,8 @@ RUN rm -rf /usr/share/nginx/html/*
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
-COPY nginx/default.conf /etc/nginx/templates/default.conf.template
-COPY nginx/nginx.conf /etc/nginx/nginx.conf
-COPY nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
+COPY docker/nginx/default.conf /etc/nginx/templates/default.conf.template
+COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
