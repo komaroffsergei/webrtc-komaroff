@@ -83,7 +83,7 @@ end
 Service :src_postgres, image: image_name("src_postgres") do
   env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
   env PGDATA: '/var/lib/postgresql/data/pgdata'
-  volume 'src_postgres_data:/var/lib/postgresql/data'
+  volume name: 'src_postgres_data', target: '/var/lib/postgresql/data'
   command ['postgres', '--wal_level=logical']
 end
 
