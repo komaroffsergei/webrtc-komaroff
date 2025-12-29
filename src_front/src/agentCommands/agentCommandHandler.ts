@@ -1,6 +1,5 @@
-import type { AgentCommandContext, AgentResponse } from "./types";
 import { commandHandlers } from "./commands";
-import {AgentMessage, ServerEvent} from "../types";
+import {AgentCommandContext, AgentMessage} from "../types";
 
 export class AgentCommandHandler {
   constructor(private ctx: AgentCommandContext) {}

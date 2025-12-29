@@ -1,45 +1,90 @@
 Options name: 'web-rtc-komaroff'
 
 NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
-PublishPorts back: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
+USER_ID = ENV.fetch("USER_ID", "user123")
+NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
+NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
+NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
 
+CI_IMAGE_PREFIX = ENV.fetch("CI_REGISTRY_IMAGE", "builder-registry.builder.giscloud.ru/webrtc-komaroff-dev")
+CI_IMAGE_TAG = ENV.fetch("CI_COMMIT_REF_SLUG", "main")
 
-Service :back,  image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-back/main', ports: 8000,
-        ingress: { host: 'webrtc-komaroff.*' } do
-  env NATS_URL: NATS_URL,
-      NATS_FRAMES_SUBJECT: 'nats.frames',
-      NATS_LOGS_SUBJECT: 'nats.logs',
-      VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
-  volume name: 'VAD_MODELS_PATH', target: '/app/models/vad/'
+def image_name(service)
+  "#{CI_IMAGE_PREFIX}/#{service}:#{CI_IMAGE_TAG}"
 end
 
-Service :whisper_python, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-python/main', ports: 9000,
-        ingress: { host: 'webrtc-komaroff-whisper.*' } do
+PublishPorts src_core: [ { target: 19303, published: 19303, protocol: 'udp', mode: 'host'}]
+
+Service :src_core,  image: image_name("src_core"), ports: 8000,
+        ingress: { host: 'webrtc-komaroff-core.*' } do
   env NATS_URL: NATS_URL,
-      NATS_FRAMES_SUBJECT: 'nats.frames',
-      NATS_LOGS_SUBJECT: 'nats.logs',
+      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+      NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
+      NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      STACK_SERVICE_NAME: 'src_core',
+      USER_ID: USER_ID,
+      CORE_HOST: '0.0.0.0',
+      CORE_PORT: 8000,
+      ASR_MODELS_DIR: '/app/models/asr',
+      ASR_MODEL_ID: 'Systran/faster-whisper-small',
+      VAD_MODEL_PATH: '/app/src_core/models/vad',
+      VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
+  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+  volume name: 'VAD_MODELS_PATH', target: '/app/src_core/models/vad'
+end
+
+Service :src_api_gateway, image: image_name("src_api_gateway"), ports: 8100,
+        ingress: { host: 'webrtc-komaroff-api.*' } do
+  env API_HOST: '0.0.0.0',
+      API_PORT: 8100
+end
+
+Service :src_agent, image: image_name("src_agent") do
+  env STACK_SERVICE_NAME: 'src_agent',
+      USER_ID: USER_ID,
+      NATS_URL: NATS_URL,
+      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+      NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
+      NATS_LLM_SUBJECT: ENV.fetch('NATS_LLM_SUBJECT', 'nats.llm.'),
+      AGENT_MAX_STEPS: ENV.fetch('AGENT_MAX_STEPS', '10'),
+      MAX_STEPS: ENV.fetch('MAX_STEPS', '10'),
+      TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '60'),
+      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://host.docker.internal:11435'),
+      OLLAMA_MODEL: ENV.fetch('OLLAMA_MODEL', 'qwen3:1.7b'),
+      DATABASE_URL: ENV.fetch('DATABASE_URL', "postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp"),
+      AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
+      RUNWAYS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports',
+      PILOT_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/pilot/location',
+      ROUTES_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/routes/nearest',
+      WEATHER_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/weather'
+end
+
+Service :src_whisper, image: image_name("src_whisper") do
+  env NATS_URL: NATS_URL,
+      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+      NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      STACK_SERVICE_NAME: 'src_whisper',
+      USER_ID: USER_ID,
+      ASR_MODELS_DIR: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small'
   volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
 end
 
-Service :whisper_ruby, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-ruby/main', ports: 7000,
-        ingress: { host: 'webrtc-komaroff-whisper-ruby.*' } do
-  env NATS_URL: NATS_URL,
-      NATS_FRAMES_SUBJECT: 'nats.frames',
-      NATS_LOGS_SUBJECT: 'nats.logs',
-      ASR_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
-      ASR_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
-  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+Service :src_front, image: image_name("src_front"), ports: 8000,
+        ingress: { host: 'webrtc-komaroff.*' } do
+  env FRONT_NATS_URL: 'ws://web-rtc-komaroff_audio_nats:9222',
+      FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
+      FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
+      FRONT_NATS_CLIENT_NAME: 'src_front',
+      FRONT_CORE_ORIGIN: 'http://web-rtc-komaroff_src_core:8000',
+      COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'] || ENV['CI_PIPELINE_IID'] || 'local'
 end
 
-Service :whisper_cpp, image: 'builder-registry.builder.giscloud.ru/webrtc-server-komaroff-whisper-cpp/main' do
-  env NATS_URL: NATS_URL,
-      NATS_FRAMES_SUBJECT: 'nats.frames',
-      NATS_LOGS_SUBJECT: 'nats.logs',
-      STACK_SERVICE_NAME: 'src_whisper_c',
-      ASR_MODEL_URL: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin',
-      ASR_MODEL_SHA1: '55356645c2b361a969dfd0ef2c5a50d530afd8d5'
-  volume name: 'ASR_MODELS_DIR_CPP', target: '/app/models/asr'
+Service :src_postgres, image: image_name("src_postgres") do
+  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
+  env PGDATA: '/var/lib/postgresql/data/pgdata'
+  volume 'src_postgres_data:/var/lib/postgresql/data'
+  command ['postgres', '--wal_level=logical']
 end
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
@@ -57,17 +102,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
     }
   CONF
 end
-
-Service :mcp_db, image: 'postgres:13.5' do
-  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'node', POSTGRES_PASSWORD: 'node'
-  env PGDATA: '/var/lib/postgresql/data/pgdata'
-  volume 'database:/var/lib/postgresql/data'
-  command ['postgres', '--wal_level=logical']
-end
-
-# mcp_odata ...
-
-
 
 Service :nats_box, image: 'natsio/nats-box' do
   env NATS_URL: NATS_URL

@@ -1,112 +1,130 @@
 services:
-  src_frontend:
+  src_postgres:
     build:
-      context: ./src_front
-    ports:
-      - "8080:80"
-    environment:
-      - VITE_NATS_URL=ws://localhost:9222
-      - VITE_NATS_EVENTS_SUBJECT=nats.events.user123
-      - VITE_NATS_AGENT_SUBJECT=nats.agent.user123
-    depends_on:
-      - nats
-
-  api_gateway:
-    build:
-      context: ./src_api_gateway
+      context: ../src_postgres
       dockerfile: Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_postgres:${CI_COMMIT_REF_SLUG:-latest}
+    environment:
+      POSTGRES_DB: mcp
+      POSTGRES_USER: mcp
+      POSTGRES_PASSWORD: mcp_pass
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - src_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mcp} -d ${POSTGRES_DB:-mcp}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  src_api_gateway:
+    build:
+      context: ../src_api_gateway
+      dockerfile: Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_api_gateway:${CI_COMMIT_REF_SLUG:-latest}
     ports:
       - "8100:8100"
     environment:
-      - API_PORT=8100
+      API_HOST: 0.0.0.0
+      API_PORT: 8100
 
   src_core:
     build:
-      context: ./src_core
-      dockerfile: ./docker/python/Dockerfile
+      context: ../src_core
+      dockerfile: ../docker/python/Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_core:${CI_COMMIT_REF_SLUG:-latest}
     environment:
-      - USER_ID=user123
-      - NATS_URL=nats://nats:4222
-      - NATS_AGENT_SUBJECT=nats.agent.
-      - NATS_ASR_SUBJECT=nats.asr.
-      - NATS_EVENTS_SUBJECT=nats.events.
-      - CORE_PORT=8000
+      STACK_SERVICE_NAME: src_core
+      USER_ID: ${USER_ID:-user123}
+      CORE_HOST: 0.0.0.0
+      CORE_PORT: 8000
+      NATS_URL: nats://nats:4222
+      NATS_AGENT_SUBJECT: nats.agent.
+      NATS_ASR_SUBJECT: nats.asr.
+      NATS_EVENTS_SUBJECT: nats.events.
+      ASR_MODELS_DIR: /app/models/asr
+      ASR_MODEL_ID: Systran/faster-whisper-small
+      VAD_MODEL_PATH: /app/src_core/models/vad
+      VAD_MODEL_URL: https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx
     ports:
       - "8000:8000"
     depends_on:
       - nats
-      - api_gateway
+      - src_api_gateway
 
   src_agent:
     build:
-      context: ./src_agent
+      context: ../src_agent
       dockerfile: Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_agent:${CI_COMMIT_REF_SLUG:-latest}
     environment:
-      - USER_ID=user123
-      - NATS_URL=nats://nats:4222
-      - NATS_AGENT_SUBJECT=nats.agent.
-      - NATS_LLM_SUBJECT=nats.llm.
-      - NATS_EVENTS_SUBJECT=nats.events.
-      - AGENT_MAX_STEPS=10
-      - AIRPORTS_API_URL=http://api_gateway:8100/api/airports/search
-      - RUNWAYS_API_URL=http://api_gateway:8100/api/airports
-      - PILOT_API_URL=http://api_gateway:8100/api/pilot/location
-      - ROUTES_API_URL=http://api_gateway:8100/api/routes/nearest
-      - WEATHER_API_URL=http://api_gateway:8100/api/weather
+      STACK_SERVICE_NAME: src_agent
+      USER_ID: ${USER_ID:-user123}
+      NATS_URL: nats://nats:4222
+      NATS_AGENT_SUBJECT: nats.agent.
+      NATS_LLM_SUBJECT: nats.llm.
+      NATS_EVENTS_SUBJECT: nats.events.
+      AGENT_MAX_STEPS: ${AGENT_MAX_STEPS:-10}
+      MAX_STEPS: ${MAX_STEPS:-10}
+      TIMEOUT_SECONDS: ${TIMEOUT_SECONDS:-60}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11435}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3:1.7b}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://mcp:mcp_pass@src_postgres:5432/mcp}
+      AIRPORTS_API_URL: http://src_api_gateway:8100/api/airports/search
+      RUNWAYS_API_URL: http://src_api_gateway:8100/api/airports
+      PILOT_API_URL: http://src_api_gateway:8100/api/pilot/location
+      ROUTES_API_URL: http://src_api_gateway:8100/api/routes/nearest
+      WEATHER_API_URL: http://src_api_gateway:8100/api/weather
     depends_on:
       - nats
-      - api_gateway
+      - src_api_gateway
       - src_postgres
-
-#  src_llm:
-#    build:
-#      context: ./src_llm
-#      dockerfile: Dockerfile
-#    environment:
-#      - USER_ID=user123
-#      - NATS_URL=nats://nats:4222
-#      - NATS_LLM_SUBJECT=nats.llm.
-#      - NATS_EVENTS_SUBJECT=nats.events.
-#      - OLLAMA_URL=http://host.docker.internal:11435
-#      - TOOLS_MANIFEST=/app/manifest.json
-#    volumes:
-#      - ./src_agent/manifest.json:/app/manifest.json:ro
-#    depends_on:
-#      - nats
 
   src_whisper:
     build:
-      context: ./src_whisper
+      context: ../src_whisper
       dockerfile: Dockerfile
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_whisper:${CI_COMMIT_REF_SLUG:-latest}
     environment:
-      - USER_ID=user123
-      - NATS_URL=nats://nats:4222
-      - NATS_ASR_SUBJECT=nats.asr.
-      - NATS_EVENTS_SUBJECT=nats.events.
-      - ASR_MODEL_ID=Systran/faster-whisper-small
+      STACK_SERVICE_NAME: src_whisper
+      USER_ID: ${USER_ID:-user123}
+      NATS_URL: nats://nats:4222
+      NATS_ASR_SUBJECT: nats.asr.
+      NATS_EVENTS_SUBJECT: nats.events.
+      ASR_MODELS_DIR: /app/models/asr
+      ASR_MODEL_ID: Systran/faster-whisper-small
     depends_on:
       - nats
 
-
-  # docker exec -i src_postgres psql -U mcp -d mcp < src_postgres/data/init/010_core_schema.sql
-#  src_postgres:
-#    image: postgres:16-alpine
-#    container_name: src_postgres
-#    restart: unless-stopped
-#    environment:
-#      POSTGRES_DB: mcp
-#      POSTGRES_USER: mcp
-#      POSTGRES_PASSWORD: mcp_pass
-#    ports:
-#      - "5432:5432"
-#    volumes:
-#      - mcp_pg_data:/var/lib/postgresql/data
-#      - ./db/init:/docker-entrypoint-initdb.d:ro
-#    healthcheck:
-#      test: ["CMD-SHELL", "pg_isready -U mcp -d mcp"]
-#      interval: 3s
-#      timeout: 3s
-#      retries: 20
+  src_front:
+    build:
+      context: ../src_front
+      dockerfile: ../docker/frontend/Dockerfile
+      additional_contexts:
+        docker: ../docker
+      args:
+        VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
+        VITE_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
+        VITE_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
+        VITE_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
+        VITE_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
+        CORE_ORIGIN: ${CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
+        CI_PIPELINE_ID: ${CI_PIPELINE_ID:-local}
+    image: ${CI_REGISTRY_IMAGE:-builder-registry.builder.giscloud.ru/webrtc-komaroff-dev}/src_front:${CI_COMMIT_REF_SLUG:-latest}
+    ports:
+      - "8080:8000"
+    environment:
+      FRONT_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
+      FRONT_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
+      FRONT_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
+      FRONT_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
+      FRONT_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
+      COM_GITLAB_CI_PIPELINE_IID: ${CI_PIPELINE_ID:-local}
+    depends_on:
+      - src_core
+      - nats
 
   nats:
     image: nats:2.11
@@ -117,7 +135,6 @@ services:
     volumes:
       - ./nats/nats.conf:/etc/nats/nats.conf:ro
 
-
 volumes:
-  mcp_pg_data:
-    name: mcp_pg_data
+  src_postgres_data:
+    name: src_postgres_data
