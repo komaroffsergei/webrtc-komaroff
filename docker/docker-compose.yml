@@ -22,7 +22,7 @@ services:
   src_api_gateway:
     build:
       context: ../src_api_gateway
-      dockerfile: Dockerfile
+      dockerfile: ../docker/api/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/api-gateway:${CI_COMMIT_BRANCH}
     ports:
       - "8100:8100"
@@ -101,7 +101,7 @@ services:
   src_front:
     build:
       context: ../src_front
-      dockerfile: docker/frontend/Dockerfile
+      dockerfile: ../docker/front/Dockerfile
       args:
         VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
         VITE_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
