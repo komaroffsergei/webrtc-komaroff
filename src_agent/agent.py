@@ -88,8 +88,8 @@ class MCPAgent:
             logger.debug("STEP %d", step)
 
             # ограничение контекста
-            if len(messages) > self.max_messages:
-                messages = messages[:2] + messages[-(self.max_messages - 2):]
+            # if len(messages) > self.max_messages:
+            #     messages = messages[:2] + messages[-(self.max_messages - 2):]
 
             # intent_id = create_intent(session_id, self.user_id, OLLAMA_URL)
 
