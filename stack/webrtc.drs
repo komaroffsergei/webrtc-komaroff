@@ -11,7 +11,7 @@ PublishPorts core: [
 ]
 
 Service :src_core,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/core:0.0.1-main',
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/core:0.0.3-main',
         ports: 8000,
         ingress: { host: 'webrtc-komaroff-core.*' } do
   env NATS_URL: NATS_URL,
@@ -31,7 +31,7 @@ Service :src_core,
 end
 
 Service :src_api_gateway,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/api-gateway:0.0.1-main',
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/api-gateway:0.0.3-main',
         ports: 8100,
         ingress: { host: 'webrtc-komaroff-api.*' } do
   env API_HOST: '0.0.0.0',
@@ -39,7 +39,7 @@ Service :src_api_gateway,
 end
 
 Service :src_agent,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/agent:0.0.1-main' do
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/agent:0.0.3-main' do
   env STACK_SERVICE_NAME: 'src_agent',
       USER_ID: USER_ID,
       NATS_URL: NATS_URL,
@@ -63,7 +63,7 @@ Service :src_agent,
 end
 
 Service :src_whisper,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper:0.0.1-main' do
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper:0.0.3-main' do
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
@@ -75,7 +75,7 @@ Service :src_whisper,
 end
 
 Service :src_front,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/front:0.0.1-main',
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/front:0.0.3-main',
         ports: 8000,
         ingress: { host: 'webrtc-komaroff.*' } do
   env FRONT_NATS_URL: 'ws://web-rtc-komaroff_audio_nats:9222',
@@ -89,7 +89,7 @@ Service :src_front,
 end
 
 Service :src_postgres,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper:0.0.1-postgres' do
+        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper:0.0.3-postgres' do
   env POSTGRES_DB: 'mcp',
       POSTGRES_USER: 'mcp',
       POSTGRES_PASSWORD: 'mcp_pass',
