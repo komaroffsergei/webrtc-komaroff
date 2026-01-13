@@ -3,7 +3,8 @@ import time
 
 import ollama
 
-from settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT, MAX_STEPS, OLLAMA_MODEL
+from src_agent.settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT, MAX_STEPS, \
+    OLLAMA_MODEL
 from src_agent.tools.tools import *
 from src_agent.utils.db import finish_session
 

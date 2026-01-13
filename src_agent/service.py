@@ -4,14 +4,14 @@ import logging
 import signal
 import sys
 from nats.aio.client import Client as NATS
-from settings import (
+from src_agent.settings import (
     NATS_URL,
     STACK_SERVICE_NAME
 )
-from agent import MCPAgent
+from src_agent.agent import MCPAgent
 from src_agent.utils.db import create_session
 # from src_agent.utils.db import Database, create_session
-from utils.nats_logger import NatsLogger
+from src_agent.utils.nats_logger import NatsLogger
 # from src_agent.repositories.sessions import create_session
 # from src_agent.repositories.events import log_event
 

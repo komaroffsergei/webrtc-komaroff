@@ -3,9 +3,9 @@ import logging
 import os
 import sys
 
-from service import AgentServer
-from settings import STACK_SERVICE_NAME, USER_ID, NATS_EVENTS_SUBJECT, AGENT_MAX_STEPS, NATS_AGENT_SUBJECT, NATS_URL, \
-    NATS_LLM_SUBJECT, DATABASE_URL
+from src_agent.service import AgentServer
+from src_agent.settings import STACK_SERVICE_NAME, USER_ID, NATS_EVENTS_SUBJECT, AGENT_MAX_STEPS, NATS_AGENT_SUBJECT, \
+    NATS_URL, NATS_LLM_SUBJECT, DATABASE_URL
 
 
 def configure_logging():

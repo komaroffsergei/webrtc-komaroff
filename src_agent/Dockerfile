@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-WORKDIR /app/src_agent
+WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -10,7 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . /app/src_agent
 
 ENV STACK_SERVICE_NAME=src_agent \
     USER_ID=user123 \
@@ -30,4 +30,6 @@ ENV STACK_SERVICE_NAME=src_agent \
     ROUTES_API_URL=http://localhost:8100/api/routes/nearest \
     WEATHER_API_URL=http://localhost:8100/api/weather
 
-CMD ["python", "main.py"]
+WORKDIR /app/src_agent
+
+CMD ["python", "-m", "src_agent.main"]
