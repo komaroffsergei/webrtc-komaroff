@@ -105,7 +105,7 @@ services:
         nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
       args:
-        VITE_NATS_URL: ${VITE_NATS_URL:-wss://web-rtc-komaroff_audio_nats:9222}
+        VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
         VITE_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
         VITE_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
         VITE_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
@@ -116,7 +116,7 @@ services:
     ports:
       - "8080:8000"
     environment:
-      FRONT_NATS_URL: ${VITE_NATS_URL:-wss://web-rtc-komaroff_audio_nats:9222}
+      FRONT_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
       FRONT_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
       FRONT_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
       FRONT_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
