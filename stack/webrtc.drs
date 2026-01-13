@@ -14,7 +14,7 @@ PublishPorts core: [
 ]
 
 Service :src_core, image: webrtc_registry['core']do
-  ingress host: HOST, path: '/core', ports: 8000
+  ingress host: HOST, path: '/core', port: 8000
 
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
@@ -33,7 +33,7 @@ Service :src_core, image: webrtc_registry['core']do
 end
 
 Service :src_api_gateway, image: webrtc_registry['api-gateway']do
-  ingress host: HOST, path: '/api', ports: 8100
+  ingress host: HOST, path: '/api', port: 8100
 
   env API_HOST: '0.0.0.0',
       API_PORT: 8100
@@ -74,7 +74,7 @@ Service :src_whisper, image: webrtc_registry['whisper'] do
 end
 
 Service :src_front, image: webrtc_registry['front'] do
-  ingress host: HOST, ports: 8000
+  ingress host: HOST, port: 8000
 
   env FRONT_NATS_URL: 'ws://web-rtc-komaroff_audio_nats:9222',
       FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
