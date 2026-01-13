@@ -56,3 +56,5 @@ COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
+
+

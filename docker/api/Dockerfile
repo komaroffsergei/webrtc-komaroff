@@ -18,3 +18,5 @@ ENV API_HOST=0.0.0.0 \
 EXPOSE 8100
 
 CMD ["python", "main.py"]
+
+
