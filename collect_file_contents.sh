@@ -27,7 +27,7 @@ build
 README.md
 third_party
 model
-models
+models``
 .env.example
 __pycache__
 __init__

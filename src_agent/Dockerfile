@@ -33,3 +33,4 @@ ENV STACK_SERVICE_NAME=src_agent \
 WORKDIR /app/src_agent
 
 CMD ["python", "-m", "src_agent.main"]
+

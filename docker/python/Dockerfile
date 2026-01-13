@@ -44,3 +44,4 @@ CMD ["python", "-m", "src_core.main"]
 
 FROM base AS whisper
 # Placeholder stage (runtime downloads model on first start)
+

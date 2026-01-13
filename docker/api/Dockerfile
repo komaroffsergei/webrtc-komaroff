@@ -20,3 +20,4 @@ EXPOSE 8100
 CMD ["python", "main.py"]
 
 
+

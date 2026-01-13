@@ -30,7 +30,7 @@ export class CommandHandler {
   // }
 
   async sendMessage(text: string): Promise<void> {
-    const resp = await fetch("/message", {
+    const resp = await fetch("/core/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
