@@ -1,4 +1,5 @@
 python-dotenv
 nats-py
 requests
+ollama
 asyncpg>=0.31.0
