@@ -109,6 +109,13 @@ services:
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH}
     ports:
       - "8080:8000"
+    environment:
+      FRONT_NATS_URL: ${VITE_NATS_URL:-wss:///ws}
+      FRONT_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
+      FRONT_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
+      FRONT_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
+      FRONT_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
+      COM_GITLAB_CI_PIPELINE_IID: ${CI_PIPELINE_ID:-local}
     depends_on:
       - src_core
       - nats
