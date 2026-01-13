@@ -88,17 +88,12 @@ Service :src_front,
                                  'local'
 end
 
-Service :src_postgres,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper:0.0.4-postgres' do
-  env POSTGRES_DB: 'mcp',
-      POSTGRES_USER: 'mcp',
-      POSTGRES_PASSWORD: 'mcp_pass',
-      PGDATA: '/var/lib/postgresql/data/pgdata'
-  volume name: 'src_postgres_data', target: '/var/lib/postgresql/data'
+Service :src_postgres, image: 'postgis/postgis:16-master' do
+  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
+  volume target: '/var/lib/postgresql/data'
   command ['postgres', '--wal_level=logical']
+  ingress host_sni: 'db-dev.mcp.*', port: 5432, entrypoints: 'postgres'
 end
-
-
 
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
