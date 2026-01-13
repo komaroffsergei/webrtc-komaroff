@@ -9,7 +9,7 @@ RUN set -eux; \
     . /etc/os-release; \
     printf "Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: %s\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n" "$VERSION_CODENAME" \
       > /etc/apt/sources.list.d/docker.sources; \
-    apt update; apt install -y --no-install-recommends docker-ce-cli docker-cli-buildx; \
+    apt update; apt install -y --no-install-recommends docker-ce-cli; \
     rm -rf /var/lib/apt/lists/*
 
 RUN docker -v
