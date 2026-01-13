@@ -16,7 +16,7 @@ RUN docker -v
 
 RUN gem install build-labels:0.0.65 dry-stack:0.1.53
 
-RUN apk add --no-cache openssh-client ca-certificates
+# RUN apk add --no-cache openssh-client ca-certificates
 
 WORKDIR /build
 RUN mkdir -p /root/.ssh && mkdir -pv /root/.ssh/sockets
