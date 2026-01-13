@@ -55,6 +55,6 @@ COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx/default.conf /etc/nginx/templates/default.conf.template
 COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
+RUN chmod +x /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
-
