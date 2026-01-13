@@ -23,8 +23,9 @@ COPY --from=nginx /nginx.conf /etc/nginx/nginx.conf
 COPY --from=nginx /50-settings.sh /docker-entrypoint.d/50-settings.sh
 RUN chmod +x /docker-entrypoint.d/50-settings.sh
 
-CMD ["nginx", "-g", "daemon off;"]
 
+
+CMD ["nginx", "-g", "daemon off;"]
 
 
 
