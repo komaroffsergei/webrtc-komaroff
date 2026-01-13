@@ -76,7 +76,7 @@ end
 Service :src_front, image: webrtc_registry['front'] do
   ingress host: HOST, port: 8000
 
-  env FRONT_NATS_URL: 'wss://./ws',
+  env FRONT_NATS_URL: 'wss://ws',
       FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
       FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
       FRONT_NATS_CLIENT_NAME: 'src_front',
