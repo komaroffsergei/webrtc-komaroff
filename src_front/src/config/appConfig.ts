@@ -39,16 +39,43 @@ export type AppConfig = {
   };
 };
 
-const natsUrl = import.meta.env.VITE_NATS_URL ?? "ws://localhost:9222";
+const runtimeSettings =
+  typeof window !== "undefined" && (window as any).SETTINGS
+    ? ((window as any).SETTINGS as Record<string, string | undefined>)
+    : {};
+
+const rawNatsUrl =
+  runtimeSettings.NATS_URL ??
+  import.meta.env.VITE_NATS_URL ??
+  "ws://localhost:9222";
+const natsUrl =
+  typeof window !== "undefined" && window.location?.protocol === "https:"
+    ? rawNatsUrl.replace(/^ws:\/\//, "wss://")
+    : rawNatsUrl;
 const natsEventsSubject =
-  import.meta.env.VITE_NATS_EVENTS_SUBJECT ?? "nats.events.user123";
+  runtimeSettings.NATS_EVENTS_SUBJECT ??
+  import.meta.env.VITE_NATS_EVENTS_SUBJECT ??
+  "nats.events.user123";
 const natsAgentSubject =
-  import.meta.env.VITE_NATS_AGENT_SUBJECT ?? "nats.agent.user123";
-const natsClientName = import.meta.env.VITE_NATS_CLIENT_NAME ?? "src_front";
+  runtimeSettings.NATS_AGENT_SUBJECT ??
+  import.meta.env.VITE_NATS_AGENT_SUBJECT ??
+  "nats.agent.user123";
+const natsClientName =
+  runtimeSettings.NATS_CLIENT_NAME ??
+  import.meta.env.VITE_NATS_CLIENT_NAME ??
+  "src_front";
+
+const coreOrigin =
+  runtimeSettings.CORE_ORIGIN ??
+  import.meta.env.VITE_CORE_ORIGIN ??
+  import.meta.env.CORE_ORIGIN;
+const offerEndpoint = coreOrigin
+  ? `${coreOrigin.replace(/\/$/, "")}/offer`
+  : "/offer";
 
 export const appConfig: AppConfig = {
   signaling: {
-    offerEndpoint: "/core/offer",
+    offerEndpoint,
   },
   webrtc: {
     iceServers: [{ urls: ["stun:stun.gis-master.ru:3478"] }],
