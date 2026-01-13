@@ -60,3 +60,6 @@ RUN chmod +x /docker-entrypoint.d/50-settings.sh
 CMD ["nginx", "-g", "daemon off;"]
 
 
+
+
+
