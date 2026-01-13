@@ -27,3 +27,4 @@ ENV STACK_SERVICE_NAME=src_whisper \
 RUN mkdir -p "$ASR_MODELS_DIR"
 
 CMD ["python", "main.py"]
+
