@@ -6,14 +6,16 @@ NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
 
+HOST = 'webrtc-komaroff.*'
+webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
+
 PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
 ]
 
-Service :src_core,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/core/main',
-        ports: 8000,
-        ingress: { host: 'webrtc-komaroff-core.*' } do
+Service :src_core, image: webrtc_registry['core']do
+  ingress host: HOST, path: '/core', ports: 8000
+
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
@@ -30,16 +32,14 @@ Service :src_core,
   volume name: 'VAD_MODELS_PATH', target: '/app/src_core/models/vad'
 end
 
-Service :src_api_gateway,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/api-gateway/main',
-        ports: 8100,
-        ingress: { host: 'webrtc-komaroff-api.*' } do
+Service :src_api_gateway, image: webrtc_registry['api-gateway']do
+  ingress host: HOST, path: '/api', ports: 8100
+
   env API_HOST: '0.0.0.0',
       API_PORT: 8100
 end
 
-Service :src_agent,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/agent/main' do
+Service :src_agent, image: webrtc_registry['agent'] do
   env STACK_SERVICE_NAME: 'src_agent',
       USER_ID: USER_ID,
       NATS_URL: NATS_URL,
@@ -62,8 +62,7 @@ Service :src_agent,
       WEATHER_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/weather'
 end
 
-Service :src_whisper,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/whisper/main' do
+Service :src_whisper, image: webrtc_registry['whisper'] do
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
@@ -74,10 +73,9 @@ Service :src_whisper,
   volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
 end
 
-Service :src_front,
-        image: 'builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/front/main',
-        ports: 8000,
-        ingress: { host: 'webrtc-komaroff.*' } do
+Service :src_front, image: webrtc_registry['front'] do
+  ingress host: HOST, ports: 8000
+
   env FRONT_NATS_URL: 'ws://web-rtc-komaroff_audio_nats:9222',
       FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
       FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
@@ -92,12 +90,14 @@ Service :src_postgres, image: 'postgis/postgis:16-master' do
   env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
   volume target: '/var/lib/postgresql/data'
   command ['postgres', '--wal_level=logical']
-  ingress host_sni: 'db-dev.mcp.*', port: 5432, entrypoints: 'postgres'
+  ingress host_sni: "db.#{HOST}", port: 5432, entrypoints: 'postgres'
 end
 
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
-  ingress host: 'komaroff-nats-ws.*', port: 9222
+  ingress host: 'komaroff-nats-ws.*', port: 9222 # TODO: remove
+  ingress host: HOST, path: '/ws', path_sub: ['^/ws(.*)', '$1'], port: 9222
+
   command ['-c', '/nats.conf']
   config target: '/nats.conf', file_content: <<~CONF
     jetstream: false

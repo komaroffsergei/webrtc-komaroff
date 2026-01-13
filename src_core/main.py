@@ -32,9 +32,9 @@ logger = logging.getLogger(STACK_SERVICE_NAME)
 
 
 def setup_routes(app):
-    app.router.add_get("/", handle_index)
-    app.router.add_post("/offer", handle_offer)
-    app.router.add_post("/message", message_handler)
+    app.router.add_get("/core", handle_index)
+    app.router.add_post("/core/offer", handle_offer)
+    app.router.add_post("/core/message", message_handler)
 
     app.on_startup.append(handle_startup)
     app.on_shutdown.append(handle_shutdown)
