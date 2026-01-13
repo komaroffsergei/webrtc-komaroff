@@ -105,12 +105,6 @@ services:
         nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
       args:
-        VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
-        VITE_NATS_EVENTS_SUBJECT: ${VITE_NATS_EVENTS_SUBJECT:-nats.events.user123}
-        VITE_NATS_AGENT_SUBJECT: ${VITE_NATS_AGENT_SUBJECT:-nats.agent.user123}
-        VITE_NATS_CLIENT_NAME: ${VITE_NATS_CLIENT_NAME:-src_front}
-        VITE_CORE_ORIGIN: ${VITE_CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
-        CORE_ORIGIN: ${CORE_ORIGIN:-http://web-rtc-komaroff_src_core:8000}
         CI_PIPELINE_ID: ${CI_PIPELINE_ID:-local}
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH}
     ports:
