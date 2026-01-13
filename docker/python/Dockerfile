@@ -2,6 +2,10 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libavformat-dev libavcodec-dev \
     libavdevice-dev libavfilter-dev libswresample-dev libswscale-dev \
@@ -13,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . /app/src_core
 
 RUN cat <<'EOF' >/entrypoint.sh
 #!/bin/sh
@@ -33,9 +37,10 @@ ENV SERVER_ENV=production \
     ASR_MODEL_ID=Systran/faster-whisper-small \
     VAD_MODEL_PATH=/app/src_core/models/vad/
 
+WORKDIR /app/src_core
+
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["python", "main.py"]
+CMD ["python", "-m", "src_core.main"]
 
 FROM base AS whisper
 # Placeholder stage (runtime downloads model on first start)
-
