@@ -48,7 +48,7 @@ const natsClientName = import.meta.env.VITE_NATS_CLIENT_NAME ?? "src_front";
 
 export const appConfig: AppConfig = {
   signaling: {
-    offerEndpoint: "/offer",
+    offerEndpoint: "/core/offer",
   },
   webrtc: {
     iceServers: [{ urls: ["stun:stun.gis-master.ru:3478"] }],

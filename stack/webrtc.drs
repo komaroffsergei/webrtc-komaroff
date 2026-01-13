@@ -95,7 +95,6 @@ end
 
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
-  ingress host: 'komaroff-nats-ws.*', port: 9222 # TODO: remove
   ingress host: HOST, path: '/ws', path_sub: ['^/ws(.*)', '$1'], port: 9222
 
   command ['-c', '/nats.conf']
