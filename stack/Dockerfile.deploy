@@ -20,7 +20,15 @@ RUN gem install build-labels:0.0.65 dry-stack:0.1.53
 
 WORKDIR /build
 RUN mkdir -p /root/.ssh && mkdir -pv /root/.ssh/sockets
-RUN echo -e 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /root/.ssh/sockets/%r@%h-%p\n\tBatchMode yes\n\tStrictHostKeyChecking no\n\tPort 22' > ~/.ssh/config
+RUN printf '%s\n' \
+'Host *' \
+'  ControlPersist yes' \
+'  ControlMaster auto' \
+'  ControlPath /root/.ssh/sockets/%r@%h-%p' \
+'  BatchMode yes' \
+'  StrictHostKeyChecking no' \
+'  Port 22' \
+> /root/.ssh/config
 ADD . .
 
 CMD ["sh", "-c", "\
