@@ -1,9 +1,10 @@
 FROM python:3.11-slim
 
-WORKDIR /app
+WORKDIR /app/src_agent
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
