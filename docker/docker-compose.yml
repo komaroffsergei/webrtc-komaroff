@@ -101,6 +101,8 @@ services:
   src_front:
     build:
       context: ../src_front
+      additional_contexts:
+        nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
       args:
         VITE_NATS_URL: ${VITE_NATS_URL:-ws://web-rtc-komaroff_audio_nats:9222}
