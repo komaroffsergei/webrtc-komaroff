@@ -39,7 +39,7 @@ export type AppConfig = {
   };
 };
 
-const natsUrl = import.meta.env.VITE_NATS_URL ?? "ws://localhost:9222";
+const natsUrl = (window as any)?.SETTINGS?.NATS_URL ?? "ws://localhost:9222";
 const natsEventsSubject =
   import.meta.env.VITE_NATS_EVENTS_SUBJECT ?? "nats.events.user123";
 const natsAgentSubject =
