@@ -48,6 +48,7 @@ ENV VITE_NATS_URL=$VITE_NATS_URL \
     FRONT_CORE_ORIGIN=$VITE_CORE_ORIGIN \
     COM_GITLAB_CI_PIPELINE_IID=$CI_PIPELINE_ID
 RUN rm -rf /usr/share/nginx/html/*
+RUN rm -f /etc/nginx/conf.d/*.conf /etc/nginx/templates/*.conf.template /etc/nginx/sites-enabled/*.conf
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
@@ -56,5 +57,4 @@ COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/50-settings.sh /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
-
 
