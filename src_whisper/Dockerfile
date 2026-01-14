@@ -14,17 +14,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY . /app/src_whisper
 
-ENV STACK_SERVICE_NAME=src_whisper \
-    USER_ID=user123 \
-    NATS_URL=nats://localhost:4222 \
-    NATS_EVENTS_SUBJECT=nats.events. \
-    NATS_ASR_SUBJECT=nats.asr. \
-    ASR_MODELS_DIR=/app/models/asr \
-    ASR_MODEL_ID=Systran/faster-whisper-small
+WORKDIR /app/src_whisper
 
-RUN mkdir -p "$ASR_MODELS_DIR"
+RUN mkdir -p "/models/asr"
 
-CMD ["python", "main.py"]
+CMD ["python", "-m", "src_whisper.main"]
 

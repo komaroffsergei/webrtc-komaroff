@@ -28,7 +28,7 @@ services:
   src_core:
     build:
       context: ../src_core
-      dockerfile: ../docker/python/Dockerfile
+      dockerfile: ../docker/core/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/core/${CI_COMMIT_BRANCH}
     ports:
       - "8000:8000"
