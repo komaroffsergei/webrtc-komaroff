@@ -155,8 +155,7 @@ export class AssistantApp {
 
     try {
       await this.nats.connect({
-        url: `wss://${location.host}/ws`,
-        // url: this.config.nats.url,
+        url: this.config.nats.url,
         name: this.config.nats.clientName,
       });
 
