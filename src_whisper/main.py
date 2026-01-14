@@ -7,7 +7,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from service import WhisperService
+from src_whisper.service import WhisperService
 from src_whisper.settings import STACK_SERVICE_NAME, NATS_URL, NATS_ASR_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, \
     ASR_MODEL_ID
 
