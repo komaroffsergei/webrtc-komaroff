@@ -44,14 +44,10 @@ const defaultNatsUrl = import.meta.env.DEV
   : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`;
 
 const natsUrl =
-  (window as any)?.SETTINGS?.NATS_URL ??
-  import.meta.env.VITE_NATS_URL ??
-  defaultNatsUrl;
-const natsEventsSubject =
-  import.meta.env.VITE_NATS_EVENTS_SUBJECT ?? "nats.events.user123";
-const natsAgentSubject =
-  import.meta.env.VITE_NATS_AGENT_SUBJECT ?? "nats.agent.user123";
-const natsClientName = import.meta.env.VITE_NATS_CLIENT_NAME ?? "src_front";
+  (window as any)?.SETTINGS?.NATS_URL ??  defaultNatsUrl;
+const natsEventsSubject = "nats.events.user123";
+const natsAgentSubject = "nats.agent.user123";
+const natsClientName = "src_front";
 
 export const appConfig: AppConfig = {
   signaling: {
