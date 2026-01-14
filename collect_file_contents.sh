@@ -27,7 +27,7 @@ build
 README.md
 third_party
 model
-models``
+models
 .env.example
 __pycache__
 __init__
@@ -37,6 +37,7 @@ agents.md
 .venv
 #.version
 collect_file_contents.sh
+src_whisper
 src_lang_graph_1
 src_lang_graph_2
 src_llm
