@@ -208,6 +208,8 @@ export class AssistantApp {
         this.pendingThinkingId = null;
         this.agentCommands.handle(event.message as AgentMessage);
         return;
+      } else if(event.message && typeof event.message === 'string') {
+        this.chat.addMessage(event.message, "server");
       }
     }
 

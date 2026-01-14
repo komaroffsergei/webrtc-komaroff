@@ -16,6 +16,10 @@ async def handle_transcription(app, payload: dict):
         logger.warning("Empty transcription payload")
         return
 
+    await event_log(message=text,
+                    kind="message",
+        app=app,
+        service=STACK_SERVICE_NAME)
     logger.info("handle_transcription: '%s'", text)
 
     try:
