@@ -22,7 +22,13 @@ NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 
 # ---- OLLAMA ----
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "osmosis-mcp-4bQ8_0")
+LLM_MODE = os.getenv("LLM_MODE", "local")
+LLM_LOCAL_MODEL = os.getenv("LLM_LOCAL_MODEL", "Qwen/Qwen3-1.7B-GGUF")
+LLM_REMOTE_MODEL = os.getenv("LLM_REMOTE_MODEL", "qwen3:1.7b")
+LLM_MODELS_DIR = os.getenv("LLM_MODELS_DIR", "models/llm")
+OLLAMA_MODEL_FILE = os.getenv("OLLAMA_MODEL_FILE", "")
+LLM_CONTEXT_SIZE = os.getenv("LLM_CONTEXT_SIZE", "8192")
+LLM_CHAT_FORMAT = os.getenv("LLM_CHAT_FORMAT", "")
 
 # ---- SYSTEM PROMPT ----
 SYSTEM_PROMPT_FILE = os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt")

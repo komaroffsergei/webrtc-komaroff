@@ -5,6 +5,7 @@ USER_ID = ENV.fetch("USER_ID", "user123")
 NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
+NATS_LLM_SUBJECT = ENV.fetch("NATS_LLM_SUBJECT", "nats.llm.")
 
 HOST = 'webrtc-komaroff.*'
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
@@ -45,12 +46,10 @@ Service :src_agent, image: webrtc_registry['agent'] do
       NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
-      NATS_LLM_SUBJECT: ENV.fetch('NATS_LLM_SUBJECT', 'nats.llm.'),
+      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       AGENT_MAX_STEPS: ENV.fetch('AGENT_MAX_STEPS', '10'),
       MAX_STEPS: ENV.fetch('MAX_STEPS', '10'),
-      TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '60'),
-      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
-      OLLAMA_MODEL: ENV.fetch('OLLAMA_MODEL', 'qwen3:1.7b'),
+      TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '600'),
       DATABASE_URL: ENV.fetch(
         'DATABASE_URL',
         'postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp'
@@ -60,6 +59,23 @@ Service :src_agent, image: webrtc_registry['agent'] do
       PILOT_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/pilot/location',
       ROUTES_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/routes/nearest',
       WEATHER_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/weather'
+end
+
+Service :src_llm, image: webrtc_registry['llm'] do
+  env STACK_SERVICE_NAME: 'src_llm',
+      USER_ID: USER_ID,
+      NATS_URL: NATS_URL,
+      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
+      LLM_MODE: ENV.fetch('LLM_MODE', 'remote'),
+      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B'),
+      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
+      LLM_MODELS_DIR: ENV.fetch('LLM_MODELS_DIR', '/app/models/llm'),
+      OLLAMA_MODEL_FILE: ENV.fetch('OLLAMA_MODEL_FILE', ''),
+      LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE', '8192'),
+      LLM_CHAT_FORMAT: ENV.fetch('LLM_CHAT_FORMAT', '')
+  volume name: 'LLM_MODELS_DIR', target: '/app/models/llm'
 end
 
 Service :src_whisper, image: webrtc_registry['whisper'] do

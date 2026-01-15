@@ -4,7 +4,13 @@ from typing import Any, List, Dict
 
 
 def load_tools_from_manifest(manifest_path: str) -> List[Dict[str, Any]]:
+    if not manifest_path:
+        return []
+
     path = Path(manifest_path)
+    if not path.exists():
+        return []
+
     data = json.loads(path.read_text(encoding="utf-8"))
 
     tools = []

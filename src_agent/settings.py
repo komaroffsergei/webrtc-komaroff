@@ -16,9 +16,7 @@ NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.llm.")
 # Agent settings
 AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
-TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "60"))
-OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:1.7b")
+TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "600"))
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
 # Database
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")

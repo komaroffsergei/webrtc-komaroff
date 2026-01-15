@@ -30,3 +30,4 @@ coverage
 /src_front/node_modules/
 /src_front/dist/
 /src_front/tsconfig.tsbuildinfo
+/src_llm/models/

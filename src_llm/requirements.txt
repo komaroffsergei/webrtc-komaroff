@@ -1,3 +1,6 @@
 fastapi
 llama-cpp-python
 python-dotenv
+nats-py
+ollama
+huggingface_hub

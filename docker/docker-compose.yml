@@ -54,6 +54,14 @@ services:
     depends_on:
       - nats
 
+  src_llm:
+    build:
+      context: ../src_llm
+      dockerfile: ../docker/llm/Dockerfile
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/llm/${CI_COMMIT_BRANCH}
+    depends_on:
+      - nats
+
   src_front:
     build:
       context: ../src_front

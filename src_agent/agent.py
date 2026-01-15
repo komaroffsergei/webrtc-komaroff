@@ -1,10 +1,9 @@
 import json
 import time
 
-import ollama
+from nats.errors import TimeoutError as NatsTimeoutError
 
-from src_agent.settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT, MAX_STEPS, \
-    OLLAMA_MODEL
+from src_agent.settings import AGENT_MAX_STEPS, STACK_SERVICE_NAME, SYSTEM_PROMPT, MAX_STEPS, TIMEOUT_SECONDS
 from src_agent.tools.tools import *
 from src_agent.utils.db import finish_session
 
@@ -30,6 +29,7 @@ class MCPAgent:
                  llm_subject: str,
                  events_subject: str,
                  max_steps: int = AGENT_MAX_STEPS,
+                 timeout_seconds: int = TIMEOUT_SECONDS,
                  db=None,
                  user_id: str = None,
                  max_messages: int = 12,
@@ -37,7 +37,9 @@ class MCPAgent:
         self.user_id = user_id
         self.current_intent_id = None
         self.nc = nc
+        self.llm_subject = llm_subject
         self.max_steps = max_steps
+        self.timeout_seconds = timeout_seconds
         self.db = db
         self.nats_logger = NatsLogger(self.nc, events_subject, STACK_SERVICE_NAME)
         self.tools = [v["schema"] for v in REGISTRY.values()]
@@ -45,26 +47,35 @@ class MCPAgent:
         self.tools_vocabulary = build_tool_vocabulary()
         self.max_messages = max_messages
 
+    async def _request_llm(self, payload: dict) -> dict:
+        msg = await self.nc.request(
+            self.llm_subject,
+            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+            timeout=self.timeout_seconds,
+        )
+        return json.loads(msg.data.decode("utf-8"))
+
     async def run(self, *, prompt: str, session_id: str) -> AgentResponse:
         logger.info("[USER] ----------- New request: %s", prompt)
         reset_artifacts()
+        model_used = None
 
         # отбрасываю невалидные запросы
-        if not check_prompt_by_vocabulary(prompt, self.tools_vocabulary):
-            logger.info("[FINAL ANSWER] %s", "Запрос не поддерживается системой")
-            return {
-                "success": False,
-                "error": {
-                    "type": "UNSUPPORTED_REQUEST",
-                },
-                "data": {
-                    "model": OLLAMA_MODEL,
-                    "prompt": prompt,
-                },
-                "client_handler": {
-                    "command": "SHOW_ERROR_MESSAGE",
-                },
-            }
+        # if not check_prompt_by_vocabulary(prompt, self.tools_vocabulary):
+        #     logger.info("[FINAL ANSWER] %s", "Запрос не поддерживается системой")
+        #     return {
+        #         "success": False,
+        #         "error": {
+        #             "type": "UNSUPPORTED_REQUEST",
+        #         },
+        #         "data": {
+        #             "model": model_used or "unknown",
+        #             "prompt": prompt,
+        #         },
+        #         "client_handler": {
+        #             "command": "SHOW_ERROR_MESSAGE",
+        #         },
+        #     }
 
         start_ts = time.perf_counter()
         # intent_id = create_intent(
@@ -72,8 +83,6 @@ class MCPAgent:
         #     self.user_id,
         #     intent_type="GENERIC_QUERY"
         # )
-
-        client = ollama.Client(host=OLLAMA_URL, timeout=60)
 
         messages = [
             {"role": "system", "content": "\n".join(SYSTEM_PROMPT)},
@@ -95,15 +104,31 @@ class MCPAgent:
             # intent_id = create_intent(session_id, self.user_id, OLLAMA_URL)
 
             try:
-                resp = client.chat(
-                    model=OLLAMA_MODEL,
-                    messages=messages,
-                    tools=self.tools,
-                    think=False,
-                    options={"temperature": 0.0},
-                )
+                resp = await self._request_llm({
+                    "messages": messages,
+                    "tools": self.tools,
+                    "think": False,
+                    "options": {"temperature": 0.0},
+                })
+            except NatsTimeoutError as e:
+                logger.exception("LLM timeout: %s", str(e))
+                return {
+                    "success": False,
+                    "error": {
+                        "type": "LLM_EXCEPTION",
+                        "message": "LLM request timeout"
+                    },
+                    "data": {
+                        "model": model_used or "unknown",
+                        "prompt": prompt,
+                        "steps": steps,
+                    },
+                    "client_handler": {
+                        "command": "SHOW_ERROR_MESSAGE",
+                    },
+                }
             except Exception as e:
-                logger.exception("ERROR: %s", str(e))
+                logger.exception("LLM request error: %s", str(e))
 
                 # finish_intent(intent_id, "FAILED")
                 # finish_session(session_id, "FAILED")
@@ -115,7 +140,7 @@ class MCPAgent:
                         "message": str(e)
                     },
                     "data": {
-                        "model": OLLAMA_MODEL,
+                        "model": model_used or "unknown",
                         "prompt": prompt,
                         "steps": steps,
                     },
@@ -124,10 +149,29 @@ class MCPAgent:
                     },
                 }
 
-            msg = resp["message"]
+            if resp.get("error"):
+                logger.error("LLM error response: %s", resp)
+                return {
+                    "success": False,
+                    "error": {
+                        "type": "LLM_EXCEPTION",
+                        "message": resp.get("details") or resp.get("error")
+                    },
+                    "data": {
+                        "model": resp.get("model") or model_used or "unknown",
+                        "prompt": prompt,
+                        "steps": steps,
+                    },
+                    "client_handler": {
+                        "command": "SHOW_ERROR_MESSAGE",
+                    },
+                }
+
+            msg = resp.get("message") or {}
+            model_used = resp.get("model") or model_used
 
             tool_calls = normalize_tool_calls(msg.get("tool_calls"))
-            logger.debug("[LLM][content] %s", msg.get("content").strip())
+            logger.debug("[LLM][content] %s", (msg.get("content") or "").strip())
             logger.debug("[LLM][tool_calls]\n%s", json.dumps(tool_calls, ensure_ascii=False, indent=2))
 
             if not tool_calls:
@@ -158,7 +202,7 @@ class MCPAgent:
                             "message": str(e)
                         },
                         "data": {
-                            "model": OLLAMA_MODEL,
+                            "model": model_used or "unknown",
                             "prompt": prompt,
                             "steps": steps,
                         },
@@ -202,7 +246,7 @@ class MCPAgent:
                     return {
                         "success": True,
                         "data": {
-                            "model": OLLAMA_MODEL,
+                            "model": model_used or "unknown",
                             "prompt": prompt,
                             "steps": steps,
                             "total_time_sec": round(total_time, 3),
@@ -231,7 +275,7 @@ class MCPAgent:
                 "type": "MAX_STEPS_EXCEEDED"
             },
             "data": {
-                "model": OLLAMA_MODEL,
+                "model": model_used or "unknown",
                 "prompt": prompt,
                 "steps": steps,
                 "total_time_sec": round(total_time, 3),
