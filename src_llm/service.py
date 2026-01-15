@@ -190,7 +190,6 @@ class LLMService(BaseService):
             tools = self.tools
 
         options = payload.get("options") or {}
-        think = bool(payload.get("think", False))
         model = payload.get("model") or (self.llm_local_model if self._use_local else self.llm_remote_model)
 
         try:
@@ -201,7 +200,7 @@ class LLMService(BaseService):
                 messages=messages,
                 tools=tools,
                 options=options,
-                think=think,
+                think=False,
             )
         except Exception as exc:
             logger.exception("LLM request failed: %s", exc)
