@@ -1,7 +1,12 @@
 export type ChatRole = "user" | "server" | "status" | "thinking";
 
 export class ChatUI {
-  constructor(private root: HTMLElement) {}
+  private thinkingCount = 0;
+
+  constructor(
+    private root: HTMLElement,
+    private textInput?: HTMLInputElement | null,
+  ) {}
 
   addMessage(text: string, role: ChatRole): void {
     const div = document.createElement("div");
@@ -16,6 +21,9 @@ export class ChatUI {
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : `thinking-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    this.thinkingCount += 1;
+    this.setInputBlocked(true);
 
     const div = document.createElement("div");
     div.className = "message thinking-message";
@@ -37,6 +45,19 @@ export class ChatUI {
     const el = this.root.querySelector(
       `[data-thinking-id="${CSS.escape(id)}"]`,
     );
-    el?.remove();
+    if (!el) return;
+    el.remove();
+    this.thinkingCount = Math.max(0, this.thinkingCount - 1);
+    if (this.thinkingCount === 0) {
+      this.setInputBlocked(false);
+    }
+  }
+
+  private setInputBlocked(blocked: boolean): void {
+    if (!this.textInput) return;
+    this.textInput.disabled = blocked;
+    if (blocked) {
+      this.textInput.blur();
+    }
   }
 }

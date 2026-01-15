@@ -37,7 +37,7 @@ export class AssistantApp {
   constructor(private config: AppConfig) {
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
-    this.chat = new ChatUI(this.el.messageLog);
+    this.chat = new ChatUI(this.el.messageLog, this.el.textInput);
 
     /* ---------- WARNING ---------- */
     const warningRoot =
@@ -57,7 +57,7 @@ export class AssistantApp {
     this.registerBuiltinCommands();
 
     this.chat.addMessage("Голосовой ассистент готов к работе", "status");
-    this.chat.addMessage("Покажи аэропорты в радиусе 100км", "status");
+    this.chat.addMessage("Покажи аэропорты в радиусе 100км", "user");
   }
 
   /* ===========================
@@ -112,7 +112,7 @@ export class AssistantApp {
       });
 
       setStatus(this.el, "Подключено");
-      this.chat.addMessage("Подключено", "status");
+      // this.chat.addMessage("Подключено", "status");
     } catch (err) {
       this.warning.show({ message: `Connect failed: ${String(err)}` });
       setStatus(this.el, "Ошибка подключения");
@@ -210,6 +210,7 @@ export class AssistantApp {
         return;
       } else if(event.message && typeof event.message === 'string') {
         this.chat.addMessage(event.message, "server");
+        return;
       }
     }
 
