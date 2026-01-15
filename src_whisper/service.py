@@ -86,13 +86,13 @@ class WhisperService:
         )
 
         self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)
-        await self._nats_logger.info("Whisper Python service connected")
+        await self._nats_logger.log("Whisper Python service connected")
 
         self._model_task = asyncio.create_task(self._warmup_model())
         self._model_task.add_done_callback(self._handle_model_task_done)
 
         await self._nc.subscribe(self._asr_subject, cb=self._handle_message)
-        await self._nats_logger.info(f"Subscribed to {self._asr_subject}")
+        await self._nats_logger.log(f"Subscribed to {self._asr_subject}")
 
     async def _shutdown(self) -> None:
         if self._model_task:
@@ -114,7 +114,7 @@ class WhisperService:
             pass
         except Exception as exc:
             logger.error("Model preparation failed: %s", exc, exc_info=True)
-            asyncio.create_task(self._log_error(f"Model preparation failed: {exc}"))
+            asyncio.create_task(self._nats_logger.log(f"Model preparation failed: {exc}"))
             self.stop()
 
     async def _handle_message(self, msg: Msg) -> None:
@@ -130,30 +130,30 @@ class WhisperService:
             packet = PhrasePacket.from_bytes(msg.data)
         except Exception as exc:
             logger.warning("Invalid packet: %s", exc)
-            await self._log_error(f"Invalid packet: {exc}")
+            await self._nats_logger.log(f"Invalid packet: {exc}")
             await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
             return
 
         try:
             model = await self._ensure_model_loaded()
         except Exception as exc:
-            await self._log_error(f"Model not ready: {exc}")
+            await self._nats_logger.log(f"Model not ready: {exc}")
             await self._reply(msg, {"phrase_id": packet.phrase_id, "error": "model_error"})
             return
 
-        await self._nats_logger.info(
+        await self._nats_logger.log(
             f"Phrase received id={packet.phrase_id} dur={packet.duration:.2f}"
         )
 
         started = time.perf_counter()
-        await self._nats_logger.info(f"Transcription started phrase_id={packet.phrase_id}")
+        await self._nats_logger.log(f"Transcription started phrase_id={packet.phrase_id}")
 
         async with self._semaphore:
             try:
                 text = await asyncio.to_thread(self._transcribe, model, packet)
             except Exception as exc:
                 logger.exception("Transcription error: %s", exc)
-                await self._log_error(f"Transcription error: {exc}")
+                await self._nats_logger.log(f"Transcription error: {exc}")
                 await self._reply(
                     msg,
                     {"phrase_id": packet.phrase_id, "error": "transcription_failed", "details": str(exc)},
@@ -168,10 +168,10 @@ class WhisperService:
             "transcribe_time": transcribe_time,
         }
 
-        await self._nats_logger.info(
+        await self._nats_logger.log(
             f"Transcription finished phrase_id={packet.phrase_id} time={transcribe_time:.3f}s"
         )
-        await self._nats_logger.info(message, name="transcription_result")
+        await self._nats_logger.log(text, name="transcription_result", kind="message")
         await self._reply(msg, message)
 
     async def _ensure_model_loaded(self) -> WhisperModel:
@@ -191,7 +191,7 @@ class WhisperService:
                 )
 
             logger.info("Loading Whisper model from %s", self._model_path)
-            await self._nats_logger.info("Model loading", name="model_status")
+            await self._nats_logger.log("Model loading", name="model_status")
             try:
                 self._whisper_model = await asyncio.to_thread(
                     WhisperModel,
@@ -200,10 +200,10 @@ class WhisperService:
                     compute_type=self._compute_type,
                 )
             except Exception as exc:
-                await self._nats_logger.error(f"Model load failed: {exc}", name="model_status")
+                await self._nats_logger.log(f"Model load failed: {exc}", name="model_status")
                 raise
 
-            await self._nats_logger.info("Model ready", name="model_status")
+            await self._nats_logger.log("Model ready", name="model_status")
             return self._whisper_model
 
     async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
@@ -211,16 +211,13 @@ class WhisperService:
             return
         await self._nc.publish(msg.reply, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
-    async def _log_error(self, message: str) -> None:
-        if self._nats_logger:
-            await self._nats_logger.error(message)
 
     async def _warmup_model(self) -> None:
         try:
             await self._ensure_model_loaded()
         except Exception as exc:
             logger.error("Model warmup failed: %s", exc, exc_info=True)
-            await self._log_error(f"Model warmup failed: {exc}")
+            await self._nats_logger.log(f"Model warmup failed: {exc}")
             self.stop()
 
     def _transcribe(self, model: WhisperModel, packet: PhrasePacket) -> str:

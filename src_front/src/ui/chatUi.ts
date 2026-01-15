@@ -6,6 +6,7 @@ export class ChatUI {
   constructor(
     private root: HTMLElement,
     private textInput?: HTMLInputElement | null,
+    private micButton?: HTMLButtonElement | null,
   ) {}
 
   addMessage(text: string, role: ChatRole): void {
@@ -54,10 +55,14 @@ export class ChatUI {
   }
 
   private setInputBlocked(blocked: boolean): void {
-    if (!this.textInput) return;
-    this.textInput.disabled = blocked;
-    if (blocked) {
-      this.textInput.blur();
+    if (this.textInput) {
+      this.textInput.disabled = blocked;
+      if (blocked) {
+        this.textInput.blur();
+      }
+    }
+    if (this.micButton) {
+      this.micButton.disabled = blocked;
     }
   }
 }

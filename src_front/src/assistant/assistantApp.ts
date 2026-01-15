@@ -37,7 +37,11 @@ export class AssistantApp {
   constructor(private config: AppConfig) {
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
-    this.chat = new ChatUI(this.el.messageLog, this.el.textInput);
+    this.chat = new ChatUI(
+      this.el.messageLog,
+      this.el.textInput,
+      this.el.micButton,
+    );
 
     /* ---------- WARNING ---------- */
     const warningRoot =

@@ -105,13 +105,13 @@ def _list_repo_files(repo_id: str) -> Iterable:
 def _log_status(loop: AbstractEventLoop, logger: Optional[NatsLogger], message: str) -> None:
     if not logger:
         return
-    run_coroutine_threadsafe(logger.info(message, name="model_downloading_status"), loop)
+    run_coroutine_threadsafe(logger.log(message, name="model_downloading_status"), loop)
 
 
 def _log_percent(loop: AbstractEventLoop, logger: Optional[NatsLogger], percent: int) -> None:
     if not logger:
         return
-    run_coroutine_threadsafe(logger.info(str(percent), name="model_downloading_percent"), loop)
+    run_coroutine_threadsafe(logger.log(str(percent), name="model_downloading_percent"), loop)
 
 
 def _slug(value: str) -> str:

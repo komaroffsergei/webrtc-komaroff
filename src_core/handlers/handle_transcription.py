@@ -7,8 +7,6 @@ from src_core.utils.event_bus import event_log
 logger = logging.getLogger("handle_transcription")
 
 
-# ... (импорты остаются)
-
 async def handle_transcription(app, payload: dict):
     """Обработчик транскрипций, отправляющий запросы агенту через NATS"""
     text = (payload.get("text") or "").strip()
