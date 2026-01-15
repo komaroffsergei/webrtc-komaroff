@@ -59,9 +59,9 @@ class BaseService:
     async def run(self) -> None:
         await self._connect()
         self._register_signals()
+        await self.on_run()
         await self._stop_event.wait()
         await self._shutdown()
-        await self.on_run()
 
     async def _shutdown(self) -> None:
         for task in list(self._tasks):

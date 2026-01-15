@@ -193,7 +193,7 @@ ServiceConfig load_config() {
     cfg.nats_url = getenv_or("NATS_URL", "nats://127.0.0.1:4222");
     cfg.frames_subject = getenv_or("NATS_FRAMES_SUBJECT", "nats.frames");
     cfg.logs_subject = getenv_or("NATS_LOGS_SUBJECT", "nats.logs");
-    cfg.models_dir = getenv_or("ASR_MODELS_DIR", "models/asr");
+    cfg.models_dir = getenv_or("ASR_MODELS", "models/asr");
     cfg.model_path = getenv_or("ASR_MODEL_PATH", "");
     cfg.model_url = getenv_or("ASR_MODEL_URL", kDefaultModelUrl);
     cfg.model_sha1 = getenv_or("ASR_MODEL_SHA1", kDefaultModelSha1);

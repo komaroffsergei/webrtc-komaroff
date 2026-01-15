@@ -26,11 +26,11 @@ Service :src_core, image: webrtc_registry['core']do
       USER_ID: USER_ID,
       CORE_HOST: '0.0.0.0',
       CORE_PORT: 8000,
-      ASR_MODELS_DIR: '/app/models/asr',
+      ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small',
       VAD_MODEL_PATH: '/app/src_core/models/vad',
       VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
-  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+  volume name: 'ASR_MODELS', target: '/app/models/asr'
   volume name: 'VAD_MODELS_PATH', target: '/app/src_core/models/vad'
 end
 
@@ -68,14 +68,13 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
-      LLM_MODE: ENV.fetch('LLM_MODE', 'remote'),
-      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B'),
-      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
-      LLM_MODELS_DIR: ENV.fetch('LLM_MODELS_DIR', '/app/models/llm'),
-      OLLAMA_MODEL_FILE: ENV.fetch('OLLAMA_MODEL_FILE', ''),
-      LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE', '8192'),
-  volume name: 'LLM_MODELS_DIR', target: '/app/models/llm'
+      OLLAMA_URL: ENV.fetch('OLLAMA_URL'),
+      LLM_MODE: ENV.fetch('LLM_MODE'),
+      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL'),
+      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL'),
+      LLM_MODELS: ENV.fetch('LLM_MODELS'),
+      LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE')
+  volume name: 'LLM_MODELS', target: '/app/models/llm'
 end
 
 Service :src_whisper, image: webrtc_registry['whisper'] do
@@ -84,9 +83,9 @@ Service :src_whisper, image: webrtc_registry['whisper'] do
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
       STACK_SERVICE_NAME: 'src_whisper',
       USER_ID: USER_ID,
-      ASR_MODELS_DIR: '/app/models/asr',
+      ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small'
-  volume name: 'ASR_MODELS_DIR', target: '/app/models/asr'
+  volume name: 'ASR_MODELS', target: '/app/models/asr'
 end
 
 Service :src_front, image: webrtc_registry['front'] do
@@ -128,5 +127,5 @@ Service :nats_box, image: 'natsio/nats-box' do
   entrypoint 'sh -c "sleep infinity"'
 end
 
-Service :pgweb_location, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: RADAR_INGEST_DB_URL },
+Service :pgweb_location, image: 'sosedoff/pgweb:0.17.0',
         ingress: { host: 'pgweb.location.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }

@@ -34,7 +34,7 @@ module WhisperRuby
             @log,
             model_url: ASR_MODEL_URL,
             model_sha: ASR_MODEL_SHA1,
-            model_dir: ASR_MODELS_DIR,
+            model_dir: ASR_MODELS,
             model_path: MODEL_PATH
           )
 

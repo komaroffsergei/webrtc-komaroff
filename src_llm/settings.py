@@ -25,7 +25,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://192.168.2.108:11435")
 LLM_MODE = os.getenv("LLM_MODE", "local")
 LLM_LOCAL_MODEL = os.getenv("LLM_LOCAL_MODEL", "Qwen/Qwen3-1.7B-GGUF")
 LLM_REMOTE_MODEL = os.getenv("LLM_REMOTE_MODEL", "qwen3:1.7b")
-LLM_MODELS_DIR = os.getenv("LLM_MODELS_DIR", "models/llm")
+LLM_MODELS = os.getenv("LLM_MODELS", "models/llm")
 OLLAMA_MODEL_FILE = os.getenv("OLLAMA_MODEL_FILE", "")
 LLM_CONTEXT_SIZE = os.getenv("LLM_CONTEXT_SIZE", "8192")
 

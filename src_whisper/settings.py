@@ -12,5 +12,5 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
 
-ASR_MODELS_DIR = os.getenv("ASR_MODELS_DIR", "/app/models/asr")
+ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")

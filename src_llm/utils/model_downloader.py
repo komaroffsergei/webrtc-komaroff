@@ -14,12 +14,19 @@ def ensure_model_path(model_id: str, models_dir: str, model_file: str | None = N
     if candidate.exists():
         return str(candidate.resolve())
 
-    models_dir = Path(models_dir).resolve()
-    models_dir.mkdir(parents=True, exist_ok=True)
-
+    models_dir = Path(models_dir).expanduser().resolve()
     repo_id = model_id
     target_dir = models_dir / _slug(repo_id)
-    target_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+    except PermissionError:
+        try:
+            relative = models_dir.relative_to("/app")
+        except ValueError:
+            raise
+        models_dir = (Path(__file__).resolve().parents[2] / relative).resolve()
+        target_dir = models_dir / _slug(repo_id)
+        target_dir.mkdir(parents=True, exist_ok=True)
 
     filename = model_file or _select_model_file(repo_id)
     cached = target_dir / filename

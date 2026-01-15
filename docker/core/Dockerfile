@@ -31,7 +31,7 @@ RUN mkdir -p /app/models/asr /app/src_core/models/vad
 
 ENV SERVER_ENV=production \
     PORT=8000 \
-    ASR_MODELS_DIR=/app/models/asr \
+    ASR_MODELS=/app/models/asr \
     ASR_MODEL_ID=Systran/faster-whisper-small \
     VAD_MODEL_PATH=/app/src_core/models/vad/
 

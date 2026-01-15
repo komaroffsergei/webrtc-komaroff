@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import threading
@@ -54,6 +55,13 @@ class LLMService(BaseService):
         await self._nats_logger.info(
             f"{STACK_SERVICE_NAME} service connected (mode={self.llm_mode})"
         )
+        if self._use_local:
+            await asyncio.to_thread(
+                ensure_model_path,
+                self.llm_local_model,
+                self.llm_models_dir,
+                self.ollama_model_file,
+            )
 
     def _ensure_local_model(self):
         if self._local_model:

@@ -19,7 +19,7 @@ NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "600"))
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))
 CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")
 
-ASR_MODELS_DIR = os.getenv("ASR_MODELS_DIR", "/app/models/asr")
+ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 
 SERVICE_ROOT = Path(__file__).resolve().parent
