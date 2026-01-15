@@ -3,14 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from settings import (
+from src_llm.settings import (
     NATS_URL,
     STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT_FILE, MAX_OUTPUT_TOKENS,
     DEFAULT_MAX_TOKENS, NATS_LLM_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, LLM_MODE,
     LLM_MODELS_DIR, OLLAMA_MODEL_FILE, LLM_CONTEXT_SIZE, LLM_CHAT_FORMAT,
     LLM_LOCAL_MODEL, LLM_REMOTE_MODEL,
 )
-from service import LLMService
+from src_llm.service import LLMService
 from src_llm.settings import TOOLS_MANIFEST_FILE
 
 
