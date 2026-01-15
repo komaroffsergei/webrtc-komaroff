@@ -12,7 +12,6 @@ from src_llm.clients.ollama_chat import chat as ollama_chat
 from src_llm.settings import STACK_SERVICE_NAME
 from src_llm.utils.base_service import BaseService
 from src_llm.utils.model_downloader import ensure_model_path
-from src_llm.utils.tools_loader import load_tools_from_manifest
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 

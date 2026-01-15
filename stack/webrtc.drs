@@ -74,7 +74,7 @@ Service :src_llm, image: webrtc_registry['llm'] do
       LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL'),
       LLM_MODELS: ENV.fetch('LLM_MODELS'),
       LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE')
-  volume name: 'LLM_MODELS', target: '/app/models/llm'
+  volume name: 'LLM_MODELS', target: 'models/llm'
 end
 
 Service :src_whisper, image: webrtc_registry['whisper'] do

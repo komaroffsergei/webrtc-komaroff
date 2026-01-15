@@ -9,37 +9,41 @@ from huggingface_hub import HfApi, hf_hub_download
 GGUF_PATTERNS = ("*.gguf",)
 
 
-def ensure_model_path(model_id: str, models_dir: str, model_file: str | None = None) -> str:
-    candidate = Path(model_id)
-    if candidate.exists():
-        return str(candidate.resolve())
+from pathlib import Path
+from huggingface_hub import hf_hub_download
 
-    models_dir = Path(models_dir).expanduser().resolve()
-    repo_id = model_id
-    target_dir = models_dir / _slug(repo_id)
-    try:
-        target_dir.mkdir(parents=True, exist_ok=True)
-    except PermissionError:
-        try:
-            relative = models_dir.relative_to("/app")
-        except ValueError:
-            raise
-        models_dir = (Path(__file__).resolve().parents[2] / relative).resolve()
-        target_dir = models_dir / _slug(repo_id)
-        target_dir.mkdir(parents=True, exist_ok=True)
 
-    filename = model_file or _select_model_file(repo_id)
+def ensure_model_path(
+    model_id: str,
+    models_dir: str,
+    model_file: str | None = None,
+) -> str:
+    # 1. Если передали путь к файлу — просто вернуть
+    p = Path(model_id)
+    if p.exists():
+        return str(p.resolve())
+
+    # 2. Всегда работаем относительно текущей директории
+    models_dir = Path(models_dir)
+    target_dir = models_dir / _slug(model_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    # 3. Выбираем файл
+    filename = model_file or _select_model_file(model_id)
     cached = target_dir / filename
     if cached.exists():
-        return str(cached)
+        return str(cached.resolve())
 
+    # 4. Качаем
     downloaded = hf_hub_download(
-        repo_id,
-        filename,
+        repo_id=model_id,
+        filename=filename,
         local_dir=str(target_dir),
         local_dir_use_symlinks=False,
     )
-    return str(Path(downloaded))
+
+    return str(Path(downloaded).resolve())
+
 
 
 def _select_model_file(repo_id: str) -> str:
