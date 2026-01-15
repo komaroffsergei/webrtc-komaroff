@@ -5,13 +5,12 @@ import logging
 
 from src_llm.settings import (
     NATS_URL,
-    STACK_SERVICE_NAME, OLLAMA_URL, SYSTEM_PROMPT_FILE,
+    STACK_SERVICE_NAME, OLLAMA_URL,
     DEFAULT_MAX_TOKENS, NATS_LLM_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, LLM_MODE,
-    LLM_MODELS_DIR, OLLAMA_MODEL_FILE, LLM_CONTEXT_SIZE, LLM_CHAT_FORMAT,
+    LLM_MODELS_DIR, OLLAMA_MODEL_FILE, LLM_CONTEXT_SIZE,
     LLM_LOCAL_MODEL, LLM_REMOTE_MODEL,
 )
 from src_llm.service import LLMService
-from src_llm.settings import TOOLS_MANIFEST_FILE
 
 
 def configure_logging() -> None:
@@ -35,7 +34,6 @@ async def _run_service() -> None:
         llm_models_dir=LLM_MODELS_DIR,
         ollama_model_file=OLLAMA_MODEL_FILE,
         llm_context_size=LLM_CONTEXT_SIZE,
-        llm_chat_format=LLM_CHAT_FORMAT,
     )
     await service.run()
 

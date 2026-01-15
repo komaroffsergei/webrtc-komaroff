@@ -28,11 +28,7 @@ LLM_REMOTE_MODEL = os.getenv("LLM_REMOTE_MODEL", "qwen3:1.7b")
 LLM_MODELS_DIR = os.getenv("LLM_MODELS_DIR", "models/llm")
 OLLAMA_MODEL_FILE = os.getenv("OLLAMA_MODEL_FILE", "")
 LLM_CONTEXT_SIZE = os.getenv("LLM_CONTEXT_SIZE", "8192")
-LLM_CHAT_FORMAT = os.getenv("LLM_CHAT_FORMAT", "")
 
-# ---- SYSTEM PROMPT ----
-SYSTEM_PROMPT_FILE = os.getenv("SYSTEM_PROMPT_FILE", "system_prompt.txt")
-TOOLS_MANIFEST_FILE = os.getenv("TOOLS_MANIFEST_FILE", "../src_agent/manifest.json")
 # ---- LIMITS ----
 MAX_OUTPUT_TOKENS = os.getenv("MAX_OUTPUT_TOKENS", 8096)
 DEFAULT_MAX_TOKENS = os.getenv("DEFAULT_MAX_TOKENS", 2048)

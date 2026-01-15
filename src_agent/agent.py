@@ -104,10 +104,17 @@ class MCPAgent:
                 name = call["function"]["name"]
                 raw_args = call["function"].get("arguments") or {}
 
+                logger.info(
+                    "STEP %d tool_call=%s args=%s",
+                    step,
+                    name,
+                    json.dumps(raw_args, ensure_ascii=False),
+                )
                 try:
                     safe_args = normalize_args(self.tools_impl[name], raw_args)
                     cont, result = self.tools_impl[name](**safe_args)
                 except Exception as exc:
+                    logger.info("STEP %d tool_error=%s error=%s", step, name, str(exc))
                     return self._error("TOOLS_EXCEPTION", str(exc), prompt=prompt, steps=step, model=model_used)
 
                 tool_meta: AgentRegistry = REGISTRY.get(name, {})
@@ -116,11 +123,12 @@ class MCPAgent:
                     last_provided_artifacts = list(tool_meta.get("provides") or [])
 
                 logger.info(
-                    "STEP %d result tool=%s status=%s time=%.3fs",
+                    "STEP %d tool_result=%s status=%s time=%.3fs response=%s",
                     step,
                     name,
                     result.get("status"),
                     time.perf_counter() - step_started,
+                    json.dumps(result, ensure_ascii=False),
                 )
 
                 if not cont and result.get("status") == "ok":

@@ -31,7 +31,6 @@ class LLMService(BaseService):
         llm_models_dir: str,
         ollama_model_file: str,
         llm_context_size: int,
-        llm_chat_format: str,
     ) -> None:
         super().__init__(
             service_name=service_name,
@@ -46,7 +45,6 @@ class LLMService(BaseService):
         self.llm_models_dir = llm_models_dir
         self.ollama_model_file = (ollama_model_file or "").strip() or None
         self.llm_context_size = int(llm_context_size)
-        self.llm_chat_format = (llm_chat_format or "").strip() or None
         self._use_local = self.llm_mode == "local"
         self._ollama = None if self._use_local else ollama.Client(host=ollama_url)
         self._local_model = None
@@ -74,8 +72,6 @@ class LLMService(BaseService):
             "model_path": model_path,
             "n_ctx": self.llm_context_size,
         }
-        if self.llm_chat_format:
-            init_kwargs["chat_format"] = self.llm_chat_format
         self._local_model = Llama(**init_kwargs)
         return self._local_model
 

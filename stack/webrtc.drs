@@ -75,7 +75,6 @@ Service :src_llm, image: webrtc_registry['llm'] do
       LLM_MODELS_DIR: ENV.fetch('LLM_MODELS_DIR', '/app/models/llm'),
       OLLAMA_MODEL_FILE: ENV.fetch('OLLAMA_MODEL_FILE', ''),
       LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE', '8192'),
-      LLM_CHAT_FORMAT: ENV.fetch('LLM_CHAT_FORMAT', '')
   volume name: 'LLM_MODELS_DIR', target: '/app/models/llm'
 end
 
