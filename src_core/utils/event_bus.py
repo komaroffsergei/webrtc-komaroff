@@ -2,29 +2,29 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
-from datetime import datetime, timezone
-from typing import Any, Mapping, Literal
+from typing import Any
 
 from aiohttp.web_app import Application
 
-logger = logging.getLogger("event_bus")
+from src_core.utils.nats_logger import EVENT_KINDS, NatsLogger
 
-EVENT_KINDS = Literal["message", "log", "error", "control"]
+logger = logging.getLogger("event_bus")
 
 class EventBus:
     def __init__(self) -> None:
         self._subject: str | None = None
         self._service_name: str | None = None
         self._nats = None
+        self._logger: NatsLogger | None = None
 
     def configure(self, *, nats_client, subject: str, service_name: str) -> None:
         self._nats = nats_client
         self._subject = subject
         self._service_name = service_name
+        self._logger = NatsLogger(nats_client, subject, service_name)
         logger.info("Event bus configured for subject %s", subject)
 
-    async def publish(self, payload: Mapping[str, Any]) -> None:
+    async def publish(self, payload: dict[str, Any]) -> None:
         if not self._nats or not self._subject:
             raise RuntimeError("Event bus is not configured")
         await self._nats.publish(
@@ -40,17 +40,9 @@ class EventBus:
         kind: EVENT_KINDS  = "log",
         service: str | None = None,
     ) -> str:
-        payload = {
-            "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
-            "service": service or self._service_name,
-            "kind": kind,
-            "name": name,
-            "message": message,
-            "uid": str(uuid.uuid4()),
-        }
-
-        await self.publish(payload)
-        return payload["uid"]
+        if not self._logger:
+            raise RuntimeError("Event bus is not configured")
+        return await self._logger.log(message, name=name, kind=kind, service=service)
 
 
 _DEFAULT_BUS: EventBus | None = None

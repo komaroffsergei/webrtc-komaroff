@@ -49,7 +49,7 @@ Service :src_agent, image: webrtc_registry['agent'] do
       AGENT_MAX_STEPS: ENV.fetch('AGENT_MAX_STEPS', '10'),
       MAX_STEPS: ENV.fetch('MAX_STEPS', '10'),
       TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '60'),
-      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://host.docker.internal:11435'),
+      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
       OLLAMA_MODEL: ENV.fetch('OLLAMA_MODEL', 'qwen3:1.7b'),
       DATABASE_URL: ENV.fetch(
         'DATABASE_URL',
