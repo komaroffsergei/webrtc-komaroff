@@ -19,11 +19,13 @@ class NatsLogger:
         *,
         level: str = "info",
         name: str | None = None,
+        kind: str | None = None,
     ) -> None:
         payload = {
             "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
             "service": self._service_name,
             "type": level,
+            "kind": kind or "",
             "message": to_json_safe(message),
             "name": name or "",
         }

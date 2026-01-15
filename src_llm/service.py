@@ -1,24 +1,19 @@
 import json
 import logging
-import re
 import threading
 from pathlib import Path
-from typing import Any
 
 import ollama
 from nats.aio.msg import Msg
 
+from src_llm.clients.local_chat import chat as local_chat
+from src_llm.clients.ollama_chat import chat as ollama_chat
 from src_llm.settings import STACK_SERVICE_NAME
 from src_llm.utils.base_service import BaseService
 from src_llm.utils.model_downloader import ensure_model_path
 from src_llm.utils.tools_loader import load_tools_from_manifest
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
-LOCAL_TOOL_CALL_INSTRUCTION = (
-    "If tools are provided, respond ONLY with <tool_call>{\"name\":\"tool_name\","
-    "\"arguments\":{...}}</tool_call> and no other text."
-)
-
 
 class LLMService(BaseService):
     def __init__(
@@ -31,10 +26,7 @@ class LLMService(BaseService):
         ollama_url: str,
         llm_local_model: str,
         llm_remote_model: str,
-        system_prompt_file: str,
-        max_output_tokens: int,
         default_max_tokens: int,
-        tools_manifest_file: str,
         llm_mode: str,
         llm_models_dir: str,
         ollama_model_file: str,
@@ -47,23 +39,17 @@ class LLMService(BaseService):
             llm_subject=llm_subject,
             events_subject=events_subject,
         )
-        self.ollama_url = ollama_url
         self.llm_local_model = llm_local_model
         self.llm_remote_model = llm_remote_model
-        self.system_prompt_file = system_prompt_file
-        self.max_output_tokens = int(max_output_tokens)
         self.default_max_tokens = int(default_max_tokens)
-        self.tools = load_tools_from_manifest(tools_manifest_file)
         self.llm_mode = (llm_mode or "remote").strip().lower()
         self.llm_models_dir = llm_models_dir
         self.ollama_model_file = (ollama_model_file or "").strip() or None
         self.llm_context_size = int(llm_context_size)
         self.llm_chat_format = (llm_chat_format or "").strip() or None
         self._use_local = self.llm_mode == "local"
-
         self._ollama = None if self._use_local else ollama.Client(host=ollama_url)
         self._local_model = None
-        self._model_lock = threading.Lock()
         self._inference_lock = threading.Lock()
 
     async def on_run(self) -> None:
@@ -71,171 +57,51 @@ class LLMService(BaseService):
             f"{STACK_SERVICE_NAME} service connected (mode={self.llm_mode})"
         )
 
-    def _get_system_prompt(self) -> str:
-        if not self.system_prompt_file:
-            return ""
-
-        try:
-            content = Path(self.system_prompt_file).read_text(encoding="utf-8").strip()
-            return content
-        except Exception as exc:
-            logger.warning("Failed to read system prompt file %s: %s",
-                           self.system_prompt_file, exc)
-            return ""
-
     def _ensure_local_model(self):
         if self._local_model:
             return self._local_model
 
-        with self._model_lock:
-            if self._local_model:
-                return self._local_model
+        model_path = ensure_model_path(
+            self.llm_local_model,
+            self.llm_models_dir,
+            self.ollama_model_file,
+        )
+        logger.info("Loading local model from %s", model_path)
 
-            model_id = self.llm_local_model
-            model_path = ensure_model_path(
-                model_id,
-                self.llm_models_dir,
-                self.ollama_model_file,
-            )
-            logger.info("Loading local model from %s", model_path)
+        from llama_cpp import Llama
 
-            from llama_cpp import Llama
-
-            init_kwargs = {
-                "model_path": model_path,
-                "n_ctx": self.llm_context_size,
-            }
-            if self.llm_chat_format:
-                init_kwargs["chat_format"] = self.llm_chat_format
-
-            try:
-                self._local_model = Llama(**init_kwargs)
-            except TypeError:
-                init_kwargs.pop("chat_format", None)
-                self._local_model = Llama(**init_kwargs)
-
+        init_kwargs = {
+            "model_path": model_path,
+            "n_ctx": self.llm_context_size,
+        }
+        if self.llm_chat_format:
+            init_kwargs["chat_format"] = self.llm_chat_format
+        self._local_model = Llama(**init_kwargs)
         return self._local_model
 
-    def _normalize_tool_calls(self, message: dict) -> None:
-        tool_calls = message.get("tool_calls")
-        if not tool_calls:
-            tool_calls = self._parse_tool_calls_from_content(message.get("content") or "")
-            if tool_calls:
-                message["tool_calls"] = tool_calls
-            else:
-                return
-
-        for call in tool_calls:
-            function = call.get("function") or {}
-            args = function.get("arguments")
-            if isinstance(args, str):
-                try:
-                    function["arguments"] = json.loads(args)
-                except json.JSONDecodeError:
-                    function["arguments"] = {"_raw": args}
-
-    def _parse_tool_calls_from_content(self, content: str) -> list[dict]:
-        if "<tool_call>" not in content:
-            return []
-
-        calls = []
-        for raw in re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", content, flags=re.S):
-            try:
-                payload = json.loads(raw.strip())
-            except json.JSONDecodeError:
-                continue
-
-            name = payload.get("name")
-            args = payload.get("arguments", {})
-            if not name:
-                continue
-            calls.append({"function": {"name": name, "arguments": args}})
-        return calls
-
-    def _ollama_chat(self, *, model: str, messages: list, tools: list, options: dict, think: bool) -> dict[str, Any]:
-        if not self._ollama:
-            return {"error": "ollama_error", "details": "Ollama client is not configured"}
-
-        response = self._ollama.chat(
-            model=model,
-            messages=messages,
-            tools=tools or [],
-            options=options or {},
-            think=think,
-            stream=False,
-        )
-        message = response.get("message", {})
-        self._normalize_tool_calls(message)
-        return {
-            "message": message,
-            "model": response.get("model", model),
-            "provider": "ollama",
-        }
-
-    def _local_chat(self, *, model: str, messages: list, tools: list, options: dict) -> dict[str, Any]:
-        llama = self._ensure_local_model()
-        params = {
-            "temperature": options.get("temperature", 0.0),
-            "top_p": options.get("top_p"),
-            "top_k": options.get("top_k"),
-            "max_tokens": options.get("num_predict") or options.get("max_tokens") or self.default_max_tokens,
-        }
-        params = {k: v for k, v in params.items() if v is not None}
-
-        with self._inference_lock:
-            response = llama.create_chat_completion(
-                messages=messages,
-                tools=tools or [],
-                **params,
-            )
-
-        choices = response.get("choices") or []
-        message = choices[0].get("message", {}) if choices else {}
-        self._normalize_tool_calls(message)
-        return {
-            "message": message,
-            "model": model,
-            "provider": "local",
-        }
-
-    def on_message(self, msg: Msg) -> dict[str, Any]:
-        try:
-            payload = json.loads(msg.data.decode("utf-8"))
-        except Exception as exc:
-            return {"error": "invalid_payload", "details": str(exc)}
-
-        messages = payload.get("messages")
-        if not isinstance(messages, list):
-            return {"error": "invalid_payload", "details": "messages must be a list"}
-
-        system_prompt = self._get_system_prompt()
-        if system_prompt and not any(m.get("role") == "system" for m in messages):
-            messages = [{"role": "system", "content": system_prompt}, *messages]
-
+    def on_message(self, msg: Msg) -> dict:
+        payload = json.loads(msg.data.decode("utf-8"))
+        messages = payload.get("messages") or []
         tools = payload.get("tools")
-        if tools is None:
-            tools = self.tools
-        if self._use_local and tools:
-            has_instruction = any(
-                m.get("role") == "system" and m.get("content") == LOCAL_TOOL_CALL_INSTRUCTION
-                for m in messages
-            )
-            if not has_instruction:
-                messages = [*messages, {"role": "system", "content": LOCAL_TOOL_CALL_INSTRUCTION}]
-
         options = payload.get("options") or {}
         model = payload.get("model") or (self.llm_local_model if self._use_local else self.llm_remote_model)
 
-        try:
-            if self._use_local:
-                return self._local_chat(model=model, messages=messages, tools=tools, options=options)
-            return self._ollama_chat(
-                model=model,
-                messages=messages,
-                tools=tools,
-                options=options,
-                think=False,
-            )
-        except Exception as exc:
-            logger.exception("LLM request failed: %s", exc)
-            return {"error": "llm_error", "details": str(exc)}
+        if self._use_local:
+            with self._inference_lock:
+                return local_chat(
+                    self._ensure_local_model(),
+                    model=model,
+                    messages=messages,
+                    tools=tools,
+                    options=options,
+                    max_tokens=self.default_max_tokens,
+                )
+
+        return ollama_chat(
+            self._ollama,
+            model=model,
+            messages=messages,
+            tools=tools,
+            options=options,
+            think=bool(payload.get("think", False)),
+        )

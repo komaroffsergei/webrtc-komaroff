@@ -1,9 +1,7 @@
 import asyncio
-import json
 import logging
 import signal
-import time
-from typing import Any, Dict
+from typing import Any
 
 import nats
 from nats.aio.msg import Msg
@@ -78,10 +76,6 @@ class BaseService:
     def stop(self) -> None:
         self._stop_event.set()
 
-    async def _log_error(self, message: str) -> None:
-        if self._nats_logger:
-            await self._nats_logger.error(message)
-
     async def _handle_message(self, msg: Msg) -> None:
         task = asyncio.create_task(self._process_message(msg))
         self._tasks.add(task)
@@ -91,39 +85,20 @@ class BaseService:
         if not self._nats_logger:
             return
 
-        started = time.perf_counter()
-
-        # msg.data – bytes, делаем человекочитаемую строку
-        try:
-            msg_str = msg.data.decode("utf-8", errors="replace")
-        except Exception:
-            msg_str = repr(msg.data)
-
-        # await self._nats_logger.info(f"Process message data={msg_str}")
-
         async with self._semaphore:
             try:
-                # ВАЖНО: передаём msg в on_message
                 text = await asyncio.to_thread(self.on_message, msg)
             except Exception as exc:
                 logger.exception("Process message error: %s", exc)
-                await self._log_error(f"Process message error: {exc}")
+                await self._nats_logger.error(f"Process message error: {exc}")
                 await self._reply(
                     msg,
-                    {"data": msg_str, "error": "process_message", "details": str(exc)},
+                    {"error": "process_message", "details": str(exc)},
                 )
                 return
 
-        transcribe_time = time.perf_counter() - started
-        # message = {
-        #     "input": msg_str,
-        #     "output": text,
-        #     "time": transcribe_time,
-        # }
-
-        await self._nats_logger.info(
-            f"Process message finished data={msg_str} time={transcribe_time:.3f}s"
-        )
+        model_message = text.get("message") if isinstance(text, dict) else text
+        await self._nats_logger.log(model_message, name="model_thinking", kind="control")
         await self._nats_logger.info(text, name="llm_result")
         await self._reply(msg, text)
 
@@ -133,28 +108,8 @@ class BaseService:
             return
         await self._publisher.publish(msg.reply, payload)
 
-    def on_message(self, msg: Msg) -> None:
+    def on_message(self, msg: Msg) -> Any:
         raise NotImplementedError
 
     async def on_run(self) -> None:
         raise NotImplementedError
-
-    def to_json_safe(self, obj):
-        if obj is None:
-            return None
-
-        if isinstance(obj, (str, int, float, bool)):
-            return obj
-
-        if isinstance(obj, dict):
-            return {k: self.to_json_safe(v) for k, v in obj.items()}
-
-        if isinstance(obj, list):
-            return [self.to_json_safe(v) for v in obj]
-
-        # SDK-объекты (Message, ToolCall и т.п.)
-        if hasattr(obj, "__dict__"):
-            return self.to_json_safe(vars(obj))
-
-        # крайний случай
-        return str(obj)

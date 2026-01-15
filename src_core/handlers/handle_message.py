@@ -9,16 +9,6 @@ logger = logging.getLogger("handle_message")
 
 
 async def message_handler(request: web.Request):
-    """
-    Обработчик POST /message для приема сообщений от клиента.
-    
-    Ожидаемый формат:
-    {
-        "text": "текст сообщения от клиента"
-    }
-    
-    Отправляет подтверждение через SSE и возвращает echo ответ клиенту.
-    """
     try:
         data = await request.json()
     except Exception as e:

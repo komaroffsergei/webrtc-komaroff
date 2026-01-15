@@ -1,5 +1,8 @@
-import nats
 import logging
+
+import nats
+
+from src_core.settings import NATS_REQUEST_TIMEOUT
 
 logger = logging.getLogger("NatsLogsClient")
 
@@ -26,7 +29,7 @@ class NatsClient:
         logger.info(f"NATS logs client subscribed: {subject}")
 
 
-    async def request(self, subject, data, timeout=1):
+    async def request(self, subject, data, timeout=NATS_REQUEST_TIMEOUT):
         logger.info(f"NATS logs client request: {subject} `{data}`")
         return await self.nc.request(subject, data, timeout=timeout)
 

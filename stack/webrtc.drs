@@ -21,6 +21,7 @@ Service :src_core, image: webrtc_registry['core']do
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      NATS_REQUEST_TIMEOUT: ENV.fetch("NATS_REQUEST_TIMEOUT", "600"),
       STACK_SERVICE_NAME: 'src_core',
       USER_ID: USER_ID,
       CORE_HOST: '0.0.0.0',
@@ -130,4 +131,3 @@ end
 
 Service :pgweb_location, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: RADAR_INGEST_DB_URL },
         ingress: { host: 'pgweb.location.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
-

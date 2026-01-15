@@ -13,6 +13,7 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
+NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "600"))
 
 
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))

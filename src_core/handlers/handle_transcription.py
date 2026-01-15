@@ -1,7 +1,7 @@
 import json
 import logging
 
-from src_core.settings import NATS_AGENT_SUBJECT, STACK_SERVICE_NAME
+from src_core.settings import NATS_AGENT_SUBJECT, STACK_SERVICE_NAME, NATS_REQUEST_TIMEOUT
 from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_transcription")
@@ -24,7 +24,7 @@ async def handle_transcription(app, payload: dict):
             json.dumps({
                 "text": text
             }, ensure_ascii=False).encode("utf-8"),
-            timeout=120.0,
+            timeout=NATS_REQUEST_TIMEOUT,
         )
 
         response = json.loads(msg.data.decode("utf-8"))
