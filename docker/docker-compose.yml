@@ -2,7 +2,7 @@ services:
   src_postgres:
     build:
       context: ../src_postgres
-      dockerfile: Dockerfile
+      dockerfile: ../docker/postgres/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
     ports:
       - "5432:5432"
@@ -39,7 +39,7 @@ services:
   src_agent:
     build:
       context: ../src_agent
-      dockerfile: Dockerfile
+      dockerfile: ../docker/agent/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/agent/${CI_COMMIT_BRANCH}
     depends_on:
       - nats
@@ -49,7 +49,7 @@ services:
   src_whisper:
     build:
       context: ../src_whisper
-      dockerfile: Dockerfile
+      dockerfile: ../docker/whisper/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/whisper/${CI_COMMIT_BRANCH}
     depends_on:
       - nats

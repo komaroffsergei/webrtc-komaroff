@@ -26,11 +26,9 @@ exec "$@"
 EOF
 
 RUN chmod +x /entrypoint.sh
-
-# Создать директории для моделей
 RUN mkdir -p /app/models/asr /app/src_core/models/vad
 
-# Установить переменные окружения для загрузки модели
+
 ENV SERVER_ENV=production \
     PORT=8000 \
     ASR_MODELS_DIR=/app/models/asr \
@@ -41,7 +39,3 @@ WORKDIR /app/src_core
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "-m", "src_core.main"]
-
-FROM base AS whisper
-# Placeholder stage (runtime downloads model on first start)
-
