@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import threading
 from pathlib import Path
 from typing import Any
@@ -13,6 +14,10 @@ from src_llm.utils.model_downloader import ensure_model_path
 from src_llm.utils.tools_loader import load_tools_from_manifest
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
+LOCAL_TOOL_CALL_INSTRUCTION = (
+    "If tools are provided, respond ONLY with <tool_call>{\"name\":\"tool_name\","
+    "\"arguments\":{...}}</tool_call> and no other text."
+)
 
 
 class LLMService(BaseService):
@@ -111,9 +116,14 @@ class LLMService(BaseService):
 
         return self._local_model
 
-    def _normalize_tool_calls(self, tool_calls: Any) -> Any:
+    def _normalize_tool_calls(self, message: dict) -> None:
+        tool_calls = message.get("tool_calls")
         if not tool_calls:
-            return tool_calls
+            tool_calls = self._parse_tool_calls_from_content(message.get("content") or "")
+            if tool_calls:
+                message["tool_calls"] = tool_calls
+            else:
+                return
 
         for call in tool_calls:
             function = call.get("function") or {}
@@ -123,7 +133,24 @@ class LLMService(BaseService):
                     function["arguments"] = json.loads(args)
                 except json.JSONDecodeError:
                     function["arguments"] = {"_raw": args}
-        return tool_calls
+
+    def _parse_tool_calls_from_content(self, content: str) -> list[dict]:
+        if "<tool_call>" not in content:
+            return []
+
+        calls = []
+        for raw in re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", content, flags=re.S):
+            try:
+                payload = json.loads(raw.strip())
+            except json.JSONDecodeError:
+                continue
+
+            name = payload.get("name")
+            args = payload.get("arguments", {})
+            if not name:
+                continue
+            calls.append({"function": {"name": name, "arguments": args}})
+        return calls
 
     def _ollama_chat(self, *, model: str, messages: list, tools: list, options: dict, think: bool) -> dict[str, Any]:
         if not self._ollama:
@@ -138,7 +165,7 @@ class LLMService(BaseService):
             stream=False,
         )
         message = response.get("message", {})
-        message["tool_calls"] = self._normalize_tool_calls(message.get("tool_calls"))
+        self._normalize_tool_calls(message)
         return {
             "message": message,
             "model": response.get("model", model),
@@ -164,7 +191,7 @@ class LLMService(BaseService):
 
         choices = response.get("choices") or []
         message = choices[0].get("message", {}) if choices else {}
-        message["tool_calls"] = self._normalize_tool_calls(message.get("tool_calls"))
+        self._normalize_tool_calls(message)
         return {
             "message": message,
             "model": model,
@@ -188,6 +215,13 @@ class LLMService(BaseService):
         tools = payload.get("tools")
         if tools is None:
             tools = self.tools
+        if self._use_local and tools:
+            has_instruction = any(
+                m.get("role") == "system" and m.get("content") == LOCAL_TOOL_CALL_INSTRUCTION
+                for m in messages
+            )
+            if not has_instruction:
+                messages = [*messages, {"role": "system", "content": LOCAL_TOOL_CALL_INSTRUCTION}]
 
         options = payload.get("options") or {}
         model = payload.get("model") or (self.llm_local_model if self._use_local else self.llm_remote_model)
