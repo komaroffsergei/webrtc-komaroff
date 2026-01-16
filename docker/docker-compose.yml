@@ -2,6 +2,8 @@ services:
   src_postgres:
     build:
       context: ../src_postgres
+      additional_contexts:
+        postgres: ../docker/postgres
       dockerfile: ../docker/postgres/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
     ports:
