@@ -69,7 +69,7 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
-      LLM_MODE: ENV.fetch('LLM_MODE', 'remote'),
+      LLM_MODE: ENV.fetch('LLM_MODE', 'local'),
       LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B'),
       LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
       LLM_MODELS: ENV.fetch('LLM_MODELS', '/app/models/llm'),
