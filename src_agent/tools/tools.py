@@ -1,10 +1,11 @@
+import os
 from typing import Tuple, Dict, Any, List
 
 import requests
 
 from src_agent.utils.mcp_tools import mcp_tool
 
-API = "http://127.0.0.1:8100/api"
+API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
 
 # =============================
 # ARTIFACT STORAGE (per intent)

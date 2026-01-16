@@ -55,6 +55,7 @@ Service :src_agent, image: webrtc_registry['agent'] do
         'DATABASE_URL',
         'postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp'
       ),
+      API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
       RUNWAYS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports',
       PILOT_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/pilot/location',
