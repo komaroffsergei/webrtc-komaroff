@@ -18,8 +18,18 @@ AGENT_MAX_STEPS = int(os.getenv("AGENT_MAX_STEPS", "10"))
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
 TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "600"))
 MAX_STEPS = int(os.getenv("MAX_STEPS", "10"))
-# Database
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")
+
+# Database configuration
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "mcp")
+POSTGRES_USER = os.getenv("POSTGRES_USER", "mcp")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "mcp_pass")
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}",
+)
 
 AIRPORTS_API_URL = os.getenv("AIRPORTS_API_URL", "http://127.0.0.1:8100/api/airports/search")
 RUNWAYS_API_URL = os.getenv("RUNWAYS_API_URL", "http://127.0.0.1:8100/api/airports")

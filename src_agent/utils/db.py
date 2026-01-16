@@ -1,101 +1,179 @@
-import uuid
-from datetime import datetime, timezone
+from __future__ import annotations
 
-def now():
-    return datetime.now(tz=timezone.utc).isoformat()
+import json
+from dataclasses import dataclass
+from typing import Any, Optional, Dict
+from uuid import uuid4
 
-def new_uuid():
-    return str(uuid.uuid4())
-
-
-def db_insert(table: str, record: dict):
-    DB_STORE[table].append(record)
+import asyncpg
 
 
-def create_session(user_id: str):
-    session_id = new_uuid()
-    db_insert("sessions", {
-        "session_id": session_id,
-        "user_id": user_id,
-        "status": "RUNNING",
-        "created_at": now(),
-        "updated_at": now(),
-    })
-    return session_id
+@dataclass
+class Database:
+    db_url: str
+    _pool: Optional[asyncpg.Pool] = None
+
+    async def connect(self) -> None:
+        if self._pool is None:
+            self._pool = await asyncpg.create_pool(
+                self.db_url,
+                min_size=1,
+                max_size=10,
+            )
+
+    async def close(self) -> None:
+        if self._pool is not None:
+            await self._pool.close()
+            self._pool = None
+
+    async def execute(self, query: str, *args):
+        if self._pool is None:
+            raise RuntimeError("Database pool is not connected")
+        async with self._pool.acquire() as conn:
+            return await conn.execute(query, *args)
+
+    async def fetchrow(self, query: str, *args):
+        if self._pool is None:
+            raise RuntimeError("Database pool is not connected")
+        async with self._pool.acquire() as conn:
+            return await conn.fetchrow(query, *args)
+
+    async def fetchval(self, query: str, *args):
+        if self._pool is None:
+            raise RuntimeError("Database pool is not connected")
+        async with self._pool.acquire() as conn:
+            return await conn.fetchval(query, *args)
 
 
-def finish_session(session_id: str, status: str):
-    for s in DB_STORE["sessions"]:
-        if s["session_id"] == session_id:
-            s["status"] = status
-            s["updated_at"] = now()
-            return
+def _to_jsonb(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    return json.dumps(value, ensure_ascii=False)
 
 
-def create_intent(session_id: str, user_id: str, intent_type: str):
-    intent_id = new_uuid()
-    db_insert("intents", {
-        "intent_id": intent_id,
-        "session_id": session_id,
-        "intent_type": intent_type,
-        "user_id": user_id,
-        "status": "RUNNING",
-        "created_at": now(),
-    })
-    return intent_id
+# ----------------------------
+# sessions
+# ----------------------------
+
+async def create_session(db: Database, *, user_id: str, session_id: Optional[str] = None) -> str:
+    sid = session_id or str(uuid4())
+    await db.execute(
+        """
+        insert into sessions (session_id, user_id, status)
+        values ($1, $2, 'RUNNING')
+        on conflict (session_id) do update
+        set updated_at = now()
+        """,
+        sid,
+        user_id,
+    )
+    return sid
 
 
-def finish_intent(intent_id: str, status: str):
-    for i in DB_STORE["intents"]:
-        if i["intent_id"] == intent_id:
-            i["status"] = status
-            return
+async def update_session_status(db: Database, *, session_id: str, status: str) -> None:
+    await db.execute(
+        """
+        update sessions
+        set status = $2,
+            updated_at = now()
+        where session_id = $1
+        """,
+        session_id,
+        status,
+    )
 
 
-def log_event(
+# ----------------------------
+# intents
+# ----------------------------
+
+async def create_intent(db: Database, *, session_id: str, intent_type: str) -> str:
+    iid = str(uuid4())
+    await db.execute(
+        """
+        insert into intents (intent_id, session_id, intent_type, status, created_at, updated_at)
+        values ($1, $2, $3, 'RUNNING', now(), now())
+        """,
+        iid,
+        session_id,
+        intent_type,
+    )
+    return iid
+
+
+async def finish_intent(db: Database, *, intent_id: str, status: str = "DONE") -> None:
+    await db.execute(
+        """
+        update intents
+        set status = $2,
+            updated_at = now()
+        where intent_id = $1
+        """,
+        intent_id,
+        status,
+    )
+
+
+# ----------------------------
+# events
+# ----------------------------
+
+async def log_event(
+    db: Database,
+    *,
     session_id: str,
-    intent_id: str,
-    seq: int,
+    intent_id: Optional[str],
     role: str,
     event_type: str,
-    name: str | None,
-    input_data,
-    output_data,
-):
-    db_insert("events", {
-        "event_id": len(DB_STORE["events"]) + 1,
-        "session_id": session_id,
-        "intent_id": intent_id,
-        "seq": seq,
-        "role": role,
-        "event_type": event_type,
-        "name": name,
-        "input": input_data,
-        "output": output_data,
-        "created_at": now(),
-    })
+    name: Optional[str] = None,
+    input: Optional[Dict[str, Any]] = None,
+    output: Optional[Dict[str, Any]] = None,
+) -> None:
+    await db.execute(
+        """
+        insert into events (
+          session_id, intent_id,
+          role, event_type, name,
+          input, output
+        )
+        values (
+          $1, $2,
+          $3, $4, $5,
+          $6::jsonb, $7::jsonb
+        )
+        """,
+        session_id,
+        intent_id,
+        role,
+        event_type,
+        name,
+        _to_jsonb(input),
+        _to_jsonb(output),
+    )
 
-def log_artifact(
+
+# ----------------------------
+# artifacts
+# ----------------------------
+
+async def save_artifact(
+    db: Database,
+    *,
     session_id: str,
-    intent_id: str,
-    artifact_type: str,
+    intent_id: Optional[str],
+    type: str,
     name: str,
-    data,
-):
-    db_insert("artifacts", {
-        "artifact_id": new_uuid(),
-        "session_id": session_id,
-        "intent_id": intent_id,
-        "type": artifact_type,
-        "name": name,
-        "data": data,
-        "created_at": now(),
-    })
-
-
-DB_STORE = {
-    "sessions": [],
-    "intents": [],
-    "artifacts": [],
-    "events": [],
-}
+    data: Dict[str, Any],
+) -> None:
+    await db.execute(
+        """
+        insert into artifacts (artifact_id, session_id, intent_id, type, name, data)
+        values ($1, $2, $3, $4, $5, $6::jsonb)
+        """,
+        str(uuid4()),
+        session_id,
+        intent_id,
+        type,
+        name,
+        _to_jsonb(data),
+    )

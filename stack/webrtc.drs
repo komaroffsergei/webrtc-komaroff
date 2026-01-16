@@ -8,6 +8,11 @@ NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
 NATS_LLM_SUBJECT = ENV.fetch("NATS_LLM_SUBJECT", "nats.llm.")
 
 HOST = 'webrtc-komaroff.*'
+POSTGRES_HOST = ENV.fetch("POSTGRES_HOST", "web-rtc-komaroff_src_postgres")
+POSTGRES_PORT = ENV.fetch("POSTGRES_PORT", "5432")
+POSTGRES_DB = ENV.fetch("POSTGRES_DB", "mcp")
+POSTGRES_USER = ENV.fetch("POSTGRES_USER", "mcp")
+POSTGRES_PASSWORD = ENV.fetch("POSTGRES_PASSWORD", "mcp_pass")
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 
 PublishPorts core: [
@@ -51,9 +56,14 @@ Service :src_agent, image: webrtc_registry['agent'] do
       AGENT_MAX_STEPS: ENV.fetch('AGENT_MAX_STEPS', '10'),
       MAX_STEPS: ENV.fetch('MAX_STEPS', '10'),
       TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '600'),
+      POSTGRES_HOST: POSTGRES_HOST,
+      POSTGRES_PORT: POSTGRES_PORT,
+      POSTGRES_DB: POSTGRES_DB,
+      POSTGRES_USER: POSTGRES_USER,
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD,
       DATABASE_URL: ENV.fetch(
         'DATABASE_URL',
-        'postgresql://mcp:mcp_pass@web-rtc-komaroff_src_postgres:5432/mcp'
+        "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}"
       ),
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
@@ -103,7 +113,7 @@ Service :src_front, image: webrtc_registry['front'] do
 end
 
 Service :src_postgres, image: 'postgis/postgis:16-master' do
-  env POSTGRES_DB: 'mcp', POSTGRES_USER: 'mcp', POSTGRES_PASSWORD: 'mcp_pass'
+  env POSTGRES_DB: POSTGRES_DB, POSTGRES_USER: POSTGRES_USER, POSTGRES_PASSWORD: POSTGRES_PASSWORD
   volume target: '/var/lib/postgresql/data'
   command ['postgres', '--wal_level=logical']
   ingress host_sni: "db.#{HOST}", port: 5432, entrypoints: 'postgres'

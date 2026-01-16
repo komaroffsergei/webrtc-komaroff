@@ -3,17 +3,16 @@ import json
 import logging
 import signal
 import sys
+
 from nats.aio.client import Client as NATS
+
 from src_agent.settings import (
     NATS_URL,
     STACK_SERVICE_NAME
 )
 from src_agent.agent import MCPAgent
-from src_agent.utils.db import create_session
-# from src_agent.utils.db import Database, create_session
+from src_agent.utils.db import Database, create_session
 from src_agent.utils.nats_logger import NatsLogger
-# from src_agent.repositories.sessions import create_session
-# from src_agent.repositories.events import log_event
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -29,23 +28,24 @@ class AgentServer:
         max_steps: int = 10,
         db_url: str = None,
         user_id: str = None,
-
     ):
         self.nats_url = nats_url
         self.agent_subject = agent_subject      # ← nats.src_agent.user123
         self.llm_subject = llm_subject          # ← nats.src_llm.user123
-        self.events_subject = events_subject        # ← nats.events.user123
+        self.events_subject = events_subject    # ← nats.events.user123
         self.max_steps = max_steps
+
         self.nc = None
         self.agent = None
         self.nats_logger = None
         self.stop_event = asyncio.Event()
+
         self.db_url = db_url
-        self.db = None
-        self.user_id = user_id
+        self.db: Database | None = None
+        self.user_id = user_id or "anonymous"
 
     async def connect(self):
-        """Подключение к NATS"""
+        """Подключение к NATS + Database"""
         self.nc = NATS()
         await self.nc.connect(
             servers=[NATS_URL],
@@ -55,13 +55,20 @@ class AgentServer:
             ping_interval=10,
         )
         self.nats_logger = NatsLogger(self.nc, self.events_subject, STACK_SERVICE_NAME)
-        # self.db = Database(db_url=self.db_url)
-        # await self.db.connect()
+
+        if not self.db_url:
+            raise RuntimeError("db_url is not set for src_agent")
+
+        self.db = Database(db_url=self.db_url)
+        await self.db.connect()
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to Database")
+
         self.agent = MCPAgent(
             self.nc,
             llm_subject=self.llm_subject,
             max_steps=self.max_steps,
+            db=self.db,
+            user_id=self.user_id,
         )
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS {NATS_URL}")
 
@@ -74,56 +81,40 @@ class AgentServer:
         """Обработка входящего запроса на выполнение агента"""
         try:
             data = json.loads(msg.data.decode("utf-8"))
-            prompt = data.get("text", "").strip()
+            prompt = (data.get("text") or "").strip()
             session_id = data.get("session_id")
 
             if not prompt:
                 raise ValueError("Empty text in request")
-            #
+
+            if not self.db:
+                raise RuntimeError("Database is not connected")
+
             if not session_id:
-                session_id = create_session(self.user_id)
+                session_id = await create_session(self.db, user_id=self.user_id)
 
-
-            #Логируем пользовательский ввод
-            # await log_event(
-            #     self.db,
-            #     session_id=session_id,
-            #     intent_id=None,
-            #     role="USER",
-            #     event_type="MESSAGE",
-            #     name=None,
-            #     input={"text": user_text},
-            #     output=None,
-            # )
-
-            # Запуск агента
             result = await self.agent.run(prompt=prompt, session_id=session_id)
-            payload = json.dumps(
-                result,
-                ensure_ascii=False
-            ).encode("utf-8")
 
+            payload = json.dumps(result, ensure_ascii=False).encode("utf-8")
             await msg.respond(payload)
-            # await self.nats_logger.info(f"Request processed successfully")
-            # logger.info("Request processed successfully")
 
         except Exception as e:
             logger.error(f"Error processing request: {e}", exc_info=True)
-            await self.nats_logger.error(f"Processing error: {e}")
+            if self.nats_logger:
+                await self.nats_logger.error(f"Processing error: {e}")
 
             error_response = {
-                "status": "error",
-                "error": str(e)
+                "success": False,
+                "error": {"type": "SERVER_EXCEPTION", "message": str(e)},
             }
             try:
-                await msg.respond(json.dumps(error_response, ensure_ascii=False).encode('utf-8'))
+                await msg.respond(json.dumps(error_response, ensure_ascii=False).encode("utf-8"))
             except Exception as respond_error:
                 logger.error(f"Error sending error response: {respond_error}")
 
     def setup_signal_handlers(self):
         """Настройка обработчиков сигналов для graceful shutdown"""
         loop = asyncio.get_running_loop()
-
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(
                 sig,
@@ -147,6 +138,12 @@ class AgentServer:
                 await self.nc.close()
                 logger.info("NATS connection closed")
 
+        if self.db:
+            try:
+                await self.db.close()
+            except Exception as e:
+                logger.error(f"Error closing DB pool: {e}")
+
     async def run(self):
         """Запуск сервера"""
         try:
@@ -155,9 +152,9 @@ class AgentServer:
             self.setup_signal_handlers()
 
             logger.info(f"{STACK_SERVICE_NAME} is running and waiting for requests...")
-            await self.nats_logger.info(f"{STACK_SERVICE_NAME} is ready")
+            if self.nats_logger:
+                await self.nats_logger.info(f"{STACK_SERVICE_NAME} is ready")
 
-            # Ожидание сигнала остановки
             await self.stop_event.wait()
 
         except Exception as e:
