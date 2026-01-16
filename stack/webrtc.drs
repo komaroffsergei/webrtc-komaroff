@@ -70,8 +70,8 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://192.168.2.108:11435'),
       LLM_MODE: ENV.fetch('LLM_MODE', 'local'),
-      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B'),
-      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
+      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
+      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'qwen3:1.7b'),
       LLM_MODELS: ENV.fetch('LLM_MODELS', '/app/models/llm'),
       OLLAMA_MODEL_FILE: ENV.fetch('OLLAMA_MODEL_FILE', ''),
       LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE', '8192')
