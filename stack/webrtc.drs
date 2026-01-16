@@ -147,5 +147,5 @@ Service :nats_box, image: 'natsio/nats-box' do
   entrypoint 'sh -c "sleep infinity"'
 end
 
-Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL },
+Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL }
         ingress: { host: 'pgweb.mcp.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
