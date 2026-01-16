@@ -13,7 +13,7 @@ POSTGRES_PORT = ENV.fetch("POSTGRES_PORT", "5432")
 POSTGRES_DB = ENV.fetch("POSTGRES_DB", "mcp")
 POSTGRES_USER = ENV.fetch("POSTGRES_USER", "mcp")
 POSTGRES_PASSWORD = ENV.fetch("POSTGRES_PASSWORD", "mcp_pass")
-DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}"
+DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}?sslmode=disable"
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 
 PublishPorts core: [
