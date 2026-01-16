@@ -55,12 +55,14 @@ class LLMService(BaseService):
             f"{STACK_SERVICE_NAME} service connected (mode={self.llm_mode})"
         )
         if self._use_local:
+            await self._nats_logger.log("started", name="model_downloading", kind="control")
             await asyncio.to_thread(
                 ensure_model_path,
                 self.llm_local_model,
                 self.llm_models_dir,
                 self.ollama_model_file,
             )
+            await self._nats_logger.log("finished", name="model_downloading", kind="control")
 
     def _ensure_local_model(self):
         if self._local_model:

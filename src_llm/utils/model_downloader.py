@@ -9,32 +9,28 @@ from huggingface_hub import HfApi, hf_hub_download
 GGUF_PATTERNS = ("*.gguf",)
 
 
-from pathlib import Path
-from huggingface_hub import hf_hub_download
-
-
 def ensure_model_path(
     model_id: str,
     models_dir: str,
     model_file: str | None = None,
 ) -> str:
-    # 1. Если передали путь к файлу — просто вернуть
+    # If model_id is a path, return it as-is.
     p = Path(model_id)
     if p.exists():
         return str(p.resolve())
 
-    # 2. Всегда работаем относительно текущей директории
-    models_dir = Path(models_dir)
+    # Resolve relative paths from the current working directory.
+    models_dir = Path(models_dir).expanduser().resolve()
     target_dir = models_dir / _slug(model_id)
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    # 3. Выбираем файл
+    # Pick the model file.
     filename = model_file or _select_model_file(model_id)
     cached = target_dir / filename
     if cached.exists():
         return str(cached.resolve())
 
-    # 4. Качаем
+    # Download the model.
     downloaded = hf_hub_download(
         repo_id=model_id,
         filename=filename,
