@@ -112,12 +112,19 @@ Service :src_front, image: webrtc_registry['front'] do
                                  'local'
 end
 
-Service :src_postgres, image: 'postgis/postgis:16-master' do
-  env POSTGRES_DB: POSTGRES_DB, POSTGRES_USER: POSTGRES_USER, POSTGRES_PASSWORD: POSTGRES_PASSWORD
+Service :src_postgres, image: webrtc_registry['postgres'] do
+  env POSTGRES_DB: POSTGRES_DB,
+      POSTGRES_USER: POSTGRES_USER,
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD
+
   volume target: '/var/lib/postgresql/data'
+
+  # оставляем твой параметр
   command ['postgres', '--wal_level=logical']
+
   ingress host_sni: "db.#{HOST}", port: 5432, entrypoints: 'postgres'
 end
+
 
 
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
@@ -140,4 +147,11 @@ Service :nats_box, image: 'natsio/nats-box' do
 end
 
 Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0',
-        ingress: { host: 'pgweb.mcp.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
+        ingress: { host: 'pgweb.mcp.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' } do
+
+  env DATABASE_URL: "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}"
+
+  command ['pgweb', '--bind=0.0.0.0', '--listen=8081', '--url',
+           "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}"]
+end
+
