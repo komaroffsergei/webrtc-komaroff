@@ -28,10 +28,10 @@ Service :src_core, image: webrtc_registry['core']do
       CORE_PORT: 8000,
       ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small',
-      VAD_MODEL_PATH: '/app/src_core/models/vad',
+      VAD_MODEL_PATH: '/app/models/vad',
       VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
   volume name: 'ASR_MODELS', target: '/app/models/asr'
-  volume name: 'VAD_MODELS_PATH', target: '/app/src_core/models/vad'
+  volume name: 'VAD_MODELS_PATH', target: '/app/models/vad'
 end
 
 Service :src_api_gateway, image: webrtc_registry['api-gateway']do
@@ -129,5 +129,5 @@ Service :nats_box, image: 'natsio/nats-box' do
   entrypoint 'sh -c "sleep infinity"'
 end
 
-Service :pgweb_location, image: 'sosedoff/pgweb:0.17.0',
-        ingress: { host: 'pgweb.location.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
+Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0',
+        ingress: { host: 'pgweb.mcp.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
