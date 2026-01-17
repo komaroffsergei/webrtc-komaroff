@@ -147,16 +147,11 @@ Service :nats_box, image: 'natsio/nats-box' do
   entrypoint 'sh -c "sleep infinity"'
 end
 
-Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0',
-        ingress: { host: 'pgweb.mcp.*', port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' } do
-
-  env DATABASE_URL: DATABASE_URL
-
-  command [
-    'pgweb',
-    '--bind=0.0.0.0',
-    '--listen=8081',
-    '--url', DATABASE_URL
-  ]
+Service :nats_ui, image: registry['nats-ui/main:latest'], ports: 7000 do
+  ingress host: "ns.#{HOST}", basic_auth: 'admin:admin:i7hdbc9g'
+  env NATS_URL: NATS_URL
 end
+
+Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL },
+        ingress: { host: "pgweb.#{HOST}", port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
 
