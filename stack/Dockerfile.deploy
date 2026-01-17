@@ -5,7 +5,7 @@ RUN install-docker-static 28
 
 WORKDIR /build
 RUN mkdir -p /root/.ssh && mkdir -pv /root/.ssh/sockets
-RUN echo -e 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /root/.ssh/sockets/%r@%h-%p\n\tBatchMode yes\n\tStrictHostKeyChecking no\n\tPort 22' > ~/.ssh/config
+RUN printf 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /root/.ssh/sockets/%r@%h-%p\n\tBatchMode yes\n\tStrictHostKeyChecking no\n\tPort 22\n' > /root/.ssh/config
 ADD . .
 
 CMD ["sh", "-c", "\
