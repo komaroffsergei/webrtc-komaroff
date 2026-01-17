@@ -3,8 +3,6 @@ RUN apt update && apt install -y --no-install-recommends openssh-client ca-certi
 RUN gem install build-labels:0.0.75 dry-stack:0.1.53
 RUN install-docker-static
 
-# RUN apk add --no-cache openssh-client ca-certificates
-
 WORKDIR /build
 RUN mkdir -p /root/.ssh && mkdir -pv /root/.ssh/sockets
 RUN echo -e 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /root/.ssh/sockets/%r@%h-%p\n\tBatchMode yes\n\tStrictHostKeyChecking no\n\tPort 22' > ~/.ssh/config
