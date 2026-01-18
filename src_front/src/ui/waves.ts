@@ -5,23 +5,30 @@ type Stopper = () => void;
 
 function drawWave(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number,
   history: Float32Array,
   strokeStyle: string,
 ): void {
+  const { canvas } = ctx;
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || canvas.width;
+  const height = canvas.clientHeight || canvas.height;
+  const scaledW = Math.round(width * dpr), scaledH = Math.round(height * dpr);
+
+  if (canvas.width !== scaledW || canvas.height !== scaledH) {
+    canvas.width = scaledW;
+    canvas.height = scaledH;
+  }
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
-  ctx.strokeStyle = strokeStyle;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = strokeStyle; ctx.lineWidth = 2; ctx.lineCap = "round";
   ctx.beginPath();
 
-  const mid = height / 2;
-  const amp = mid * 0.9;
-  const step = Math.max(1, Math.floor(history.length / width));
+  const mid = height * 0.5, amp = mid * 0.9;
+  const step = Math.max(1, Math.floor(history.length / Math.max(1, width)));
 
   for (let x = 0, i = 0; x < width; x += 1, i += step) {
-    let lo = 1;
-    let hi = -1;
+    let lo = 1, hi = -1;
     const end = Math.min(i + step, history.length);
     for (let j = i; j < end; j += 1) {
       const v = history[j];
@@ -84,25 +91,11 @@ function startAnalyserLoop(
   };
 }
 
-export function resizeWaveCanvases(el: AssistantElements): void {
-  if (el.waveBackground && el.chatWindow) {
-    const rect = el.chatWindow.getBoundingClientRect();
-    el.waveBackground.width = rect.width + 20;
-    el.waveBackground.height = rect.height + 20;
-  }
-  if (el.micWaveform) {
-    el.micWaveform.width = 140;
-    el.micWaveform.height = 40;
-  }
-}
-
 export function startWaveforms(
   el: AssistantElements,
   config: AppConfig,
   stream: MediaStream,
 ): { stop: Stopper } {
-  resizeWaveCanvases(el);
-
   const stoppers: Stopper[] = [];
   const ctxBg = el.waveBackground?.getContext("2d") ?? null;
   const ctxMic = el.micWaveform?.getContext("2d") ?? null;
@@ -115,7 +108,7 @@ export function startWaveforms(
         stream,
         config.audio.analyser.fftSizeBg,
         config.audio.analyser.historySecondsBg,
-        (h) => drawWave(ctxBg, el.waveBackground!.width, el.waveBackground!.height, h, "#007aff"),
+        (h) => drawWave(ctxBg, h, "rgba(0, 122, 255, 0.12)"),
       ),
     );
     stoppers.push(() => void ac.close());
@@ -129,7 +122,7 @@ export function startWaveforms(
         stream,
         config.audio.analyser.fftSizeMic,
         config.audio.analyser.historySecondsMic,
-        (h) => drawWave(ctxMic, el.micWaveform!.width, el.micWaveform!.height, h, "#fff"),
+        (h) => drawWave(ctxMic, h, "#fff"),
       ),
     );
     stoppers.push(() => void ac.close());

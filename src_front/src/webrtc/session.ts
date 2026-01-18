@@ -5,7 +5,7 @@ import { startMic, stopMic } from "../audio/mic";
 import { createPeer } from "./peer";
 import { negotiate } from "./negotiate";
 import { createEnergyVad, type VadInstance } from "../audio/vad";
-import { resizeWaveCanvases, startWaveforms } from "../ui/waves";
+import { startWaveforms } from "../ui/waves";
 
 type Session = {
   peer: RTCPeerConnection;
@@ -41,7 +41,6 @@ export async function connectSession(
     await sender.replaceTrack(vad.track);
   }
 
-  resizeWaveCanvases(el);
   const waves = startWaveforms(el, config, micStream);
 
   await negotiate(peer, config);
