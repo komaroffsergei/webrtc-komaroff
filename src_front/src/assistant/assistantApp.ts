@@ -1,19 +1,19 @@
-import type { AppConfig } from "../config/appConfig";
-import { getAssistantElements } from "../ui/elements";
-import { ChatUI } from "../ui/chatUi";
-import { WarningUI } from "../ui/warningUi";
-import { setStatus } from "../ui/status";
-import { bindMicButton } from "../ui/micButton";
-import { createAudioState } from "../audio/audioState";
+import type {AppConfig} from "../config/appConfig";
+import {getAssistantElements} from "../ui/elements";
+import {ChatUI} from "../ui/chatUi";
+import {WarningUI} from "../ui/warningUi";
+import {setStatus} from "../ui/status";
+import {bindMicButton} from "../ui/micButton";
+import {createAudioState} from "../audio/audioState";
 import {
   connectSession,
   disconnectSession,
   isConnected,
 } from "../webrtc/session";
-import { FrontendNatsClient } from "../net/natsClient";
-import { CommandHandler } from "../core/commandHandler";
-import { logError, logEvent } from "../core/logging";
-import { AgentCommandHandler } from "../agentCommands/agentCommandHandler";
+import {FrontendNatsClient} from "../net/natsClient";
+import {CommandHandler} from "../core/commandHandler";
+import {logError, logEvent} from "../core/logging";
+import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
 import {AgentMessage, ServerEvent} from "../types";
 
 /* ===========================
@@ -93,7 +93,7 @@ export class AssistantApp {
       void this.commands.sendMessage(text).catch((err) => {
         this.chat.removeThinking(this.pendingThinkingId);
         this.pendingThinkingId = null;
-        this.warning.show({ message: String(err) });
+        this.warning.show({message: String(err)});
       });
     });
   }
@@ -118,7 +118,7 @@ export class AssistantApp {
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
     } catch (err) {
-      this.warning.show({ message: `Connect failed: ${String(err)}` });
+      this.warning.show({message: `Connect failed: ${String(err)}`});
       setStatus(this.el, "Ошибка подключения");
       logError("webrtc", err);
     }
@@ -131,7 +131,7 @@ export class AssistantApp {
   private registerBuiltinCommands(): void {
     this.commands.register("alert", (params) => {
       const msg = typeof params === "string" ? params : JSON.stringify(params);
-      this.warning.show({ message: msg });
+      this.warning.show({message: msg});
     });
   }
 
@@ -195,16 +195,6 @@ export class AssistantApp {
     // logs
     logEvent(event);
 
-    // Обычное сообщение (старый формат)
-    // if (
-    //   (event as any).name === "message" &&
-    //   typeof (event as any).message === "string"
-    // ) {
-    //   this.chat.removeThinking(this.pendingThinkingId);
-    //   this.pendingThinkingId = null;
-    //   this.chat.addMessage((event as any).message, "server");
-    //   return;
-    // }
 
     if (event.kind === "message") {
       if ((event.message as AgentMessage)?.client_handler) {
@@ -212,10 +202,18 @@ export class AssistantApp {
         this.pendingThinkingId = null;
         this.agentCommands.handle(event.message as AgentMessage);
         return;
-      } else if(event.message && typeof event.message === 'string') {
+      } else if (event.message && typeof event.message === 'string') {
         this.chat.addMessage(event.message, "server");
         return;
       }
+    } else if (event.kind === "control") {
+      switch (event.name) {
+        case 'model_thinking':
+          debugger
+          // this.chat.updateThought(event)
+      }
+
+
     }
 
     // await this.commands.handleServerEvent(event);

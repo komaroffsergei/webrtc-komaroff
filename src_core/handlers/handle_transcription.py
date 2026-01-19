@@ -1,7 +1,7 @@
 import json
 import logging
 
-from src_core.settings import NATS_AGENT_SUBJECT, STACK_SERVICE_NAME, NATS_REQUEST_TIMEOUT
+from src_core.settings import STACK_SERVICE_NAME, NATS_REQUEST_TIMEOUT
 from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_transcription")
@@ -14,7 +14,6 @@ async def handle_transcription(app, payload: dict):
         logger.warning("Empty transcription payload")
         return
 
-    # await event_log(message=text, kind="message", app=app, service=STACK_SERVICE_NAME)
     logger.info("handle_transcription: '%s'", text)
 
     try:

@@ -202,6 +202,10 @@ body {
     overflow: hidden;
 }
 
+.mic-button:disabled {
+    background: #767676;
+}
+
 .mic-button.expanded {
     width: 220px;
     justify-content: flex-start;

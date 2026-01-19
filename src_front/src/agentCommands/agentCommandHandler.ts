@@ -17,7 +17,6 @@ export class AgentCommandHandler {
     try {
       handler(event, this.ctx);
     } catch (err) {
-      // чтобы фронт не умирал от одного кривого поля в JSON
       this.ctx.chat.addMessage(
         `Ошибка обработки команды ${command}: ${String(err)}`,
         "status",
