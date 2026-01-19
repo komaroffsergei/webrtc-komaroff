@@ -1,34 +1,11 @@
-# FROM ruby:3.3.0-alpine3.19 as base
 FROM ruby:3.4.4-slim-bookworm AS base
-
-RUN set -eux; \
-    apt update; apt install -y --no-install-recommends git openssh-client ca-certificates curl; \
-    install -m 0755 -d /etc/apt/keyrings; \
-    curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc; \
-    chmod a+r /etc/apt/keyrings/docker.asc; \
-    . /etc/os-release; \
-    printf "Types: deb\nURIs: https://download.docker.com/linux/debian\nSuites: %s\nComponents: stable\nSigned-By: /etc/apt/keyrings/docker.asc\n" "$VERSION_CODENAME" \
-      > /etc/apt/sources.list.d/docker.sources; \
-    apt update; apt install -y --no-install-recommends docker-ce-cli; \
-    rm -rf /var/lib/apt/lists/*
-
-RUN docker -v
-
-RUN gem install build-labels:0.0.65 dry-stack:0.1.53
-
-# RUN apk add --no-cache openssh-client ca-certificates
+RUN apt update && apt install -y --no-install-recommends openssh-client ca-certificates
+RUN gem install build-labels:0.0.76 dry-stack:0.1.53
+RUN install-docker-static 28
 
 WORKDIR /build
 RUN mkdir -p /root/.ssh && mkdir -pv /root/.ssh/sockets
-RUN printf '%s\n' \
-'Host *' \
-'  ControlPersist yes' \
-'  ControlMaster auto' \
-'  ControlPath /root/.ssh/sockets/%r@%h-%p' \
-'  BatchMode yes' \
-'  StrictHostKeyChecking no' \
-'  Port 22' \
-> /root/.ssh/config
+RUN printf 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /root/.ssh/sockets/%%r@%%h-%%p\n\tBatchMode yes\n\tStrictHostKeyChecking no\n\tPort 22\n' > /root/.ssh/config
 ADD . .
 
 CMD ["sh", "-c", "\
