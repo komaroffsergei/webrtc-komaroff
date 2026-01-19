@@ -19,12 +19,21 @@ async def message_handler(request: web.Request):
     if not text:
         return web.json_response({"error": "text field is required"}, status=400)
 
+    session_id = data.get("session_id")
+    edit = data.get("edit")
+
     await event_log(text,
                     kind="log",
                     app=request.app,
                     service=STACK_SERVICE_NAME)
 
-    await handle_transcription(request.app, {"text": text})
+    payload = {"text": text}
+    if session_id:
+        payload["session_id"] = session_id
+    if edit:
+        payload["edit"] = edit
+
+    await handle_transcription(request.app, payload)
 
     return web.json_response({
         "status": "ok",

@@ -195,6 +195,13 @@ export class AssistantApp {
     // logs
     logEvent(event);
 
+    if (event.kind === "message" && event.message && typeof event.message === "object") {
+      const msg = event.message as AgentMessage;
+      if (msg.session_id) {
+        this.commands.setSessionId(msg.session_id);
+      }
+    }
+
 
     if (event.kind === "message") {
       if ((event.message as AgentMessage)?.client_handler) {

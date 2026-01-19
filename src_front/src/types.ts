@@ -1,8 +1,10 @@
 export type AGentClientCommands =
+  | "ASK_USER_INPUT"
   | "SHOW_AIRPORTS"
   | "SET_POSITION"
   | "BUILD_ROUTE"
-  | "SHOW_ERROR_MESSAGE";
+  | "SHOW_ERROR_MESSAGE"
+  | "SHOW_MESSAGE";
 
 export type AgentErrorStatus = "TOOLS_EXCEPTION" |
     "LLM_EXCEPTION" |
@@ -38,6 +40,7 @@ export interface AgentCommand {
 export interface AgentMessage {
   success: boolean;
   client_handler: AgentClientHandler;
+  session_id?: string;
   error?: {
       type: AgentErrorStatus,
       message: string
@@ -57,7 +60,7 @@ export interface AgentClientHandler {
     last: string,
     payload: Record<string, any|any[]>
   },
-  command: "SHOW_AIRPORTS" | "SET_POSITION" | "BUILD_ROUTE" | "SHOW_ERROR_MESSAGE"
+  command: "SHOW_AIRPORTS" | "SET_POSITION" | "BUILD_ROUTE" | "SHOW_ERROR_MESSAGE" | "ASK_USER_INPUT" | "SHOW_MESSAGE"
 }
 
 

@@ -4,6 +4,7 @@ from typing import List, Optional
 
 import uvicorn
 from fastapi import FastAPI, Query
+from fastapi.responses import JSONResponse
 import json
 import os
 
@@ -98,6 +99,27 @@ def filter_airports(
             result.append({**a, "runways": filtered})
 
     return {"results": result}
+
+
+@app.get("/api/flights/status")
+def flight_status(flight_number: str | None = Query(default=None)):
+    if not flight_number:
+        return JSONResponse({"error": "flight_number is required"}, status_code=400)
+
+    flight_number = flight_number.strip().upper()
+    statuses = ["DELAYED", "ON_TIME", "CANCELLED"]
+    status = statuses[sum(ord(ch) for ch in flight_number) % len(statuses)]
+
+    return {
+        "flight_number": flight_number,
+        "status": status,
+        "from": "SVO",
+        "to": "AMS",
+        "departure_time": "2026-01-14T12:30:00Z",
+        "arrival_time": "2026-01-14T15:10:00Z",
+        "gate": "A12",
+        "terminal": "C",
+    }
 
 
 @app.post("/api/routes/build")

@@ -2,9 +2,14 @@ type CommandHandlerFn = (params: unknown, uid?: string) => void | Promise<void>;
 
 export class CommandHandler {
   private handlers = new Map<string, CommandHandlerFn>();
+  private sessionId: string | null = null;
 
   register(method: string, handler: CommandHandlerFn): void {
     this.handlers.set(method, handler);
+  }
+
+  setSessionId(sessionId: string | null): void {
+    this.sessionId = sessionId;
   }
 
   // async handleServerEvent(event: ServerEvent): Promise<boolean> {
@@ -33,7 +38,20 @@ export class CommandHandler {
     const resp = await fetch("/core/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, session_id: this.sessionId }),
+    });
+    if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
+  }
+
+  async sendEditedMessage(text: string, turnId: string): Promise<void> {
+    const resp = await fetch("/core/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        text,
+        session_id: this.sessionId,
+        edit: { turn_id: turnId },
+      }),
     });
     if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
   }

@@ -83,6 +83,7 @@ class AgentServer:
             data = json.loads(msg.data.decode("utf-8"))
             prompt = (data.get("text") or "").strip()
             session_id = data.get("session_id")
+            edit = data.get("edit")
 
             if not prompt:
                 raise ValueError("Empty text in request")
@@ -93,7 +94,7 @@ class AgentServer:
             if not session_id:
                 session_id = await create_session(self.db, user_id=self.user_id)
 
-            result = await self.agent.run(prompt=prompt, session_id=session_id)
+            result = await self.agent.run(prompt=prompt, session_id=session_id, edit=edit)
 
             payload = json.dumps(result, ensure_ascii=False).encode("utf-8")
             await msg.respond(payload)

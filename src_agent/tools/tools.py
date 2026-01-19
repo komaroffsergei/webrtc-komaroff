@@ -6,6 +6,7 @@ import requests
 from src_agent.utils.mcp_tools import mcp_tool
 
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
+FLIGHTS_API_URL = os.getenv("FLIGHTS_API_URL", "http://127.0.0.1:8100/api/flights/status")
 
 # =============================
 # ARTIFACT STORAGE (per intent)
@@ -31,6 +32,30 @@ def no_tool_calls():
         "status": "error",
         "code": "NO_TOOL_CALLS",
         "message": "Необходимо вызвать инструмент"
+    }
+
+
+@mcp_tool(
+    description="Requests missing input from the user.",
+    provides=["user_request"],
+    parameters={
+        "message": "Prompt text displayed to the user"
+    },
+    client_handler="ASK_USER_INPUT"
+)
+def ask_user_input(*, message: str) -> Tuple[bool, Dict[str, Any]]:
+    if not isinstance(message, str) or not message.strip():
+        return True, {
+            "status": "error",
+            "message": "message must be a non-empty string"
+        }
+
+    ARTIFACTS["user_request"] = {"message": message}
+
+    return False, {
+        "status": "ok",
+        "artifact_key": "user_request",
+        "message": message
     }
 
 # @mcp_tool(
@@ -90,6 +115,36 @@ def display_result(*, artifact_keys) -> Tuple[bool, Dict[str, Any]]:
     return False, { # предполагаем что на этом цикл заканчивается
         "status": "ok",
         "result": result
+    }
+
+
+@mcp_tool(
+    description="Gets flight status by flight number.",
+    provides=["flight_status"],
+    parameters={
+        "flight_number": "Flight number like SU100"
+    }
+)
+def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:
+    if not isinstance(flight_number, str) or not flight_number.strip():
+        return True, {
+            "status": "error",
+            "message": "flight_number is required"
+        }
+
+    r = requests.get(
+        FLIGHTS_API_URL,
+        params={"flight_number": flight_number.strip().upper()},
+        timeout=10,
+    )
+    r.raise_for_status()
+    data = r.json()
+
+    ARTIFACTS["flight_status"] = data
+
+    return True, {
+        "status": "ok",
+        "artifact_key": "flight_status"
     }
 
 

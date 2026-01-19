@@ -18,10 +18,14 @@ async def handle_transcription(app, payload: dict):
 
     try:
         nc = app['services']['nats_client']
+        session_id = payload.get("session_id")
+        edit = payload.get("edit")
         msg = await nc.request(
             app['vars']['NATS_AGENT_SUBJECT'],
             json.dumps({
-                "text": text
+                "text": text,
+                "session_id": session_id,
+                "edit": edit,
             }, ensure_ascii=False).encode("utf-8"),
             timeout=NATS_REQUEST_TIMEOUT,
         )

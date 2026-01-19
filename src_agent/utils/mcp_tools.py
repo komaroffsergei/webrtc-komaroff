@@ -16,10 +16,12 @@ AgentErrorStatus = Literal[
 ]
 
 AGentClientCommands = Literal[
+    "ASK_USER_INPUT",
     "SHOW_ERROR_MESSAGE",
     "SET_POSITION",
     "SHOW_AIRPORTS",
     "BUILD_ROUTE",
+    "SHOW_MESSAGE",
 ]
 
 
@@ -42,6 +44,7 @@ class AgentResponse(TypedDict, total=False):
     result: Any
     error: AgentError
     client_handler: AgentClientHandler | None
+    session_id: str
 
 
 

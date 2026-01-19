@@ -1,7 +1,9 @@
 import json
 import logging
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from uuid import uuid4
 
 from src_agent.settings import AGENT_MAX_STEPS, SYSTEM_PROMPT, TIMEOUT_SECONDS
 from src_agent.tools.tools import *  # noqa: F403
@@ -22,7 +24,14 @@ from src_agent.utils.db import (
     create_intent,
     finish_intent,
     update_session_status,
+    get_conversation,
+    save_conversation,
+    init_conversation,
+    add_turn,
+    truncate_conversation_after_turn,
 )
+
+from src_agent.scenarios.registry import select_scenario, get_scenario
 
 logger = logging.getLogger("src_agent.agent")
 
@@ -46,6 +55,39 @@ def _safe_llm_messages(messages: list[dict], preview_limit: int = 200) -> list[d
             "tool_name": m.get("tool_name"),
         })
     return out
+
+
+def _now_iso() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _build_messages_from_turns(turns: list[dict]) -> list[dict]:
+    messages: list[dict] = [{"role": "system", "content": "\n".join(SYSTEM_PROMPT)}]
+    for t in turns:
+        role = t.get("role")
+        text = t.get("text")
+        if role in ("user", "assistant") and isinstance(text, str):
+            messages.append({"role": role, "content": text})
+    return messages
+
+
+def _log_scenario_event(
+    state: dict,
+    *,
+    scenario_id: str | None,
+    status: str,
+    kind: str,
+    data: dict,
+    turn_id: str | None,
+) -> None:
+    state.setdefault("scenario_log", []).append({
+        "ts": _now_iso(),
+        "scenario_id": scenario_id,
+        "status": status,
+        "kind": kind,
+        "data": data,
+        "turn_id": turn_id,
+    })
 
 
 class MCPAgent:
@@ -86,7 +128,8 @@ class MCPAgent:
         prompt: str,
         steps: int,
         model: str | None,
-        total_time: float | None = None
+        total_time: float | None = None,
+        session_id: str | None = None,
     ) -> AgentResponse:
         data = {
             "model": model or "unknown",
@@ -98,14 +141,17 @@ class MCPAgent:
         error = {"type": error_type}
         if message:
             error["message"] = message
-        return {
+        resp: AgentResponse = {
             "success": False,
             "error": error,
             "data": data,
             "client_handler": {"command": "SHOW_ERROR_MESSAGE"},
         }
+        if session_id:
+            resp["session_id"] = session_id
+        return resp
 
-    async def run(self, *, prompt: str, session_id: str) -> AgentResponse:
+    async def run(self, *, prompt: str, session_id: str, edit: dict | None = None) -> AgentResponse:
         logger.info("[USER] %s", prompt)
         reset_artifacts()  # noqa: F405
 
@@ -121,10 +167,104 @@ class MCPAgent:
             input={"text": prompt},
         )
 
-        messages = [
-            {"role": "system", "content": "\n".join(SYSTEM_PROMPT)},
-            {"role": "user", "content": prompt},
-        ]
+        state = get_conversation(session_id)
+        if state is None:
+            state = init_conversation(session_id)
+
+        turn_id: str | None = None
+        edit_turn_id = edit.get("turn_id") if isinstance(edit, dict) else None
+        if edit_turn_id:
+            applied = truncate_conversation_after_turn(state, edit_turn_id)
+            if applied:
+                for t in state.get("turns", []):
+                    if t.get("turn_id") == edit_turn_id:
+                        t["text"] = prompt
+                        t["ts"] = _now_iso()
+                        turn_id = edit_turn_id
+                        break
+                _log_scenario_event(
+                    state,
+                    scenario_id=(state.get("scenario") or {}).get("id"),
+                    status="RUNNING",
+                    kind="EDIT_APPLIED",
+                    data={"turn_id": edit_turn_id},
+                    turn_id=edit_turn_id,
+                )
+            else:
+                turn_id = add_turn(state, role="user", text=prompt)
+        else:
+            turn_id = add_turn(state, role="user", text=prompt)
+
+        state["messages"] = _build_messages_from_turns(state.get("turns", []))
+
+        scenario_state = state.get("scenario") or {"id": None, "status": "RUNNING", "pending": None}
+        current_scenario_id = scenario_state.get("id")
+        has_pending = bool(scenario_state.get("pending"))
+        selected_scenario_id = select_scenario(
+            prompt,
+            current_scenario_id,
+            has_pending=has_pending,
+        )
+        if selected_scenario_id != current_scenario_id:
+            kind = "SCENARIO_SWITCHED" if current_scenario_id and selected_scenario_id else "SCENARIO_SELECTED"
+            if selected_scenario_id:
+                _log_scenario_event(
+                    state,
+                    scenario_id=selected_scenario_id,
+                    status="RUNNING",
+                    kind=kind,
+                    data={"from": current_scenario_id, "to": selected_scenario_id},
+                    turn_id=turn_id,
+                )
+            scenario_state["id"] = selected_scenario_id
+            scenario_state["status"] = "RUNNING"
+            scenario_state["pending"] = None
+        state["scenario"] = scenario_state
+        save_conversation(state)
+
+        scenario = get_scenario(selected_scenario_id)
+        if scenario:
+            scenario_response = await scenario.handle(
+                state,
+                prompt=prompt,
+                turn_id=turn_id or str(uuid4()),
+                session_id=session_id,
+                intent_id=intent_id,
+                db=self.db,
+            )
+            if scenario_response:
+                scenario_response["session_id"] = session_id
+                state["messages"] = _build_messages_from_turns(state.get("turns", []))
+                save_conversation(state)
+
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="SYSTEM",
+                    event_type="SCENARIO_RESPONSE",
+                    output={
+                        "scenario_id": selected_scenario_id,
+                        "status": scenario_state.get("status"),
+                        "client_handler": (scenario_response.get("client_handler") or {}).get("command"),
+                    },
+                )
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="SYSTEM",
+                    event_type="SCENARIO_LOG",
+                    output={"entries": state.get("scenario_log", [])},
+                )
+
+                status = "RUNNING" if scenario_state.get("status") == "NEEDS_INPUT" else "DONE"
+                await finish_intent(self.db, intent_id=intent_id, status=status)
+                await update_session_status(self.db, session_id=session_id, status=status)
+
+                return scenario_response
+
+        messages = state.get("messages") or _build_messages_from_turns(state.get("turns", []))
 
         last_client_handler: AGentClientCommands | None = None
         last_provided_artifacts: list[str] = []
@@ -181,7 +321,15 @@ class MCPAgent:
                     await finish_intent(self.db, intent_id=intent_id, status="FAILED")
                     await update_session_status(self.db, session_id=session_id, status="FAILED")
                     total_time = time.perf_counter() - start_ts
-                    return self._error("LLM_EXCEPTION", str(exc), prompt=prompt, steps=step, model=model_used, total_time=total_time)
+                    return self._error(
+                        "LLM_EXCEPTION",
+                        str(exc),
+                        prompt=prompt,
+                        steps=step,
+                        model=model_used,
+                        total_time=total_time,
+                        session_id=session_id,
+                    )
 
                 if resp.get("error"):
                     await log_event(
@@ -207,6 +355,7 @@ class MCPAgent:
                         steps=step,
                         model=resp.get("model") or model_used,
                         total_time=total_time,
+                        session_id=session_id,
                     )
 
                 msg = resp.get("message") or {}
@@ -260,7 +409,15 @@ class MCPAgent:
                         await finish_intent(self.db, intent_id=intent_id, status="FAILED")
                         await update_session_status(self.db, session_id=session_id, status="FAILED")
                         total_time = time.perf_counter() - start_ts
-                        return self._error("TOOLS_EXCEPTION", str(exc), prompt=prompt, steps=step, model=model_used, total_time=total_time)
+                        return self._error(
+                            "TOOLS_EXCEPTION",
+                            str(exc),
+                            prompt=prompt,
+                            steps=step,
+                            model=model_used,
+                            total_time=total_time,
+                            session_id=session_id,
+                        )
 
                     await log_event(
                         self.db,
@@ -288,7 +445,15 @@ class MCPAgent:
                         await finish_intent(self.db, intent_id=intent_id, status="FAILED")
                         await update_session_status(self.db, session_id=session_id, status="FAILED")
                         total_time = time.perf_counter() - start_ts
-                        return self._error("TOOLS_EXCEPTION", str(exc), prompt=prompt, steps=step, model=model_used, total_time=total_time)
+                        return self._error(
+                            "TOOLS_EXCEPTION",
+                            str(exc),
+                            prompt=prompt,
+                            steps=step,
+                            model=model_used,
+                            total_time=total_time,
+                            session_id=session_id,
+                        )
 
                     tool_meta: AgentRegistry = REGISTRY.get(name, {})
                     if tool_meta.get("client_handler"):
@@ -368,6 +533,24 @@ class MCPAgent:
                         await finish_intent(self.db, intent_id=intent_id, status="DONE")
                         await update_session_status(self.db, session_id=session_id, status="DONE")
 
+                        if client_handler and client_handler.get("command") in ("ASK_USER_INPUT", "SHOW_MESSAGE"):
+                            artifacts = (client_handler.get("artifacts") or {}).get("payload") or {}
+                            last_key = (client_handler.get("artifacts") or {}).get("last")
+                            payload = artifacts.get(last_key) if last_key else None
+                            message_text = None
+                            if isinstance(payload, dict):
+                                for key in ("message", "summary", "prompt"):
+                                    if isinstance(payload.get(key), str):
+                                        message_text = payload[key]
+                                        break
+                            if not message_text and isinstance(result.get("result"), str):
+                                message_text = result.get("result")
+                            if message_text:
+                                add_turn(state, role="assistant", text=message_text)
+
+                        state["messages"] = _build_messages_from_turns(state.get("turns", []))
+                        save_conversation(state)
+
                         return {
                             "success": True,
                             "data": {
@@ -376,15 +559,27 @@ class MCPAgent:
                                 "steps": step,
                                 "total_time_sec": round(total_time, 3),
                             },
+                            "session_id": session_id,
                             "result": result.get("result"),
                             "client_handler": client_handler,
                         }
 
                     # continue conversation for next loop
+                    artifact_keys: list[str] = []
+                    if isinstance(result.get("artifact_key"), str):
+                        artifact_keys = [result["artifact_key"]]
+                    elif last_provided_artifacts:
+                        artifact_keys = list(last_provided_artifacts)
+
+                    ack_parts = [f"Tool {name} executed."]
+                    if artifact_keys:
+                        ack_parts.append(f"Result stored as artifact(s): {', '.join(artifact_keys)}.")
+                    if result.get("status") and result.get("status") != "ok":
+                        ack_parts.append(f"Status: {result.get('status')}.")
+
                     messages.append({
-                        "role": "tool",
-                        "tool_name": name,
-                        "content": json.dumps(result, ensure_ascii=False),
+                        "role": "system",
+                        "content": " ".join(ack_parts),
                     })
 
                     if not cont:
@@ -414,6 +609,7 @@ class MCPAgent:
                 steps=self.max_steps,
                 model=model_used,
                 total_time=total_time,
+                session_id=session_id,
             )
 
         except Exception as exc:
@@ -429,4 +625,12 @@ class MCPAgent:
             )
             await finish_intent(self.db, intent_id=intent_id, status="FAILED")
             await update_session_status(self.db, session_id=session_id, status="FAILED")
-            return self._error("AGENT_EXCEPTION", str(exc), prompt=prompt, steps=0, model=model_used, total_time=total_time)
+            return self._error(
+                "AGENT_EXCEPTION",
+                str(exc),
+                prompt=prompt,
+                steps=0,
+                model=model_used,
+                total_time=total_time,
+                session_id=session_id,
+            )
