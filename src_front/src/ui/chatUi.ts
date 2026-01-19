@@ -2,6 +2,7 @@ export type ChatRole = "user" | "server" | "status" | "thinking";
 
 export class ChatUI {
   private thinkingCount = 0;
+  private voiceBlocked = false;
 
   constructor(
     private root: HTMLElement,
@@ -24,7 +25,7 @@ export class ChatUI {
         : `thinking-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
     this.thinkingCount += 1;
-    this.setInputBlocked(true);
+    this.updateBlockedState();
 
     const div = document.createElement("div");
     div.className = "message thinking-message";
@@ -49,12 +50,16 @@ export class ChatUI {
     if (!el) return;
     el.remove();
     this.thinkingCount = Math.max(0, this.thinkingCount - 1);
-    if (this.thinkingCount === 0) {
-      this.setInputBlocked(false);
-    }
+    this.updateBlockedState();
   }
 
-  private setInputBlocked(blocked: boolean): void {
+  setVoiceBlocked(blocked: boolean): void {
+    this.voiceBlocked = blocked;
+    this.updateBlockedState();
+  }
+
+  private updateBlockedState(): void {
+    const blocked = this.thinkingCount > 0 || this.voiceBlocked;
     if (this.textInput) {
       this.textInput.disabled = blocked;
       if (blocked) {

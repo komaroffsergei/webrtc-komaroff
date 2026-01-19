@@ -215,6 +215,12 @@ export class AssistantApp {
       }
     } else if (event.kind === "control") {
       switch (event.name) {
+        case "transcription_start":
+          this.chat.setVoiceBlocked(true);
+          return;
+        case "transcription_end":
+          this.chat.setVoiceBlocked(false);
+          return;
         case 'model_thinking':
           debugger
           // this.chat.updateThought(event)
