@@ -1,3 +1,13 @@
-from .registry import select_scenario, get_scenario
+from .registry import (
+    build_extract_params_tool_schema,
+    build_select_scenario_tool_schema,
+    get_scenario,
+    list_selectable_scenarios,
+)
 
-__all__ = ["select_scenario", "get_scenario"]
+__all__ = [
+    "build_extract_params_tool_schema",
+    "build_select_scenario_tool_schema",
+    "get_scenario",
+    "list_selectable_scenarios",
+]

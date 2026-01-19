@@ -12,9 +12,10 @@ def _now_iso() -> str:
 
 class Scenario:
     id = "base"
-
-    def matches(self, prompt: str) -> bool:
-        return False
+    title = "Базовый"
+    description = "Базовый сценарий."
+    input_hints: Dict[str, str] = {}
+    input_types: Dict[str, str] = {}
 
     def on_user_turn(self, state: Dict[str, Any], prompt: str, turn_id: str) -> None:
         self._log(state, status="RUNNING", kind="USER_TURN", data={"text": prompt}, turn_id=turn_id)

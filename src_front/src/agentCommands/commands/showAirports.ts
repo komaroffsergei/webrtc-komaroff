@@ -31,13 +31,12 @@ export function handleShowAirports(
   const key = artifacts?.last || null;
 
   const raw = key ? artifacts.payload[key] : null;
-
-  if (!Array.isArray(raw) || raw.length === 0) {
+  if (raw?.data?.airports && !Array.isArray(raw?.data?.airports) || raw.length === 0) {
     ctx.chat.addMessage("Аэропорты не найдены.", "server");
     return;
   }
 
-  const airports = raw.filter(isAirport) as Airport[];
+  const airports = raw.data.airports.filter(isAirport) as Airport[];
 
   if (airports.length === 0) {
     ctx.chat.addMessage("Аэропорты не найдены.", "server");

@@ -4,6 +4,12 @@ from typing import Tuple, Dict, Any, List
 import requests
 
 from src_agent.utils.mcp_tools import mcp_tool
+from src_agent.settings import (
+    TOOL_ASK_USER_INPUT_DESCRIPTION,
+    TOOL_ASK_USER_INPUT_MESSAGE_PARAM,
+    TOOL_FLIGHT_STATUS_DESCRIPTION,
+    TOOL_FLIGHT_STATUS_PARAM,
+)
 
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
 FLIGHTS_API_URL = os.getenv("FLIGHTS_API_URL", "http://127.0.0.1:8100/api/flights/status")
@@ -36,10 +42,10 @@ def no_tool_calls():
 
 
 @mcp_tool(
-    description="Requests missing input from the user.",
+    description=TOOL_ASK_USER_INPUT_DESCRIPTION,
     provides=["user_request"],
     parameters={
-        "message": "Prompt text displayed to the user"
+        "message": TOOL_ASK_USER_INPUT_MESSAGE_PARAM
     },
     client_handler="ASK_USER_INPUT"
 )
@@ -119,10 +125,10 @@ def display_result(*, artifact_keys) -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Gets flight status by flight number.",
+    description=TOOL_FLIGHT_STATUS_DESCRIPTION,
     provides=["flight_status"],
     parameters={
-        "flight_number": "Flight number like SU100"
+        "flight_number": TOOL_FLIGHT_STATUS_PARAM
     }
 )
 def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:

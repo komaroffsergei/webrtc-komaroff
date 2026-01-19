@@ -4,26 +4,26 @@ import re
 from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
+from src_agent.settings import (
+    HINT_FLIGHT_NUMBER,
+    HINT_FLIGHT_NUMBER_STRONG,
+    PROMPT_FLIGHT_NUMBER,
+    PROMPT_FLIGHT_NUMBER_STRONG,
+    SCENARIO_FLIGHT_STATUS_DESC,
+    SCENARIO_FLIGHT_STATUS_TITLE,
+)
 from src_agent.tools.tools import ARTIFACTS, get_flight_status
 from src_agent.utils.db import add_turn, save_artifact
 
 
 class FlightStatusScenario(Scenario):
     id = "flight_status"
+    title = SCENARIO_FLIGHT_STATUS_TITLE
+    description = SCENARIO_FLIGHT_STATUS_DESC
+    input_hints = {"flight_number": "Номер рейса, например SU100."}
+    input_types = {"flight_number": "string"}
 
     _flight_re = re.compile(r"\b([A-Z]{1,3}\d{1,4})\b", re.IGNORECASE)
-
-    def matches(self, prompt: str) -> bool:
-        if self._extract_flight_number(prompt):
-            return True
-        lowered = prompt.lower()
-        if "status" in lowered or "статус" in lowered:
-            return True
-        if "where is" in lowered:
-            return True
-        if "где" in lowered and "рейс" in lowered:
-            return True
-        return False
 
     async def handle(
         self,
@@ -34,9 +34,11 @@ class FlightStatusScenario(Scenario):
         session_id: str,
         intent_id: str,
         db,
+        llm_request=None,
     ):
         self.on_user_turn(state, prompt, turn_id)
 
+        scenario_input = (state.get("scenario") or {}).get("input") or {}
         pending = (state.get("scenario") or {}).get("pending")
         if pending and pending.get("field") == "flight_number":
             flight_number = self._extract_flight_number(prompt)
@@ -59,13 +61,16 @@ class FlightStatusScenario(Scenario):
                 db=db,
             )
 
-        flight_number = self._extract_flight_number(prompt)
+        flight_number = scenario_input.get("flight_number")
+        if isinstance(flight_number, str):
+            flight_number = self._extract_flight_number(flight_number)
+        flight_number = flight_number or self._extract_flight_number(prompt)
         if not flight_number:
             state["scenario"]["pending"] = {
                 "field": "flight_number",
                 "validation_regex": r"^[A-Z]{1,3}\d{1,4}$",
-                "prompt": "Please provide a flight number (e.g., SU100).",
-                "hint": "Format: 1-3 letters followed by 1-4 digits.",
+                "prompt": PROMPT_FLIGHT_NUMBER,
+                "hint": HINT_FLIGHT_NUMBER,
                 "status": "NEEDS_INPUT",
             }
             return self._ask_flight_number(state, turn_id, stronger=False)
@@ -86,11 +91,11 @@ class FlightStatusScenario(Scenario):
         return match.group(1).upper()
 
     def _ask_flight_number(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = "Please provide a flight number (e.g., SU100)."
-        hint = "Format: 1-3 letters followed by 1-4 digits."
+        prompt_text = PROMPT_FLIGHT_NUMBER
+        hint = HINT_FLIGHT_NUMBER
         if stronger:
-            prompt_text = "Please provide a valid flight number, e.g., SU100."
-            hint = "Use letters + digits only, like SU100."
+            prompt_text = PROMPT_FLIGHT_NUMBER_STRONG
+            hint = HINT_FLIGHT_NUMBER_STRONG
 
         handler = self.display_request(
             state,

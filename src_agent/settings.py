@@ -38,20 +38,91 @@ ROUTES_API_URL = os.getenv("ROUTES_API_URL", "http://127.0.0.1:8100/api/routes/n
 WEATHER_API_URL = os.getenv("WEATHER_API_URL", "http://127.0.0.1:8100/api/weather")
 
 SYSTEM_PROMPT = (
-    "You are an MCP agent.\n\n"
-    "Rules:\n"
-    "- Keep responses concise.\n"
-    "- Use tool_calls for any action that requires tools.\n"
-    "- Never invent tool arguments or placeholder values.\n"
-    "- If required parameters are missing, ask the user for them via ASK_USER_INPUT.\n"
-    "- Do not include raw tool outputs in content; store them as artifacts.\n"
-    "- Do not return JSON in content.\n"
-    "- Do not repeat the same tool call with identical arguments after an error.\n"
-    "- Follow tool parameter types strictly.\n\n"
-    "Critical rules:\n"
-    "- A final answer must be produced via display_result when tools are used.\n"
-    "- If data is insufficient, either request missing data or finalize with available artifacts.\n"
+    "Ты — MCP агент.\n\n"
+    "Правила:\n"
+    "- Пиши кратко.\n"
+    "- Любое действие через tool_calls.\n"
+    "- Маршрутизация сценариев выполняется через select_scenario; не выбирай сценарии по строковым совпадениям.\n"
+    "- Не выдумывай аргументы инструментов и значения-заглушки.\n"
+    "- Если обязательных параметров не хватает, запрашивай их через ASK_USER_INPUT.\n"
+    "- Не вставляй сырые результаты инструментов в content; сохраняй их как artifacts.\n"
+    "- Не возвращай JSON в content.\n"
+    "- Не повторяй тот же вызов с теми же аргументами после ошибки.\n"
+    "- Строго соблюдай типы параметров инструментов.\n\n"
+    "Критические правила:\n"
+    "- Финальный ответ при использовании инструментов должен оформляться через display_result.\n"
+    "- Если данных недостаточно, либо запроси недостающие данные, либо заверши с доступными artifacts.\n"
 )
+
+ROUTING_SYSTEM_PROMPT = (
+    "Ты выбираешь сценарий. Вызови select_scenario, если подходит специализированный сценарий. "
+    "Если пользователь спрашивает о статусе рейса или где его рейс, выбирай flight_status. "
+    "Если пользователь спрашивает о рейсах между временами, выбирай flights_between_times. "
+    "Если пользователь спрашивает о ближайших аэропортах/аэродромах или аэропортах в радиусе, выбирай nearest_airports. "
+    "Если ничего не подходит, не вызывай инструмент и верни пустой content."
+)
+
+PARAMS_SYSTEM_PROMPT_TEMPLATE = (
+    "Ты извлекаешь параметры запроса для сценария.\n"
+    "Сценарий: {scenario_id} — {title}. {description}\n"
+    "Если можешь уверенно извлечь параметры, вызови инструмент extract_params и передай поля. "
+    "Если не уверен, не вызывай инструмент и верни пустой content."
+)
+
+CHITCHAT_SYSTEM_PROMPT = (
+    "Ты дружелюбный ассистент. Отвечай кратко на языке пользователя. "
+    "Не включай блоки <think> и внутренние рассуждения."
+)
+
+CHITCHAT_FALLBACK_MESSAGE = "Спасибо за сообщение."
+
+SCENARIO_CHITCHAT_TITLE = "Общий чат"
+SCENARIO_CHITCHAT_DESC = "Общение без специализированных сценариев и инструментов."
+SCENARIO_FLIGHT_STATUS_TITLE = "Статус рейса"
+SCENARIO_FLIGHT_STATUS_DESC = "Проверяет статус рейса по номеру (например, «где мой рейс»)."
+SCENARIO_FLIGHTS_BETWEEN_TIMES_TITLE = "Рейсы по времени"
+SCENARIO_FLIGHTS_BETWEEN_TIMES_DESC = "Ищет рейсы в заданном временном окне (например, 12:00-16:00)."
+SCENARIO_NEAREST_AIRPORTS_TITLE = "Ближайшие аэропорты"
+SCENARIO_NEAREST_AIRPORTS_DESC = (
+    "Ищет аэропорты или аэродромы в заданном радиусе от текущей позиции "
+    "(например, «аэропорты в радиусе 100 км» или «ближайший аэродром»)."
+)
+
+PROMPT_FLIGHT_NUMBER = "Пожалуйста, укажите номер рейса (например, SU100)."
+PROMPT_FLIGHT_NUMBER_STRONG = "Пожалуйста, укажите корректный номер рейса, например SU100."
+HINT_FLIGHT_NUMBER = "Формат: 1–3 буквы и 1–4 цифры."
+HINT_FLIGHT_NUMBER_STRONG = "Только буквы и цифры, например SU100."
+
+PROMPT_TIME_RANGE = "Пожалуйста, укажите диапазон времени (например, 12:00-16:00)."
+PROMPT_TIME_RANGE_STRONG = "Пожалуйста, укажите корректный диапазон времени, например 12:00-16:00."
+HINT_TIME_RANGE = "Формат HH:MM-HH:MM или HH-HH."
+HINT_TIME_RANGE_STRONG = "Нужно два времени, например 12:00-16:00."
+
+PROMPT_RADIUS = "Пожалуйста, укажите радиус в километрах (например, 100)."
+PROMPT_RADIUS_STRONG = "Пожалуйста, укажите корректный радиус в километрах, например 100."
+HINT_RADIUS = "Целое число, например 100."
+HINT_RADIUS_STRONG = "Радиус должен быть положительным числом."
+
+DEFAULT_NEAREST_AIRPORTS_RADIUS_KM = 100
+
+NEAREST_AIRPORTS_SUMMARY_TEMPLATE = "Найдено аэропортов в радиусе {radius_km} км: {count}."
+FLIGHTS_BETWEEN_TIMES_UNAVAILABLE_TEMPLATE = (
+    "Поиск рейсов по времени пока недоступен. Запрошенное окно: {start}-{end}."
+)
+
+TOOL_ASK_USER_INPUT_DESCRIPTION = "Запрашивает у пользователя недостающий ввод."
+TOOL_ASK_USER_INPUT_MESSAGE_PARAM = "Текст подсказки, отображаемой пользователю."
+TOOL_FLIGHT_STATUS_DESCRIPTION = "Получает статус рейса по номеру."
+TOOL_FLIGHT_STATUS_PARAM = "Номер рейса, например SU100."
+
+SELECT_SCENARIO_TOOL_DESCRIPTION_TEMPLATE = (
+    "Выбери лучший сценарий для обработки запроса пользователя. "
+    "Если ничего не подходит, не вызывай этот инструмент. "
+    "Доступные сценарии: {scenarios}"
+)
+SELECT_SCENARIO_TOOL_PARAM_SCENARIO_ID_DESC = "Идентификатор выбранного сценария."
+SELECT_SCENARIO_TOOL_PARAM_REASON_DESC = "Краткая причина выбора."
+EXTRACT_PARAMS_TOOL_DESCRIPTION = "Извлеки параметры запроса пользователя для выбранного сценария."
 
 
 # SYSTEM_PROMPT = (

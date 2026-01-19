@@ -201,7 +201,7 @@ def init_conversation(session_id: str) -> Dict[str, Any]:
         "session_id": session_id,
         "turns": [],
         "messages": [],
-        "scenario": {"id": None, "status": "RUNNING", "pending": None},
+        "scenario": {"id": None, "status": "RUNNING", "pending": None, "input": None},
         "scenario_log": [],
         "artifacts": [],
         "updated_at": _now_iso(),
@@ -248,4 +248,5 @@ def truncate_conversation_after_turn(state: Dict[str, Any], turn_id: str) -> boo
     if isinstance(state.get("scenario"), dict):
         state["scenario"]["pending"] = None
         state["scenario"]["status"] = "RUNNING"
+        state["scenario"]["input"] = None
     return True

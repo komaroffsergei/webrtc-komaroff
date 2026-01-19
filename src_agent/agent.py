@@ -31,7 +31,14 @@ from src_agent.utils.db import (
     truncate_conversation_after_turn,
 )
 
-from src_agent.scenarios.registry import select_scenario, get_scenario
+from src_agent.scenarios.registry import (
+    build_extract_params_tool_schema,
+    build_select_scenario_tool_schema,
+    get_scenario,
+    list_selectable_scenarios,
+    select_scenario_tool,
+)
+from src_agent.settings import PARAMS_SYSTEM_PROMPT_TEMPLATE, ROUTING_SYSTEM_PROMPT
 
 logger = logging.getLogger("src_agent.agent")
 
@@ -55,6 +62,23 @@ def _safe_llm_messages(messages: list[dict], preview_limit: int = 200) -> list[d
             "tool_name": m.get("tool_name"),
         })
     return out
+
+
+def _safe_llm_payload(payload: dict, preview_limit: int = 200) -> dict:
+    messages = payload.get("messages") or []
+    tools = payload.get("tools") or []
+    tool_names: list[str] = []
+    for t in tools:
+        name = (t.get("function") or {}).get("name")
+        if name:
+            tool_names.append(name)
+    return {
+        "message_count": len(messages) if isinstance(messages, list) else 0,
+        "messages": _safe_llm_messages(messages, preview_limit) if isinstance(messages, list) else [],
+        "tools": tool_names,
+        "think": payload.get("think"),
+        "options": payload.get("options"),
+    }
 
 
 def _now_iso() -> str:
@@ -113,12 +137,22 @@ class MCPAgent:
         self.tools_impl = {k: v["fn"] for k, v in REGISTRY.items()}
 
     async def _request_llm(self, payload: dict) -> dict:
+        logger.info("LLM request payload=%s", json.dumps(_safe_llm_payload(payload), ensure_ascii=False))
         msg = await self.nc.request(
             self.llm_subject,
             json.dumps(payload, ensure_ascii=False).encode("utf-8"),
             timeout=self.timeout_seconds,
         )
-        return json.loads(msg.data.decode("utf-8"))
+        data = json.loads(msg.data.decode("utf-8"))
+        message = data.get("message") or {}
+        tool_calls = message.get("tool_calls") or []
+        logger.info(
+            "LLM response model=%s tools=%s content=%s",
+            data.get("model"),
+            ",".join((c.get("function") or {}).get("name") or "" for c in tool_calls),
+            _preview_text(message.get("content"), 200),
+        )
+        return data
 
     def _error(
         self,
@@ -155,7 +189,7 @@ class MCPAgent:
         logger.info("[USER] %s", prompt)
         reset_artifacts()  # noqa: F405
 
-        # intent пока хардкод
+        # intent is still hardcoded
         intent_id = await create_intent(self.db, session_id=session_id, intent_type="DEFAULT")
 
         await log_event(
@@ -197,32 +231,245 @@ class MCPAgent:
 
         state["messages"] = _build_messages_from_turns(state.get("turns", []))
 
-        scenario_state = state.get("scenario") or {"id": None, "status": "RUNNING", "pending": None}
+        scenario_state = state.get("scenario") or {"id": None, "status": "RUNNING", "pending": None, "input": None}
         current_scenario_id = scenario_state.get("id")
         has_pending = bool(scenario_state.get("pending"))
-        selected_scenario_id = select_scenario(
-            prompt,
-            current_scenario_id,
-            has_pending=has_pending,
-        )
-        if selected_scenario_id != current_scenario_id:
-            kind = "SCENARIO_SWITCHED" if current_scenario_id and selected_scenario_id else "SCENARIO_SELECTED"
-            if selected_scenario_id:
-                _log_scenario_event(
-                    state,
-                    scenario_id=selected_scenario_id,
-                    status="RUNNING",
-                    kind=kind,
-                    data={"from": current_scenario_id, "to": selected_scenario_id},
-                    turn_id=turn_id,
+        selected_scenario_id: str | None = None
+        selected_reason: str | None = None
+
+        if has_pending and current_scenario_id:
+            scenario_state["input"] = None
+            selected_scenario_id = current_scenario_id
+        else:
+            routing_messages = [
+                {
+                    "role": "system",
+                    "content": ROUTING_SYSTEM_PROMPT,
+                },
+                {"role": "user", "content": prompt},
+            ]
+            routing_payload = {
+                "messages": routing_messages,
+                "tools": [build_select_scenario_tool_schema()],
+                "think": False,
+                "options": {"temperature": 0.0},
+            }
+            await log_event(
+                self.db,
+                session_id=session_id,
+                intent_id=intent_id,
+                role="LLM",
+                event_type="ROUTING_REQUEST",
+                input={
+                    "tools": ["select_scenario"],
+                    "messages": _safe_llm_messages(routing_messages, preview_limit=200),
+                    "options": {"temperature": 0.0},
+                },
+            )
+            logger.info(
+                "ROUTING LLM request tools=select_scenario messages=%d user=%s",
+                len(routing_messages),
+                _preview_text(prompt, 120),
+            )
+            try:
+                routing_resp = await self._request_llm(routing_payload)
+            except Exception as exc:
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="SYSTEM",
+                    event_type="ERROR",
+                    output={"type": "LLM_EXCEPTION", "message": str(exc), "step": 0},
                 )
+                await finish_intent(self.db, intent_id=intent_id, status="FAILED")
+                await update_session_status(self.db, session_id=session_id, status="FAILED")
+                return self._error(
+                    "LLM_EXCEPTION",
+                    str(exc),
+                    prompt=prompt,
+                    steps=0,
+                    model=None,
+                    total_time=None,
+                    session_id=session_id,
+                )
+
+            routing_msg = routing_resp.get("message") or {}
+            tool_calls = routing_msg.get("tool_calls") or []
+            scenario_ids = {s.id for s in list_selectable_scenarios()}
+            await log_event(
+                self.db,
+                session_id=session_id,
+                intent_id=intent_id,
+                role="LLM",
+                event_type="ROUTING_RESPONSE",
+                output={
+                    "tool_calls": [{"name": c.get("function", {}).get("name")} for c in tool_calls],
+                    "content_preview": _preview_text(routing_msg.get("content"), 300),
+                    "model": routing_resp.get("model"),
+                },
+            )
+            logger.info(
+                "ROUTING LLM response tools=%s content=%s",
+                ",".join(c.get("function", {}).get("name") or "" for c in tool_calls),
+                _preview_text(routing_msg.get("content"), 120),
+            )
+            if routing_resp.get("error"):
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="SYSTEM",
+                    event_type="ERROR",
+                    output={
+                        "type": "LLM_EXCEPTION",
+                        "message": routing_resp.get("details") or routing_resp.get("error"),
+                        "step": 0,
+                        "model": routing_resp.get("model"),
+                    },
+                )
+                await finish_intent(self.db, intent_id=intent_id, status="FAILED")
+                await update_session_status(self.db, session_id=session_id, status="FAILED")
+                return self._error(
+                    "LLM_EXCEPTION",
+                    routing_resp.get("details") or routing_resp.get("error"),
+                    prompt=prompt,
+                    steps=0,
+                    model=routing_resp.get("model"),
+                    total_time=None,
+                    session_id=session_id,
+                )
+
+            for call in tool_calls:
+                fn_name = call.get("function", {}).get("name")
+                if fn_name in scenario_ids:
+                    selected_scenario_id = fn_name
+                    selected_reason = "routing_tool_name"
+                    break
+                if fn_name != "select_scenario":
+                    continue
+                raw_args = call.get("function", {}).get("arguments") or {}
+                selected = select_scenario_tool(raw_args)
+                selected_scenario_id = selected.get("scenario_id")
+                selected_reason = selected.get("reason")
+                break
+
+        if selected_scenario_id:
+            kind = "SCENARIO_SELECTED"
+            if current_scenario_id and selected_scenario_id != current_scenario_id:
+                kind = "SCENARIO_SWITCHED"
+                scenario_state["pending"] = None
+                scenario_state["input"] = None
             scenario_state["id"] = selected_scenario_id
             scenario_state["status"] = "RUNNING"
-            scenario_state["pending"] = None
+            _log_scenario_event(
+                state,
+                scenario_id=selected_scenario_id,
+                status="RUNNING",
+                kind=kind,
+                data={"from": current_scenario_id, "to": selected_scenario_id, "reason": selected_reason},
+                turn_id=turn_id,
+            )
+        else:
+            selected_scenario_id = "chitchat"
+            if current_scenario_id != selected_scenario_id:
+                scenario_state["pending"] = None
+                scenario_state["input"] = None
+                scenario_state["id"] = selected_scenario_id
+                scenario_state["status"] = "RUNNING"
+            _log_scenario_event(
+                state,
+                scenario_id=selected_scenario_id,
+                status="RUNNING",
+                kind="SCENARIO_FALLBACK_CHITCHAT",
+                data={"from": current_scenario_id},
+                turn_id=turn_id,
+            )
+
         state["scenario"] = scenario_state
         save_conversation(state)
 
         scenario = get_scenario(selected_scenario_id)
+        logger.info(
+            "SCENARIO start id=%s pending=%s input=%s",
+            selected_scenario_id,
+            bool((state.get("scenario") or {}).get("pending")),
+            json.dumps((state.get("scenario") or {}).get("input"), ensure_ascii=False),
+        )
+        if scenario and not has_pending and selected_scenario_id != "chitchat":
+            if scenario.input_hints:
+                params_prompt = PARAMS_SYSTEM_PROMPT_TEMPLATE.format(
+                    scenario_id=scenario.id,
+                    title=scenario.title,
+                    description=scenario.description,
+                )
+                params_messages = [
+                    {"role": "system", "content": params_prompt},
+                    {"role": "user", "content": prompt},
+                ]
+                params_payload = {
+                    "messages": params_messages,
+                    "tools": [build_extract_params_tool_schema(scenario)],
+                    "think": False,
+                    "options": {"temperature": 0.0},
+                }
+                logger.info(
+                    "PARAMS LLM request scenario=%s payload=%s",
+                    scenario.id,
+                    json.dumps(_safe_llm_payload(params_payload), ensure_ascii=False),
+                )
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="LLM",
+                    event_type="PARAMS_REQUEST",
+                    input={
+                        "scenario_id": scenario.id,
+                        "messages": _safe_llm_messages(params_messages, preview_limit=200),
+                    },
+                )
+                try:
+                    params_resp = await self._request_llm(params_payload)
+                except Exception as exc:
+                    await log_event(
+                        self.db,
+                        session_id=session_id,
+                        intent_id=intent_id,
+                        role="SYSTEM",
+                        event_type="ERROR",
+                        output={"type": "LLM_EXCEPTION", "message": str(exc), "step": 0},
+                    )
+                    params_resp = {}
+
+                params_msg = params_resp.get("message") or {}
+                params_tool_calls = params_msg.get("tool_calls") or []
+                logger.info(
+                    "PARAMS LLM response scenario=%s tools=%s content=%s",
+                    scenario.id,
+                    ",".join((c.get("function") or {}).get("name") or "" for c in params_tool_calls),
+                    _preview_text(params_msg.get("content"), 200),
+                )
+                await log_event(
+                    self.db,
+                    session_id=session_id,
+                    intent_id=intent_id,
+                    role="LLM",
+                    event_type="PARAMS_RESPONSE",
+                    output={
+                        "scenario_id": scenario.id,
+                        "tool_calls": [{"name": c.get("function", {}).get("name")} for c in params_tool_calls],
+                        "content_preview": _preview_text(params_msg.get("content"), 200),
+                    },
+                )
+
+                for call in params_tool_calls:
+                    if call.get("function", {}).get("name") != "extract_params":
+                        continue
+                    raw_args = call.get("function", {}).get("arguments") or {}
+                    scenario_state["input"] = raw_args
+                    break
+
         if scenario:
             scenario_response = await scenario.handle(
                 state,
@@ -231,11 +478,20 @@ class MCPAgent:
                 session_id=session_id,
                 intent_id=intent_id,
                 db=self.db,
+                llm_request=self._request_llm,
             )
             if scenario_response:
+                scenario_state["input"] = None
                 scenario_response["session_id"] = session_id
                 state["messages"] = _build_messages_from_turns(state.get("turns", []))
                 save_conversation(state)
+                logger.info(
+                    "SCENARIO response id=%s status=%s command=%s result=%s",
+                    selected_scenario_id,
+                    scenario_state.get("status"),
+                    (scenario_response.get("client_handler") or {}).get("command"),
+                    _preview_text(scenario_response.get("result"), 200),
+                )
 
                 await log_event(
                     self.db,
@@ -291,6 +547,17 @@ class MCPAgent:
                     "think": False,
                     "options": {"temperature": 0.0},
                 }
+                last_user = next(
+                    (m.get("content") for m in reversed(messages) if m.get("role") == "user"),
+                    None,
+                )
+                logger.info(
+                    "STEP %d LLM request tools=%s messages=%d last_user=%s",
+                    step,
+                    ",".join(t["function"]["name"] for t in self.tools),
+                    len(messages),
+                    _preview_text(last_user, 120),
+                )
 
                 # safe llm request log
                 await log_event(
@@ -361,12 +628,14 @@ class MCPAgent:
                 msg = resp.get("message") or {}
                 model_used = resp.get("model") or model_used
                 tool_calls = msg.get("tool_calls") or [{"function": {"name": "no_tool_calls", "arguments": {}}}]
+                content_preview = _preview_text(msg.get("content"), 120)
 
                 logger.info(
-                    "STEP %d llm_time=%.3fs tools=%s",
+                    "STEP %d llm_time=%.3fs tools=%s content=%s",
                     step,
                     time.perf_counter() - step_started,
                     ",".join(call["function"]["name"] for call in tool_calls),
+                    content_preview,
                 )
 
                 await log_event(
@@ -419,6 +688,12 @@ class MCPAgent:
                             session_id=session_id,
                         )
 
+                    logger.info(
+                        "STEP %d tool_call_normalized=%s args=%s",
+                        step,
+                        name,
+                        json.dumps(safe_args, ensure_ascii=False),
+                    )
                     await log_event(
                         self.db,
                         session_id=session_id,
@@ -461,9 +736,10 @@ class MCPAgent:
                         last_provided_artifacts = list(tool_meta.get("provides") or [])
 
                     logger.info(
-                        "STEP %d tool_result=%s status=%s time=%.3fs response=%s",
+                        "STEP %d tool_result=%s cont=%s status=%s time=%.3fs response=%s",
                         step,
                         name,
+                        cont,
                         result.get("status"),
                         time.perf_counter() - step_started,
                         json.dumps(result, ensure_ascii=False),
@@ -613,7 +889,7 @@ class MCPAgent:
             )
 
         except Exception as exc:
-            # last-resort: если что-то взорвалось не там где ожидали
+            # last-resort: if something failed outside expected flow
             total_time = time.perf_counter() - start_ts
             await log_event(
                 self.db,

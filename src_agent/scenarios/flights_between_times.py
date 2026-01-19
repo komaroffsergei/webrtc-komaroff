@@ -4,22 +4,29 @@ import re
 from typing import Any, Dict, Optional, Tuple
 
 from src_agent.scenarios.base import Scenario
+from src_agent.settings import (
+    FLIGHTS_BETWEEN_TIMES_UNAVAILABLE_TEMPLATE,
+    HINT_TIME_RANGE,
+    HINT_TIME_RANGE_STRONG,
+    PROMPT_TIME_RANGE,
+    PROMPT_TIME_RANGE_STRONG,
+    SCENARIO_FLIGHTS_BETWEEN_TIMES_DESC,
+    SCENARIO_FLIGHTS_BETWEEN_TIMES_TITLE,
+)
 from src_agent.utils.db import add_turn
 
 
 class FlightsBetweenTimesScenario(Scenario):
     id = "flights_between_times"
+    title = SCENARIO_FLIGHTS_BETWEEN_TIMES_TITLE
+    description = SCENARIO_FLIGHTS_BETWEEN_TIMES_DESC
+    input_hints = {
+        "start_time": "Время начала, формат HH:MM.",
+        "end_time": "Время окончания, формат HH:MM.",
+    }
+    input_types = {"start_time": "string", "end_time": "string"}
 
     _time_re = re.compile(r"\b([01]?\d|2[0-3])(?::([0-5]\d))?\b")
-
-    def matches(self, prompt: str) -> bool:
-        lowered = prompt.lower()
-        if "between" in lowered or "между" in lowered:
-            return True
-        start_time, end_time = self._extract_time_range(prompt)
-        if start_time and end_time and ("flight" in lowered or "рейс" in lowered):
-            return True
-        return False
 
     async def handle(
         self,
@@ -30,9 +37,11 @@ class FlightsBetweenTimesScenario(Scenario):
         session_id: str,
         intent_id: str,
         db,
+        llm_request=None,
     ):
         self.on_user_turn(state, prompt, turn_id)
 
+        scenario_input = (state.get("scenario") or {}).get("input") or {}
         pending = (state.get("scenario") or {}).get("pending")
         if pending and pending.get("field") == "time_range":
             start_time, end_time = self._extract_time_range(prompt)
@@ -48,13 +57,16 @@ class FlightsBetweenTimesScenario(Scenario):
             state["scenario"]["pending"] = None
             return self._respond_placeholder(state, turn_id, start_time, end_time)
 
-        start_time, end_time = self._extract_time_range(prompt)
+        start_time = scenario_input.get("start_time")
+        end_time = scenario_input.get("end_time")
+        if not isinstance(start_time, str) or not isinstance(end_time, str):
+            start_time, end_time = self._extract_time_range(prompt)
         if not start_time or not end_time:
             state["scenario"]["pending"] = {
                 "field": "time_range",
                 "validation_regex": r"^\\d{1,2}(:\\d{2})?\\s*-\\s*\\d{1,2}(:\\d{2})?$",
-                "prompt": "Please provide a time range (e.g., 12:00-16:00).",
-                "hint": "Use HH:MM-HH:MM or HH-HH format.",
+                "prompt": PROMPT_TIME_RANGE,
+                "hint": HINT_TIME_RANGE,
                 "status": "NEEDS_INPUT",
             }
             return self._ask_time_range(state, turn_id, stronger=False)
@@ -75,11 +87,11 @@ class FlightsBetweenTimesScenario(Scenario):
         return f"{hour.zfill(2)}:{minute}"
 
     def _ask_time_range(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = "Please provide a time range (e.g., 12:00-16:00)."
-        hint = "Use HH:MM-HH:MM or HH-HH format."
+        prompt_text = PROMPT_TIME_RANGE
+        hint = HINT_TIME_RANGE
         if stronger:
-            prompt_text = "Please provide a valid time range, e.g., 12:00-16:00."
-            hint = "Provide two times, like 12:00-16:00."
+            prompt_text = PROMPT_TIME_RANGE_STRONG
+            hint = HINT_TIME_RANGE_STRONG
 
         handler = self.display_request(
             state,
@@ -96,10 +108,7 @@ class FlightsBetweenTimesScenario(Scenario):
         }
 
     def _respond_placeholder(self, state: Dict[str, Any], turn_id: str, start: str, end: str):
-        summary = (
-            "Flight search between times is not available yet. "
-            f"Requested window: {start}-{end}."
-        )
+        summary = FLIGHTS_BETWEEN_TIMES_UNAVAILABLE_TEMPLATE.format(start=start, end=end)
         handler = self.display_result(
             state,
             result_artifact_name="flights_between_times",
