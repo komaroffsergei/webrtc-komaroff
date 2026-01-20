@@ -271,15 +271,17 @@ class PhraseSegmenterNode(ConsumerNode):
         except NatsTimeoutError:
             logger.error("Whisper[src_whisper] request timed out for phrase %s", phrase.phrase_id)
             await event_log(
-                f"ASR timeout for phrase {phrase.phrase_id}",
-                kind="error",
+                "log",
+                "error",
+                {"text": f"ASR timeout for phrase {phrase.phrase_id}"},
                 app=self.app,
             )
         except NoRespondersError:
             logger.error("No whisper responders for phrase %s", phrase.phrase_id)
             await event_log(
-                "Whisper service unavailable",
-                kind="error",
+                "log",
+                "error",
+                {"text": "Whisper service unavailable"},
                 app=self.app,
             )
         except Exception as exc:

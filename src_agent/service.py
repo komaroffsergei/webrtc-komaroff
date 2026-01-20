@@ -30,9 +30,9 @@ class AgentServer:
         user_id: str = None,
     ):
         self.nats_url = nats_url
-        self.agent_subject = agent_subject      # ← nats.src_agent.user123
-        self.llm_subject = llm_subject          # ← nats.src_llm.user123
-        self.events_subject = events_subject    # ← nats.events.user123
+        self.agent_subject = agent_subject      # e.g. nats.src_agent.user123
+        self.llm_subject = llm_subject          # e.g. nats.src_llm.user123
+        self.events_subject = events_subject    # e.g. nats.events.user123
         self.max_steps = max_steps
 
         self.nc = None
@@ -45,7 +45,7 @@ class AgentServer:
         self.user_id = user_id or "anonymous"
 
     async def connect(self):
-        """Подключение к NATS + Database"""
+        """Connect to NATS + database."""
         self.nc = NATS()
         await self.nc.connect(
             servers=[NATS_URL],
@@ -67,18 +67,19 @@ class AgentServer:
             self.nc,
             llm_subject=self.llm_subject,
             max_steps=self.max_steps,
+            events=self.nats_logger,
             db=self.db,
             user_id=self.user_id,
         )
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to NATS {NATS_URL}")
 
     async def subscribe(self):
-        """Подписка на темы NATS"""
+        """Subscribe to NATS subjects."""
         await self.nc.subscribe(self.agent_subject, cb=self.handle_request)
         await self.nats_logger.info(f"Subscribed to {self.agent_subject}")
 
     async def handle_request(self, msg):
-        """Обработка входящего запроса на выполнение агента"""
+        """Handle an incoming agent request."""
         try:
             data = json.loads(msg.data.decode("utf-8"))
             prompt = (data.get("text") or "").strip()
@@ -95,6 +96,7 @@ class AgentServer:
                 session_id = await create_session(self.db, user_id=self.user_id)
 
             result = await self.agent.run(prompt=prompt, session_id=session_id, edit=edit)
+            await self._publish_result_event(result)
 
             payload = json.dumps(result, ensure_ascii=False).encode("utf-8")
             await msg.respond(payload)
@@ -114,7 +116,7 @@ class AgentServer:
                 logger.error(f"Error sending error response: {respond_error}")
 
     def setup_signal_handlers(self):
-        """Настройка обработчиков сигналов для graceful shutdown"""
+        """Configure signal handlers for graceful shutdown."""
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(
@@ -123,7 +125,7 @@ class AgentServer:
             )
 
     async def shutdown(self, signal=None):
-        """Graceful shutdown сервера"""
+        """Gracefully shutdown the server."""
         if signal:
             logger.info(f"Received exit signal {signal.name}")
 
@@ -146,7 +148,7 @@ class AgentServer:
                 logger.error(f"Error closing DB pool: {e}")
 
     async def run(self):
-        """Запуск сервера"""
+        """Run the server."""
         try:
             await self.connect()
             await self.subscribe()
@@ -163,3 +165,65 @@ class AgentServer:
             sys.exit(1)
         finally:
             await self.shutdown()
+
+    async def _publish_result_event(self, result: object) -> None:
+        if not self.nats_logger or not isinstance(result, dict):
+            return
+
+        client_handler = result.get("client_handler") if isinstance(result.get("client_handler"), dict) else {}
+        raw_artifacts = client_handler.get("artifacts") if isinstance(client_handler.get("artifacts"), dict) else None
+        artifacts = self._normalize_artifacts(raw_artifacts)
+
+        text = self._extract_message_text(result, artifacts)
+        if not text and result.get("success") is True:
+            text = "Done."
+        if text:
+            data: dict[str, object] = {
+                "type": "answer" if result.get("success") is True else "system",
+                "text": text,
+            }
+            if artifacts:
+                data["artifacts"] = artifacts
+            await self.nats_logger.log("command", "message", data)
+
+        command = client_handler.get("command")
+        if isinstance(command, str) and command and command not in ("ASK_USER_INPUT", "SHOW_MESSAGE", "SHOW_ERROR_MESSAGE"):
+            data: dict[str, object] = {"command": command}
+            if artifacts:
+                data["artifacts"] = artifacts
+            await self.nats_logger.log("command", "client_handler", data)
+
+    def _normalize_artifacts(self, raw: object) -> dict[str, object] | None:
+        if not isinstance(raw, dict):
+            return None
+        all_keys_raw = raw.get("all")
+        all_keys = [str(x) for x in all_keys_raw] if isinstance(all_keys_raw, list) else []
+        last_raw = raw.get("last")
+        last = str(last_raw) if isinstance(last_raw, str) else None
+        payload = raw.get("payload") if isinstance(raw.get("payload"), dict) else {}
+        if not all_keys and last is None and not payload:
+            return None
+        return {"all": all_keys, "last": last, "payload": payload}
+
+    def _extract_message_text(self, result: dict, artifacts: dict[str, object] | None) -> str | None:
+        if isinstance(result.get("result"), str) and result["result"].strip():
+            return result["result"].strip()
+
+        err = result.get("error") if isinstance(result.get("error"), dict) else None
+        if err and isinstance(err.get("message"), str) and err["message"].strip():
+            return err["message"].strip()
+
+        if not artifacts:
+            return None
+        payload = artifacts.get("payload")
+        last = artifacts.get("last")
+        if not isinstance(payload, dict) or not isinstance(last, str) or last not in payload:
+            return None
+        last_payload = payload.get(last)
+        if not isinstance(last_payload, dict):
+            return None
+        for key in ("message", "summary", "prompt", "text"):
+            val = last_payload.get(key)
+            if isinstance(val, str) and val.strip():
+                return val.strip()
+        return None

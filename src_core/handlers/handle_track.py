@@ -18,8 +18,10 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
     if track.kind != "audio":
         return
 
-    await event_log("Audio track connected",
-                    kind="log",
+    await event_log(
+                    "log",
+                    "info",
+                    {"text": "Audio track connected"},
                     app=app,
                     service=STACK_SERVICE_NAME)
 
@@ -61,7 +63,9 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
 
     # START GRAPH
     asyncio.create_task(graph.start())
-    await event_log("Audio graph started",
-                    kind="log",
+    await event_log(
+                    "log",
+                    "info",
+                    {"text": "Audio graph started"},
                     app=app,
                     service=STACK_SERVICE_NAME)

@@ -3,9 +3,9 @@ import { handleSetPosition } from "./setPosition";
 import { handleBuildRoute } from "./buildRoute";
 import { handleShowErrorMessage } from "./showErrorMessage";
 import { handleShowMessage } from "./showMessage";
-import {AgentCommandContext, AgentMessage} from "../../types";
+import {AgentCommandContext, ClientHandlerCommand} from "../../types";
 
-export type CommandHandlerFn = (resp: AgentMessage, ctx: AgentCommandContext) => void;
+export type CommandHandlerFn = (resp: ClientHandlerCommand, ctx: AgentCommandContext) => void;
 
 export const commandHandlers: Record<string, CommandHandlerFn> = {
   SHOW_AIRPORTS: handleShowAirports,

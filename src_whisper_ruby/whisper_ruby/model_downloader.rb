@@ -16,16 +16,15 @@ module WhisperRuby
       # ------------------------------------------------------------
       if File.exist?(model_path)
         if model_sha && Digest::SHA1.file(model_path).hexdigest == model_sha
-          logger.log("exists", type: "info", service: service, name: "model_downloading_status")
+          logger.command("status_asr", { status: "ready" }, service: service)
           return
         end
 
-        logger.log("Checksum mismatch, removing file", type: "info",
-                   service: service, name: "model_downloading_status")
+        logger.info("Checksum mismatch, removing file", service: service)
         File.delete(model_path)
       end
 
-      logger.log("downloading", type: "info", service: service, name: "model_downloading_status")
+      logger.command("status_asr", { status: "downloading", percent: 0 }, service: service)
 
       # ------------------------------------------------------------
       # Determine total size
@@ -34,9 +33,9 @@ module WhisperRuby
       total_size = nil if total_size == 0
 
       if total_size
-        logger.log("size=#{total_size}", type: "info", service: service, name: "model_file_size")
+        logger.info("size=#{total_size}", service: service, name: "model_file_size")
       else
-        logger.log("unable to detect file size", type: "warn", service: service)
+        logger.info("unable to detect file size", service: service)
       end
 
       # ------------------------------------------------------------
@@ -74,10 +73,7 @@ module WhisperRuby
           percent = (downloaded * 100 / total_size).to_i
 
           if percent != last_percent && percent >= 0 && percent <= 100
-            logger.log(percent.to_s,
-                       type: "info",
-                       service: service,
-                       name: "model_downloading_percent")
+            logger.command("status_asr", { status: "downloading", percent: percent }, service: service)
 
             last_percent = percent
           end
@@ -99,8 +95,7 @@ module WhisperRuby
       if model_sha
         actual_sha = Digest::SHA1.file(tmp).hexdigest
         if actual_sha != model_sha
-          logger.log("Checksum mismatch: #{actual_sha} != #{model_sha}",
-                     type: "error", service: service, name: "model_downloading_status")
+          logger.error("Checksum mismatch: #{actual_sha} != #{model_sha}", service: service)
           raise "Checksum mismatch"
         end
       end
@@ -110,12 +105,11 @@ module WhisperRuby
       # ------------------------------------------------------------
       File.rename(tmp, model_path)
 
-      logger.log("100", type: "info", service: service, name: "model_downloading_percent")
-      logger.log("exists", type: "info", service: service, name: "model_downloading_status")
+      logger.command("status_asr", { status: "downloading", percent: 100 }, service: service)
+      logger.command("status_asr", { status: "ready" }, service: service)
 
     rescue => e
-      logger.log("Downloader error: #{e}", type: "error",
-                 service: service, name: "model_downloading_status")
+      logger.error("Downloader error: #{e}", service: service)
       raise
     # ensure
       # if defined?(tmp) && File.exist?(tmp)

@@ -7,6 +7,7 @@ export type AssistantElements = {
   micWaveform: HTMLCanvasElement | null;
   waveBackground: HTMLCanvasElement | null;
   connectionStatus: HTMLElement | null;
+  modelStatus: HTMLElement | null;
   remoteAudio: HTMLAudioElement | null;
 
   vadEnable: HTMLInputElement | null;
@@ -27,6 +28,7 @@ export function getAssistantElements(): AssistantElements {
     micWaveform: document.getElementById("micWaveform") as HTMLCanvasElement | null,
     waveBackground: document.getElementById("waveBackground") as HTMLCanvasElement | null,
     connectionStatus: document.getElementById("connectionStatus"),
+    modelStatus: document.getElementById("modelStatus"),
     remoteAudio: document.getElementById("remoteAudio") as HTMLAudioElement | null,
 
     vadEnable: document.getElementById("vadEnable") as HTMLInputElement | null,

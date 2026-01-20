@@ -1,20 +1,17 @@
-import {appConfig} from "../config/appConfig"
 import {ServerEvent} from "../types";
 
 export function logEvent(event: ServerEvent): void {
-  let logFn;
-  if (["log"].includes(event.kind)) {
-    logFn = console.log;
-  } else if (["error"].includes(event.kind)) {
-    logFn = console.warn;
-  } else if (["message", "control"].includes(event.kind)) {
-    logFn = console.info;
-  } else {
-    logFn = console.error;
-  }
+  const logFn =
+    event.type === "log" && event.kind === "error"
+      ? console.warn
+      : event.type === "log"
+        ? console.log
+        : event.type === "command"
+          ? console.info
+          : console.error;
 
   logFn(
-    `${event.time}: [${event.service}]${event.kind ? "(" + event.kind + ")" : ""}) ${event.name ? event.name + " = " : ""}${formatMessage(event.message)}`
+    `${event.time}: [${event.service}] type=${event.type} kind=${event.kind}${event.name ? ` name=${event.name}` : ""} data=${formatValue(event.data)} uid=${event.uid}`
   );
 }
 
@@ -24,12 +21,12 @@ export function logError(name: string, val: any) {
 }
 
 
-function formatMessage(msg: unknown): string {
-  if (typeof msg === "string") return msg;
+function formatValue(val: unknown): string {
+  if (typeof val === "string") return val;
 
   try {
-    return JSON.stringify(msg, null, 2);
+    return JSON.stringify(val, null, 2);
   } catch {
-    return String(msg);
+    return String(val);
   }
 }

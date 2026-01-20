@@ -6,7 +6,7 @@ from typing import Any
 
 from aiohttp.web_app import Application
 
-from src_core.utils.nats_logger import EVENT_KINDS, NatsLogger
+from src_core.utils.nats_logger import NatsLogger
 
 logger = logging.getLogger("event_bus")
 
@@ -34,15 +34,16 @@ class EventBus:
 
     async def log(
         self,
-        message: Any,
+        type: str,
+        kind: str,
+        data: dict[str, Any],
         *,
         name: str = "",
-        kind: EVENT_KINDS  = "log",
         service: str | None = None,
     ) -> str:
         if not self._logger:
             raise RuntimeError("Event bus is not configured")
-        return await self._logger.log(message, name=name, kind=kind, service=service)
+        return await self._logger.log(type, kind, data, name=name, service=service)
 
 
 _DEFAULT_BUS: EventBus | None = None
@@ -73,12 +74,13 @@ def get_event_bus(app: Application | None = None) -> EventBus:
 
 
 async def event_log(
-    message: Any,
+    type: str,
+    kind: str,
+    data: dict[str, Any],
     *,
     name="",
-    kind: EVENT_KINDS = "log",
     app: Application | None = None,
     service: str | None = None,
 ) -> str:
     bus = get_event_bus(app)
-    return await bus.log(message, service=service, kind=kind, name=name)
+    return await bus.log(type, kind, data, service=service, name=name)

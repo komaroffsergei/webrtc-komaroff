@@ -39,12 +39,8 @@ agents.md
 collect_file_contents.sh
 src_lang_graph_1
 src_lang_graph_2
-src_core
-src_front
-src_llm
 src_llm_test
 src_llm_test_ruby
-src_whisper
 src_whisper_c
 src_whisper_ruby
 EOF

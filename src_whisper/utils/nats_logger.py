@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any
 
 from nats.aio.client import Client as NatsClient
-EVENT_KINDS = Literal["message", "log", "error", "control"]
 
 
 class NatsLogger:
@@ -15,14 +14,29 @@ class NatsLogger:
         self._subject = subject
         self._service_name = service_name
 
-    async def log(self, message: Any, *, name: str = "", kind: EVENT_KINDS  = "log", service: str | None = None,) -> str:
+    async def log(
+        self,
+        type: str,
+        kind: str,
+        data: dict[str, Any],
+        *,
+        name: str = "",
+        service: str | None = None,
+    ) -> str:
         payload = {
             "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
             "service": service or self._service_name,
+            "type": type,
             "kind": kind,
+            "data": data,
             "name": name or "",
-            "message": message,
             "uid": str(uuid.uuid4()),
         }
         await self._nc.publish(self._subject, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
         return payload["uid"]
+
+    async def info(self, text: str, *, name: str = "", service: str | None = None) -> str:
+        return await self.log("log", "info", {"text": text}, name=name, service=service)
+
+    async def error(self, text: str, *, name: str = "", service: str | None = None) -> str:
+        return await self.log("log", "error", {"text": text}, name=name, service=service)

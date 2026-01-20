@@ -41,6 +41,12 @@ export class CommandHandler {
       body: JSON.stringify({ text, session_id: this.sessionId }),
     });
     if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
+    try {
+      const data = (await resp.json()) as { session_id?: unknown };
+      this.sessionId = typeof data.session_id === "string" ? data.session_id : this.sessionId;
+    } catch {
+      // Ignore invalid/non-JSON responses.
+    }
   }
 
   async sendEditedMessage(text: string, turnId: string): Promise<void> {
@@ -54,5 +60,11 @@ export class CommandHandler {
       }),
     });
     if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
+    try {
+      const data = (await resp.json()) as { session_id?: unknown };
+      this.sessionId = typeof data.session_id === "string" ? data.session_id : this.sessionId;
+    } catch {
+      // Ignore invalid/non-JSON responses.
+    }
   }
 }

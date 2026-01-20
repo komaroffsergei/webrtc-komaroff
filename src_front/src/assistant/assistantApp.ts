@@ -2,7 +2,7 @@ import type {AppConfig} from "../config/appConfig";
 import {getAssistantElements} from "../ui/elements";
 import {ChatUI} from "../ui/chatUi";
 import {WarningUI} from "../ui/warningUi";
-import {setStatus} from "../ui/status";
+import {setModelStatus, setStatus} from "../ui/status";
 import {bindMicButton} from "../ui/micButton";
 import {createAudioState} from "../audio/audioState";
 import {
@@ -14,7 +14,7 @@ import {FrontendNatsClient} from "../net/natsClient";
 import {CommandHandler} from "../core/commandHandler";
 import {logError, logEvent} from "../core/logging";
 import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
-import {AgentMessage, ServerEvent} from "../types";
+import {ClientHandlerCommand, ServerEvent} from "../types";
 
 /* ===========================
    AssistantApp
@@ -31,8 +31,8 @@ export class AssistantApp {
   private nats = new FrontendNatsClient();
   private natsReconnectTimer: number | null = null;
 
-  private pendingThinkingId: string | null = null;
   private agentCommands: AgentCommandHandler;
+  private modelStatuses = new Map<string, {status: string; percent?: number}>();
 
   constructor(private config: AppConfig) {
     /* ---------- CHAT ---------- */
@@ -86,13 +86,11 @@ export class AssistantApp {
       this.el.textInput!.value = "";
       this.chat.addMessage(text, "user");
 
-      // Показать "агент думает" сразу после отправки
-      this.chat.removeThinking(this.pendingThinkingId);
-      this.pendingThinkingId = this.chat.addThinking();
+      this.chat.clearThinking();
+      this.chat.setThinking("Thinking…");
 
       void this.commands.sendMessage(text).catch((err) => {
-        this.chat.removeThinking(this.pendingThinkingId);
-        this.pendingThinkingId = null;
+        this.chat.clearThinking();
         this.warning.show({message: String(err)});
       });
     });
@@ -192,43 +190,123 @@ export class AssistantApp {
   }
 
   private async handleServerEvent(event: ServerEvent): Promise<void> {
-    // logs
     logEvent(event);
 
-    if (event.kind === "message" && event.message && typeof event.message === "object") {
-      const msg = event.message as AgentMessage;
-      if (msg.session_id) {
-        this.commands.setSessionId(msg.session_id);
+    if (event.type === "log") {
+      const txt = typeof event.data.text === "string" ? event.data.text : null;
+      if (event.kind === "error" && txt) {
+        this.chat.addMessage(txt, "status");
       }
+      return;
     }
 
-
-    if (event.kind === "message") {
-      if ((event.message as AgentMessage)?.client_handler) {
-        this.chat.removeThinking(this.pendingThinkingId);
-        this.pendingThinkingId = null;
-        this.agentCommands.handle(event.message as AgentMessage);
-        return;
-      } else if (event.message && typeof event.message === 'string') {
-        this.chat.addMessage(event.message, "server");
-        return;
-      }
-    } else if (event.kind === "control") {
-      switch (event.name) {
-        case "transcription_start":
-          this.chat.setVoiceBlocked(true);
-          return;
-        case "transcription_end":
-          this.chat.setVoiceBlocked(false);
-          return;
-        case 'model_thinking':
-          debugger
-          // this.chat.updateThought(event)
-      }
-
-
+    if (event.type !== "command") {
+      console.warn("[nats] Unknown event type", event.type, event);
+      return;
     }
 
-    // await this.commands.handleServerEvent(event);
+    switch (event.kind) {
+      case "message": {
+        const text = typeof event.data.text === "string" ? event.data.text : null;
+        if (!text) {
+          console.warn("[nats] Invalid message payload", event);
+          return;
+        }
+        this.chat.clearThinking();
+        this.chat.addMessage(text, "server");
+        return;
+      }
+      case "thought": {
+        const summary = typeof event.data.summary === "string" ? event.data.summary : "Thinking…";
+        const content = typeof event.data.content === "string" ? event.data.content : undefined;
+        const scenario = this.readScenario(event.data.scenario);
+        const tools = this.readTools(event.data.tools);
+        this.chat.updateThinking(summary, content, {scenario, tools});
+        return;
+      }
+      case "status_vad":
+      case "status_asr":
+      case "status_llm": {
+        const status = typeof event.data.status === "string" ? event.data.status : null;
+        const percent = typeof event.data.percent === "number" ? event.data.percent : undefined;
+        if (!status) {
+          console.warn("[nats] Invalid status payload", event);
+          return;
+        }
+        this.updateModelStatus(event.kind, status, percent);
+        return;
+      }
+      case "voice": {
+        const blocked = event.data.blocked;
+        if (typeof blocked !== "boolean") {
+          console.warn("[nats] Invalid voice payload", event);
+          return;
+        }
+        this.chat.setVoiceBlocked(blocked);
+        return;
+      }
+      case "client_handler": {
+        const command = typeof event.data.command === "string" ? event.data.command : null;
+        if (!command) {
+          console.warn("[nats] Invalid client_handler payload", event);
+          return;
+        }
+        const artifacts = this.readArtifacts(event.data.artifacts);
+        const payload: ClientHandlerCommand = artifacts ? {command, artifacts} : {command};
+        this.chat.clearThinking();
+        this.agentCommands.handle(payload);
+        return;
+      }
+      default:
+        console.warn("[nats] Unknown command kind", event.kind, event);
+    }
+  }
+
+  private updateModelStatus(kind: string, status: string, percent?: number): void {
+    const clippedPercent =
+      typeof percent === "number" ? Math.max(0, Math.min(100, Math.round(percent))) : undefined;
+    this.modelStatuses.set(kind, {status, percent: clippedPercent});
+
+    const label = (k: string): string => {
+      if (k === "status_vad") return "VAD";
+      if (k === "status_asr") return "ASR";
+      if (k === "status_llm") return "LLM";
+      return k;
+    };
+
+    const fmt = (k: string, v: {status: string; percent?: number}): string => {
+      if (v.status === "downloading" && typeof v.percent === "number") return `${label(k)}: downloading ${v.percent}%`;
+      return `${label(k)}: ${v.status}`;
+    };
+
+    const text = Array.from(this.modelStatuses.entries())
+      .map(([k, v]) => fmt(k, v))
+      .join(" | ");
+    setModelStatus(this.el, text);
+  }
+
+  private readArtifacts(raw: unknown): ClientHandlerCommand["artifacts"] | undefined {
+    if (!raw || typeof raw !== "object") return undefined;
+    const rec = raw as Record<string, unknown>;
+    const all = Array.isArray(rec.all) ? rec.all.filter((x) => typeof x === "string") : [];
+    const last = typeof rec.last === "string" ? rec.last : null;
+    const payload = rec.payload && typeof rec.payload === "object" ? (rec.payload as Record<string, unknown>) : {};
+    if (!all.length && !last && !Object.keys(payload).length) return undefined;
+    return {all, last, payload};
+  }
+
+  private readScenario(raw: unknown): { id: string; reason?: string } | undefined {
+    if (!raw || typeof raw !== "object") return undefined;
+    const rec = raw as Record<string, unknown>;
+    const id = typeof rec.id === "string" ? rec.id : null;
+    if (!id) return undefined;
+    const reason = typeof rec.reason === "string" ? rec.reason : undefined;
+    return reason ? {id, reason} : {id};
+  }
+
+  private readTools(raw: unknown): string[] | undefined {
+    if (!Array.isArray(raw)) return undefined;
+    const tools = raw.filter((x) => typeof x === "string");
+    return tools.length ? tools : undefined;
   }
 }

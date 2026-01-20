@@ -25,8 +25,10 @@ async def handle_startup(app: web.Application):
         service_name=STACK_SERVICE_NAME,
     )
 
-    await event_log("Core service started",
-                    kind="log",
+    await event_log(
+                    "log",
+                    "info",
+                    {"text": "Core service started"},
                     app=app,
                     service=STACK_SERVICE_NAME)
     await ensure_silero_model(

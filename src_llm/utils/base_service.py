@@ -97,8 +97,6 @@ class BaseService:
                 )
                 return
 
-        model_message = text.get("message") if isinstance(text, dict) else text
-        await self._nats_logger.log(model_message, name="model_thinking", kind="control")
         await self._nats_logger.info(text, name="llm_result")
         await self._reply(msg, text)
 

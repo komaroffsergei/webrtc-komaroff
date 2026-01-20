@@ -22,8 +22,10 @@ async def message_handler(request: web.Request):
     session_id = data.get("session_id")
     edit = data.get("edit")
 
-    await event_log(text,
-                    kind="log",
+    await event_log(
+                    "log",
+                    "info",
+                    {"text": text},
                     app=request.app,
                     service=STACK_SERVICE_NAME)
 
@@ -33,8 +35,9 @@ async def message_handler(request: web.Request):
     if edit:
         payload["edit"] = edit
 
-    await handle_transcription(request.app, payload)
+    response = await handle_transcription(request.app, payload)
 
-    return web.json_response({
-        "status": "ok",
-    })
+    session_id_out = response.get("session_id") if isinstance(response, dict) else None
+    return web.json_response(
+        {"status": "ok", "session_id": session_id_out},
+    )

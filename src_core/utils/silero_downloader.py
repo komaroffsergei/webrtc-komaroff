@@ -18,18 +18,15 @@ async def ensure_silero_model(app: Application, *, url: str) -> str:
     full_path = f"{VAD_MODEL_PATH}/{filename}"
     resolved = Path(full_path).expanduser().resolve()
     if os.path.exists(full_path):
-        await _log_status("exists", app)
-        await _log_percent("100", app)
+        await _publish_status(app, status="ready")
         return str(full_path)
 
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    await _log_status("downloading", app)
-    await _log_percent("0", app)
+    await _publish_status(app, status="downloading", percent=0)
 
     await _download_file(app, url, resolved)
 
-    await _log_status("exists", app)
-    await _log_percent("100", app)
+    await _publish_status(app, status="ready")
     return str(resolved)
 
 
@@ -52,17 +49,19 @@ async def _download_file(app: Application, url: str, target: Path) -> None:
                         percent = min(100, int(downloaded * 100 / total))
                         while last_percent < percent:
                             last_percent += 1
-                            await event_log(str(last_percent), kind="control", name="model_downloading_status", service=STACK_SERVICE_NAME, app=app)
-
-    if not total:
-        await event_log("100", kind="control", name="model_downloading_percent", service=STACK_SERVICE_NAME, app=app)
+                            await _publish_status(app, status="downloading", percent=last_percent)
 
     tmp.replace(target)
 
 
-async def _log_status(value: str, app) -> None:
-    await event_log(value, kind="control", name="model_downloading_status", service=STACK_SERVICE_NAME , app=app)
-
-
-async def _log_percent(value: str, app) -> None:
-    await event_log(value, kind="control", name="model_downloading_percent", service=STACK_SERVICE_NAME, app=app)
+async def _publish_status(app: Application, *, status: str, percent: int | None = None) -> None:
+    data: dict[str, object] = {"status": status}
+    if percent is not None:
+        data["percent"] = percent
+    await event_log(
+        "command",
+        "status_vad",
+        data,
+        app=app,
+        service=STACK_SERVICE_NAME,
+    )

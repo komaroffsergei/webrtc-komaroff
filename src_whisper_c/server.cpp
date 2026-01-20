@@ -19,7 +19,9 @@
 #include <ctime>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -876,25 +878,55 @@ public:
         : client_(client), subject_(std::move(subject)), service_(std::move(service)) {}
 
     void info(const std::string &message, const std::string &name = std::string()) {
-        log("info", json(message), name);
+        publish("log", "info", json{{"text", message}}, name);
     }
 
     void info(const json &message, const std::string &name) {
-        log("info", message, name);
+        publish("log", "info", json{{"payload", message}}, name);
     }
 
     void error(const std::string &message, const std::string &name = std::string()) {
-        log("error", json(message), name);
+        publish("log", "error", json{{"text", message}}, name);
+    }
+
+    void command(const std::string &kind, const json &data, const std::string &name = std::string()) {
+        publish("command", kind, data, name);
     }
 
 private:
-    void log(const std::string &level, const json &message, const std::string &name) {
+    static std::string uuid_v4() {
+        static thread_local std::mt19937_64 rng{std::random_device{}()};
+        std::uniform_int_distribution<uint64_t> dist;
+        uint8_t bytes[16];
+        for (int i = 0; i < 16; i += 8) {
+            uint64_t v = dist(rng);
+            std::memcpy(bytes + i, &v, sizeof(v));
+        }
+        bytes[6] = (bytes[6] & 0x0F) | 0x40;
+        bytes[8] = (bytes[8] & 0x3F) | 0x80;
+        char out[37];
+        std::snprintf(
+            out,
+            sizeof(out),
+            "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+            bytes[0], bytes[1], bytes[2], bytes[3],
+            bytes[4], bytes[5],
+            bytes[6], bytes[7],
+            bytes[8], bytes[9],
+            bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+        );
+        return std::string(out);
+    }
+
+    void publish(const std::string &type, const std::string &kind, const json &data, const std::string &name) {
         json payload = {
             {"time", iso_timestamp()},
             {"service", service_},
-            {"type", level},
-            {"message", message},
+            {"type", type},
+            {"kind", kind},
+            {"data", data},
             {"name", name},
+            {"uid", uuid_v4()},
         };
         if (!client_.publish(subject_, payload.dump())) {
             fprintf(stderr, "logger publish failed: %s\n", payload.dump().c_str());
@@ -999,34 +1031,31 @@ std::string ensure_model_file(ServiceConfig &cfg, NatsLogger *logger) {
         cfg.model_path = model_path.string();
     }
 
-    auto log_status = [&](const std::string &msg) {
-        if (logger) {
-            logger->info(msg, std::string("model_downloading_status"));
-        } else {
-            fprintf(stderr, "model status: %s\n", msg.c_str());
+    auto publish_status_asr = [&](const std::string &status, std::optional<int> percent = std::nullopt) {
+        if (!logger) {
+            return;
         }
-    };
-
-    auto log_percent = [&](const std::string &value) {
-        if (logger) {
-            logger->info(value, std::string("model_downloading_percent"));
+        json data = {{"status", status}};
+        if (percent.has_value()) {
+            data["percent"] = percent.value();
         }
+        logger->command("status_asr", data);
     };
 
     if (fs::exists(model_path)) {
         if (!cfg.model_sha1.empty()) {
             const std::string actual = compute_file_sha1(model_path);
             if (!sha_matches(actual, cfg.model_sha1)) {
-                log_status("checksum mismatch, redownloading");
+                if (logger) {
+                    logger->info("Checksum mismatch, redownloading");
+                }
                 fs::remove(model_path);
             } else {
-                log_status("exists");
-                log_percent("100");
+                publish_status_asr("ready");
                 return model_path.string();
             }
         } else {
-            log_status("exists");
-            log_percent("100");
+            publish_status_asr("ready");
             return model_path.string();
         }
     }
@@ -1035,8 +1064,7 @@ std::string ensure_model_file(ServiceConfig &cfg, NatsLogger *logger) {
         throw std::runtime_error("model missing and ASR_MODEL_URL is not set");
     }
 
-    log_status("downloading");
-    log_percent("0");
+    publish_status_asr("downloading", 0);
 
     fs::path tmp_path = model_path;
     tmp_path += ".download";
@@ -1047,7 +1075,7 @@ std::string ensure_model_file(ServiceConfig &cfg, NatsLogger *logger) {
         << std::quoted(cfg.model_url);
 
     auto progress_logger = [&](int percent) {
-        log_percent(std::to_string(percent));
+        publish_status_asr("downloading", percent);
     };
     const int rc = run_with_progress_logging(cmd.str(), progress_logger);
     if (rc != 0 || !fs::exists(tmp_path)) {
@@ -1064,8 +1092,8 @@ std::string ensure_model_file(ServiceConfig &cfg, NatsLogger *logger) {
 
     fs::rename(tmp_path, model_path);
 
-    log_percent("100");
-    log_status("exists");
+    publish_status_asr("downloading", 100);
+    publish_status_asr("ready");
     return model_path.string();
 }
 

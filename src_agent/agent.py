@@ -16,6 +16,7 @@ from src_agent.utils.mcp_tools import (
     AgentClientHandler,
     AgentRegistry,
 )
+from src_agent.utils.nats_logger import NatsLogger
 
 from src_agent.utils.db import (
     Database,
@@ -122,6 +123,7 @@ class MCPAgent:
         llm_subject: str,
         max_steps: int = AGENT_MAX_STEPS,
         timeout_seconds: int = TIMEOUT_SECONDS,
+        events: NatsLogger | None = None,
         db: Database,
         user_id: str,
     ):
@@ -129,12 +131,34 @@ class MCPAgent:
         self.llm_subject = llm_subject
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
+        self._events = events
 
         self.db = db
         self.user_id = user_id
 
         self.tools = [v["schema"] for v in REGISTRY.values()]
         self.tools_impl = {k: v["fn"] for k, v in REGISTRY.items()}
+
+    async def _emit_thought(
+        self,
+        *,
+        summary: str,
+        content: str,
+        scenario_id: str | None = None,
+        scenario_reason: str | None = None,
+        tools: list[str] | None = None,
+    ) -> None:
+        if not self._events:
+            return
+        data: dict[str, object] = {"summary": summary, "content": content}
+        if scenario_id:
+            scenario: dict[str, object] = {"id": scenario_id}
+            if scenario_reason:
+                scenario["reason"] = scenario_reason
+            data["scenario"] = scenario
+        if tools:
+            data["tools"] = tools
+        await self._events.log("command", "thought", data)
 
     async def _request_llm(self, payload: dict) -> dict:
         logger.info("LLM request payload=%s", json.dumps(_safe_llm_payload(payload), ensure_ascii=False))
@@ -390,6 +414,12 @@ class MCPAgent:
         save_conversation(state)
 
         scenario = get_scenario(selected_scenario_id)
+        await self._emit_thought(
+            summary="Scenario selected",
+            content="Starting scenario handler.",
+            scenario_id=selected_scenario_id,
+            scenario_reason=selected_reason,
+        )
         logger.info(
             "SCENARIO start id=%s pending=%s input=%s",
             selected_scenario_id,
@@ -525,12 +555,20 @@ class MCPAgent:
         last_client_handler: AGentClientCommands | None = None
         last_provided_artifacts: list[str] = []
         model_used = None
+        tools_used: list[str] = []
         start_ts = time.perf_counter()
 
         try:
             for step in range(1, self.max_steps + 1):
                 step_started = time.perf_counter()
                 logger.info("STEP %d started", step)
+                await self._emit_thought(
+                    summary=f"Step {step}/{self.max_steps}",
+                    content="Waiting for LLM response.",
+                    scenario_id=selected_scenario_id,
+                    scenario_reason=selected_reason,
+                    tools=tools_used,
+                )
 
                 await log_event(
                     self.db,
@@ -655,6 +693,15 @@ class MCPAgent:
                 for call in tool_calls:
                     name = call["function"]["name"]
                     raw_args = call["function"].get("arguments") or {}
+                    if name not in tools_used:
+                        tools_used.append(name)
+                    await self._emit_thought(
+                        summary=f"Step {step}/{self.max_steps}",
+                        content=f"Executing tool: {name}.",
+                        scenario_id=selected_scenario_id,
+                        scenario_reason=selected_reason,
+                        tools=tools_used,
+                    )
 
                     logger.info(
                         "STEP %d tool_call=%s args=%s",

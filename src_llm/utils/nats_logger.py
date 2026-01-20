@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 from nats.aio.client import Client as NatsClient
@@ -15,19 +16,20 @@ class NatsLogger:
 
     async def log(
         self,
-        message: Any,
+        type: str,
+        kind: str,
+        data: dict[str, Any],
         *,
-        level: str = "info",
         name: str | None = None,
-        kind: str | None = None,
     ) -> None:
         payload = {
             "time": datetime.now(tz=timezone.utc).isoformat(timespec="milliseconds"),
             "service": self._service_name,
-            "type": level,
-            "kind": kind or "",
-            "message": to_json_safe(message),
+            "type": type,
+            "kind": kind,
+            "data": to_json_safe(data),
             "name": name or "",
+            "uid": str(uuid.uuid4()),
         }
 
         await self._nc.publish(
@@ -36,7 +38,11 @@ class NatsLogger:
         )
 
     async def info(self, message: Any, *, name: str | None = None) -> None:
-        await self.log(message, level="info", name=name)
+        safe = to_json_safe(message)
+        data = {"text": safe} if isinstance(safe, str) else {"payload": safe}
+        await self.log("log", "info", data, name=name)
 
     async def error(self, message: Any, *, name: str | None = None) -> None:
-        await self.log(message, level="error", name=name)
+        safe = to_json_safe(message)
+        data = {"text": safe} if isinstance(safe, str) else {"payload": safe}
+        await self.log("log", "error", data, name=name)

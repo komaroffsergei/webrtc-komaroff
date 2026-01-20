@@ -1,4 +1,4 @@
-import {AgentCommandContext, AgentMessage} from "../../types";
+import {AgentCommandContext, ClientHandlerCommand} from "../../types";
 
 type Runway = {
   id?: string;
@@ -23,22 +23,20 @@ function isAirport(x: unknown): x is Airport {
 }
 
 export function handleShowAirports(
-  message: AgentMessage,
+  message: ClientHandlerCommand,
   ctx: AgentCommandContext,
 ): void {
-  const cmd = message.client_handler?.command;
-  const artifacts = message.client_handler?.artifacts ?? {};
-  const key = artifacts?.last || null;
+  const artifacts = message.artifacts;
+  const key = artifacts?.last ?? null;
 
-  const raw = key ? artifacts.payload[key] : null;
-  if (raw?.data?.airports && !Array.isArray(raw?.data?.airports) || raw.length === 0) {
+  const raw = key ? (artifacts?.payload as any)?.[key] : null;
+  if ((raw?.data?.airports && !Array.isArray(raw?.data?.airports)) || raw?.length === 0) {
     ctx.chat.addMessage("Аэропорты не найдены.", "server");
     return;
   }
 
-  const airports = raw.data.airports.filter(isAirport) as Airport[];
-
-  if (airports.length === 0) {
+  const airports = raw?.data?.airports?.filter(isAirport) as Airport[] | undefined;
+  if (!airports || airports.length === 0) {
     ctx.chat.addMessage("Аэропорты не найдены.", "server");
     return;
   }

@@ -12,16 +12,15 @@ async def handle_transcription(app, payload: dict):
     text = (payload.get("text") or "").strip()
     if not text:
         logger.warning("Empty transcription payload")
-        return
+        return {}
 
     logger.info("handle_transcription: '%s'", text)
 
     session_id = payload.get("session_id")
-    phrase_id = payload.get("phrase_id")
     await event_log(
-        {"status": "started", "phrase_id": phrase_id, "session_id": session_id},
-        kind="control",
-        name="transcription_start",
+        "command",
+        "voice",
+        {"blocked": True},
         app=app,
         service=STACK_SERVICE_NAME,
     )
@@ -40,27 +39,25 @@ async def handle_transcription(app, payload: dict):
         )
 
         response = json.loads(msg.data.decode("utf-8"))
-        await event_log(response,
-                        kind="message",
-                        app=app,
-                        service=STACK_SERVICE_NAME)
-        # await event_log(
-        #     {"status": "done", "phrase_id": phrase_id, "session_id": session_id},
-        #     kind="control",
-        #     name="transcription_end",
-        #     app=app,
-        #     service=STACK_SERVICE_NAME,
-        # )
+        return response
 
     except Exception as e:
-        await event_log(f"Agent communication error: {str(e)}",
-                        kind="error",
-                        app=app,
-                        service=STACK_SERVICE_NAME)
         await event_log(
-            {"status": "error", "phrase_id": phrase_id, "session_id": session_id},
-            kind="control",
-            name="transcription_end",
+            "log",
+            "error",
+            {"text": f"Agent communication error: {str(e)}"},
             app=app,
             service=STACK_SERVICE_NAME,
         )
+        return {"error": "agent_communication", "details": str(e)}
+    finally:
+        try:
+            await event_log(
+                "command",
+                "voice",
+                {"blocked": False},
+                app=app,
+                service=STACK_SERVICE_NAME,
+            )
+        except Exception:
+            logger.exception("Failed to publish voice unblock event")

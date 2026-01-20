@@ -1,12 +1,12 @@
 import { commandHandlers } from "./commands";
-import {AgentCommandContext, AgentMessage} from "../types";
+import {AgentCommandContext, ClientHandlerCommand} from "../types";
 
 export class AgentCommandHandler {
   constructor(private ctx: AgentCommandContext) {}
 
 
-  handle(event: AgentMessage): void {
-    const command = String(event.client_handler?.command ?? "");
+  handle(event: ClientHandlerCommand): void {
+    const command = String(event.command ?? "");
 
     const handler = commandHandlers[command];
     if (!handler) {
