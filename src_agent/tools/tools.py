@@ -1,5 +1,7 @@
 import os
-from typing import Tuple, Dict, Any, List
+from contextlib import contextmanager
+from contextvars import ContextVar
+from typing import Tuple, Dict, Any
 
 import requests
 
@@ -14,15 +16,70 @@ from src_agent.settings import (
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
 FLIGHTS_API_URL = os.getenv("FLIGHTS_API_URL", "http://127.0.0.1:8100/api/flights/status")
 
-# =============================
-# ARTIFACT STORAGE (per intent)
-# =============================
-
-ARTIFACTS: Dict[str, Any] = {}
+_TOOL_STATE: ContextVar[Dict[str, Any] | None] = ContextVar("_TOOL_STATE", default=None)
+_TOOL_SCENARIO_ID: ContextVar[str | None] = ContextVar("_TOOL_SCENARIO_ID", default=None)
 
 
-def reset_artifacts():
-    ARTIFACTS.clear()
+@contextmanager
+def tool_context(state: Dict[str, Any], scenario_id: str):
+    token_state = _TOOL_STATE.set(state)
+    token_scenario = _TOOL_SCENARIO_ID.set(scenario_id)
+    try:
+        yield
+    finally:
+        _TOOL_SCENARIO_ID.reset(token_scenario)
+        _TOOL_STATE.reset(token_state)
+
+
+def _require_context() -> tuple[Dict[str, Any], str]:
+    state = _TOOL_STATE.get()
+    scenario_id = _TOOL_SCENARIO_ID.get()
+    if state is None or not scenario_id:
+        raise RuntimeError("Tool context is not set (state/scenario_id missing)")
+    return state, scenario_id
+
+
+def _scenario_artifacts(state: Dict[str, Any], scenario_id: str) -> Dict[str, Any]:
+    scenarios = state.setdefault("scenario_artifacts", {})
+    scenario_store = scenarios.get(scenario_id)
+    if scenario_store is None:
+        scenario_store = {}
+        scenarios[scenario_id] = scenario_store
+    if not isinstance(scenario_store, dict):
+        raise RuntimeError("Invalid scenario_artifacts storage type")
+    return scenario_store
+
+
+def _artifact_key(label: str) -> str:
+    _, scenario_id = _require_context()
+    return f"{scenario_id}.tool.{label}"
+
+
+def put_artifact(label: str, value: Any) -> str:
+    state, scenario_id = _require_context()
+    key = _artifact_key(label)
+    store = _scenario_artifacts(state, scenario_id)
+    if key in store:
+        raise RuntimeError(f"Artifact key collision: {key}")
+    store[key] = value
+    return key
+
+
+def get_artifact(label: str) -> Any:
+    state, scenario_id = _require_context()
+    key = _artifact_key(label)
+    store = _scenario_artifacts(state, scenario_id)
+    if key not in store:
+        raise RuntimeError(f"Artifact not found in scenario scope: {key}")
+    return store[key]
+
+
+def get_artifact_by_key(key: str) -> Any:
+    state, scenario_id = _require_context()
+    store = _scenario_artifacts(state, scenario_id)
+    if key not in store:
+        raise RuntimeError(f"Artifact not found in scenario scope: {key}")
+    return store[key]
 
 
 # =============================
@@ -37,7 +94,7 @@ def no_tool_calls():
     return True, {
         "status": "error",
         "code": "NO_TOOL_CALLS",
-        "message": "Необходимо вызвать инструмент"
+        "message": "A tool call is required."
     }
 
 
@@ -53,15 +110,15 @@ def ask_user_input(*, message: str) -> Tuple[bool, Dict[str, Any]]:
     if not isinstance(message, str) or not message.strip():
         return True, {
             "status": "error",
-            "message": "message must be a non-empty string"
+            "message": "message must be a non-empty string",
         }
 
-    ARTIFACTS["user_request"] = {"message": message}
+    key = put_artifact("ask_user_input", {"message": message})
 
     return False, {
         "status": "ok",
-        "artifact_key": "user_request",
-        "message": message
+        "artifact_key": key,
+        "message": message,
     }
 
 # @mcp_tool(
@@ -77,54 +134,6 @@ def ask_user_input(*, message: str) -> Tuple[bool, Dict[str, Any]]:
 #     }
 
 @mcp_tool(
-    description=(
-        "Терминальный инструмент. Возвращает финальный ответ пользователю. "
-        "ДОЛЖЕН вызываться ТОЛЬКО один раз в конце выполнения. "
-        "Аргумент artifact_keys — ОБЯЗАТЕЛЬНЫЙ массив строк, "
-        "каждая строка — ключ ранее созданного артефакта. "
-        "Одиночные значения, строки или объекты недопустимы."
-    ),
-    parameters={
-        "artifact_keys": (
-            "Array[string]. Список ключей артефактов, которые нужно включить "
-            "в финальный ответ. Даже один ключ должен быть передан как массив."
-        )
-    }
-)
-def display_result(*, artifact_keys) -> Tuple[bool, Dict[str, Any]]:
-    if isinstance(artifact_keys, str):
-        artifact_keys = [artifact_keys]
-
-    elif isinstance(artifact_keys, (tuple, set)):
-        artifact_keys = list(artifact_keys)
-
-    elif not isinstance(artifact_keys, list):
-        return True, {
-          "status": "FAILED",
-          "error": "ARTIFACT_KEYS_WRONG_TYPE",
-          "message": f"artifact_keys must be list[str], got {type(artifact_keys).__name__}"
-        }
-
-    if not artifact_keys:
-        return True, {
-          "status": "FAILED",
-          "error": "ARTIFACT_KEYS_NOT_FOUND",
-          "message": f"not found artifact keys"
-        }
-
-    result = {}
-
-    for key in artifact_keys:
-        result[key] = ARTIFACTS[key]
-
-
-    return False, { # предполагаем что на этом цикл заканчивается
-        "status": "ok",
-        "result": result
-    }
-
-
-@mcp_tool(
     description=TOOL_FLIGHT_STATUS_DESCRIPTION,
     provides=["flight_status"],
     parameters={
@@ -135,7 +144,7 @@ def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:
     if not isinstance(flight_number, str) or not flight_number.strip():
         return True, {
             "status": "error",
-            "message": "flight_number is required"
+            "message": "flight_number is required",
         }
 
     r = requests.get(
@@ -146,11 +155,11 @@ def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:
     r.raise_for_status()
     data = r.json()
 
-    ARTIFACTS["flight_status"] = data
+    key = put_artifact("flight_status", data)
 
     return True, {
         "status": "ok",
-        "artifact_key": "flight_status"
+        "artifact_key": key,
     }
 
 
@@ -164,11 +173,86 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     r.raise_for_status()
     pos = r.json()
 
-    ARTIFACTS["current_position"] = pos
+    key = put_artifact("current_position", pos)
 
     return True, {
         "status": "ok",
-        "artifact_key": "current_position"
+        "artifact_key": key,
+    }
+
+@mcp_tool(
+    description="Fetches all airports from the mock API (airports.json).",
+    provides=["airports_all"],
+    client_handler="SHOW_AIRPORTS",
+)
+def get_all_airports() -> Tuple[bool, Dict[str, Any]]:
+    r = requests.get(f"{API}/airports/list", timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_all", {"data": {"airports": airports}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
+    }
+
+
+@mcp_tool(
+    description="Fetches open airports from the mock API (airports.json).",
+    provides=["airports_open"],
+    client_handler="SHOW_AIRPORTS",
+)
+def get_open_airports() -> Tuple[bool, Dict[str, Any]]:
+    r = requests.get(f"{API}/airports/list", params={"status": "open"}, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_open", {"data": {"airports": airports}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
+    }
+
+
+@mcp_tool(
+    description="Fetches closed airports from the mock API (airports.json).",
+    provides=["airports_closed"],
+    client_handler="SHOW_AIRPORTS",
+)
+def get_closed_airports() -> Tuple[bool, Dict[str, Any]]:
+    r = requests.get(f"{API}/airports/list", params={"status": "closed"}, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_closed", {"data": {"airports": airports}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
+    }
+
+
+@mcp_tool(
+    description="Searches airports by name or code using the mock API (airports.json).",
+    provides=["airports_search"],
+    parameters={"query": "Search query (name or code)."},
+    client_handler="SHOW_AIRPORTS",
+)
+def search_airports_by_name_or_code(*, query: str) -> Tuple[bool, Dict[str, Any]]:
+    if not isinstance(query, str) or not query.strip():
+        return True, {"status": "error", "message": "query must be a non-empty string"}
+    q = query.strip()
+    r = requests.get(f"{API}/airports/search_by_name", params={"query": q}, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_search", {"data": {"airports": airports, "query": q}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
     }
 
 
@@ -182,12 +266,13 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     client_handler="SHOW_AIRPORTS"
 )
 def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
-    pos = ARTIFACTS.get("current_position")
-    if not pos:
+    try:
+        pos = get_artifact("current_position")
+    except RuntimeError:
         return True, {
             "status": "error",
             "code": "NO_CURRENT_POSITION",
-            "message": "Сначала нужно получить текущую позицию"
+            "message": "Current position is required. Call get_current_position first.",
         }
 
     r = requests.get(
@@ -203,13 +288,13 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     data = r.json()
 
     airports = data.get("results", [])
-    ARTIFACTS["selected_airports"] = airports
+    key = put_artifact("nearest_airports", {"data": {"airports": airports, "radius_km": radius_km}})
 
     return True, {
         "status": "ok",
-        "artifact_key": "selected_airports",
+        "artifact_key": key,
         "count": len(airports),
-        "message": f"Найдено {len(airports)} ближайших аэродрома к заданным координатам"
+        "message": f"Found {len(airports)} airports within {radius_km} km.",
     }
 
 
@@ -220,11 +305,15 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     client_handler="SHOW_AIRPORTS"
 )
 def select_airport_with_shortest_runway() -> Tuple[bool, Dict[str, Any]]:
-    airports = ARTIFACTS.get("selected_airports")
+    try:
+        stored = get_artifact("nearest_airports")
+        airports = (stored.get("data") or {}).get("airports") if isinstance(stored, dict) else None
+    except RuntimeError:
+        airports = None
     if not isinstance(airports, list):
         return True, {
             "status": "error",
-            "message": "Ожидался массив аэропортов"
+            "message": "Expected a list of airports in scenario artifacts.",
         }
 
     selected = None
@@ -246,13 +335,14 @@ def select_airport_with_shortest_runway() -> Tuple[bool, Dict[str, Any]]:
     if not selected:
         return False, {
             "status": "error",
-            "message": "Не удалось найти ВПП с корректной длиной"
+            "message": "No runway with a valid length was found.",
         }
 
-    ARTIFACTS["selected_airports"] = [selected]
+    key = put_artifact("selected_airport_shortest_runway", {"data": {"airports": [selected]}})
 
     return True, {
         "status": "ok",
+        "artifact_key": key,
         "selected_airport_id": selected["id"],
         "shortest_runway_length_m": shortest
     }
@@ -271,17 +361,22 @@ def select_airport_with_shortest_runway_by_status(
     *,
     require_runway_status: str
 ) -> Tuple[bool, Dict[str, Any]]:
-    airports = ARTIFACTS.get("selected_airports")
-    if not airports:
+    try:
+        stored = get_artifact("nearest_airports")
+        airports = (stored.get("data") or {}).get("airports") if isinstance(stored, dict) else None
+    except RuntimeError:
+        airports = None
+    if not isinstance(airports, list):
         return True, {
             "status": "error",
-            "message": "Необходимо сначала выполнить поиск аэродромов"
+            "message": "Nearest airports are not available in scenario artifacts.",
         }
 
     selected = None
     shortest = None
 
-    for airport in airports:
+    for entry in airports:
+        airport = entry if isinstance(entry, dict) else entry[0]
         for rw in airport.get("runways", []):
             if rw.get("status") != require_runway_status:
                 continue
@@ -294,13 +389,17 @@ def select_airport_with_shortest_runway_by_status(
     if not selected:
         return False, {
             "status": "error",
-            "message": f"Не найдено ВПП со статусом {require_runway_status}"
+            "message": f"No runway found with status={require_runway_status}.",
         }
 
-    ARTIFACTS["selected_airports"] = [selected]
+    key = put_artifact(
+        "selected_airport_shortest_runway_by_status",
+        {"data": {"airports": [selected]}},
+    )
 
     return True, {
         "status": "ok",
+        "artifact_key": key,
         "selected_airport_id": selected["id"],
         "shortest_runway_length_m": shortest,
         "runway_status": require_runway_status
@@ -322,17 +421,22 @@ def select_airport_with_shortest_runway_by_surface(
     surface: str,
     require_runway_status: str | None = None
 ) -> Tuple[bool, Dict[str, Any]]:
-    airports = ARTIFACTS.get("selected_airports")
-    if not airports:
+    try:
+        stored = get_artifact("nearest_airports")
+        airports = (stored.get("data") or {}).get("airports") if isinstance(stored, dict) else None
+    except RuntimeError:
+        airports = None
+    if not isinstance(airports, list):
         return True, {
             "status": "error",
-            "message": "Необходимо сначала выполнить поиск аэродромов"
+            "message": "Nearest airports are not available in scenario artifacts.",
         }
 
     selected = None
     shortest = None
 
-    for airport in airports:
+    for entry in airports:
+        airport = entry if isinstance(entry, dict) else entry[0]
         for rw in airport.get("runways", []):
             if rw.get("surface") != surface:
                 continue
@@ -347,13 +451,17 @@ def select_airport_with_shortest_runway_by_surface(
     if not selected:
         return False, {
             "status": "error",
-            "message": f"Не найдено ВПП с покрытием {surface}"
+            "message": f"No runway found with surface={surface}.",
         }
 
-    ARTIFACTS["selected_airports"] = [selected]
+    key = put_artifact(
+        "selected_airport_shortest_runway_by_surface",
+        {"data": {"airports": [selected]}},
+    )
 
     return True, {
         "status": "ok",
+        "artifact_key": key,
         "selected_airport_id": selected["id"],
         "shortest_runway_length_m": shortest,
         "surface": surface
@@ -367,19 +475,26 @@ def select_airport_with_shortest_runway_by_surface(
     client_handler="BUILD_ROUTE"
 )
 def build_route_to_first_airport() -> Tuple[bool, Dict[str, Any]]:
-    pos = ARTIFACTS.get("current_position")
-    airports = ARTIFACTS.get("selected_airports")
+    try:
+        pos = get_artifact("current_position")
+    except RuntimeError:
+        pos = None
+    try:
+        stored = get_artifact("selected_airport_shortest_runway")
+        airports = (stored.get("data") or {}).get("airports") if isinstance(stored, dict) else None
+    except RuntimeError:
+        airports = None
 
     if not pos:
         return True, {
             "status": "error",
-            "message": "Сначала нужно получить текущую позицию"
+            "message": "Current position is required. Call get_current_position first.",
         }
 
     if not airports:
         return True, {
             "status": "error",
-            "message": "Сначала нужно выбрать аэропорт"
+            "message": "A selected airport is required. Call select_airport_with_shortest_runway first.",
         }
 
     airport = airports[0]
@@ -395,10 +510,10 @@ def build_route_to_first_airport() -> Tuple[bool, Dict[str, Any]]:
         "distance_km": 42.0  # заглушка как в Ruby
     }
 
-    ARTIFACTS["route"] = route
+    key = put_artifact("route_to_first_airport", route)
 
     return True, {
         "status": "ok",
-        "artifact_key": "route",
+        "artifact_key": key,
         "route": route
     }

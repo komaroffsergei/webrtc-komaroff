@@ -12,8 +12,8 @@ from src_agent.settings import (
     SCENARIO_FLIGHT_STATUS_DESC,
     SCENARIO_FLIGHT_STATUS_TITLE,
 )
-from src_agent.tools.tools import ARTIFACTS, get_flight_status
-from src_agent.utils.db import add_turn, save_artifact
+from src_agent.tools.tools import get_artifact, get_flight_status, tool_context
+from src_agent.utils.db import add_turn
 
 
 class FlightStatusScenario(Scenario):
@@ -32,15 +32,15 @@ class FlightStatusScenario(Scenario):
         prompt: str,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
         llm_request=None,
+        request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
 
         scenario_input = (state.get("scenario") or {}).get("input") or {}
-        pending = (state.get("scenario") or {}).get("pending")
-        if pending and pending.get("field") == "flight_number":
+        pending = state.get("pending")
+        if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "flight_number":
             flight_number = self._extract_flight_number(prompt)
             if not flight_number:
                 self._log(
@@ -51,13 +51,12 @@ class FlightStatusScenario(Scenario):
                     turn_id=turn_id,
                 )
                 return self._ask_flight_number(state, turn_id, stronger=True)
-            state["scenario"]["pending"] = None
+            state["pending"] = None
             return await self._fetch_and_respond(
                 state,
                 flight_number=flight_number,
                 turn_id=turn_id,
                 session_id=session_id,
-                intent_id=intent_id,
                 db=db,
             )
 
@@ -66,13 +65,6 @@ class FlightStatusScenario(Scenario):
             flight_number = self._extract_flight_number(flight_number)
         flight_number = flight_number or self._extract_flight_number(prompt)
         if not flight_number:
-            state["scenario"]["pending"] = {
-                "field": "flight_number",
-                "validation_regex": r"^[A-Z]{1,3}\d{1,4}$",
-                "prompt": PROMPT_FLIGHT_NUMBER,
-                "hint": HINT_FLIGHT_NUMBER,
-                "status": "NEEDS_INPUT",
-            }
             return self._ask_flight_number(state, turn_id, stronger=False)
 
         return await self._fetch_and_respond(
@@ -80,7 +72,6 @@ class FlightStatusScenario(Scenario):
             flight_number=flight_number,
             turn_id=turn_id,
             session_id=session_id,
-            intent_id=intent_id,
             db=db,
         )
 
@@ -102,6 +93,7 @@ class FlightStatusScenario(Scenario):
             field="flight_number",
             prompt_text=prompt_text,
             validation_hint=hint,
+            validation_regex=r"^[A-Z]{1,3}\\d{1,4}$",
             turn_id=turn_id,
         )
         add_turn(state, role="assistant", text=prompt_text)
@@ -118,7 +110,6 @@ class FlightStatusScenario(Scenario):
         flight_number: str,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
     ):
         self._log(
@@ -130,7 +121,8 @@ class FlightStatusScenario(Scenario):
         )
 
         try:
-            cont, result = get_flight_status(flight_number=flight_number)
+            with tool_context(state, self.id):
+                cont, result = get_flight_status(flight_number=flight_number)
         except Exception as exc:
             error_text = f"Failed to fetch flight status: {exc}"
             handler = self.display_result(
@@ -162,7 +154,8 @@ class FlightStatusScenario(Scenario):
                 "client_handler": handler,
             }
 
-        data = ARTIFACTS.get("flight_status") or {}
+        with tool_context(state, self.id):
+            data = get_artifact("flight_status") or {}
         summary_text = self._format_summary(data)
 
         self._log(
@@ -179,15 +172,6 @@ class FlightStatusScenario(Scenario):
             summary_text=summary_text,
             data=data,
             turn_id=turn_id,
-        )
-
-        await save_artifact(
-            db,
-            session_id=session_id,
-            intent_id=intent_id,
-            type="SCENARIO_ARTIFACT",
-            name="flight_status",
-            data={"summary": summary_text, "data": data},
         )
 
         add_turn(state, role="assistant", text=summary_text)

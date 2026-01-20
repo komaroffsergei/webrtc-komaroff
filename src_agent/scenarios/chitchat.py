@@ -25,9 +25,9 @@ class ChitChatScenario(Scenario):
         prompt: str,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
         llm_request,
+        request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
         messages = self._build_messages(state)

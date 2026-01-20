@@ -5,7 +5,6 @@ from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
 from src_agent.settings import (
-    DEFAULT_NEAREST_AIRPORTS_RADIUS_KM,
     HINT_RADIUS,
     HINT_RADIUS_STRONG,
     NEAREST_AIRPORTS_SUMMARY_TEMPLATE,
@@ -14,8 +13,8 @@ from src_agent.settings import (
     SCENARIO_NEAREST_AIRPORTS_DESC,
     SCENARIO_NEAREST_AIRPORTS_TITLE,
 )
-from src_agent.tools.tools import ARTIFACTS, get_current_position, search_nearest_airports
-from src_agent.utils.db import add_turn, save_artifact
+from src_agent.tools.tools import get_artifact, get_current_position, search_nearest_airports, tool_context
+from src_agent.utils.db import add_turn
 
 
 class NearestAirportsScenario(Scenario):
@@ -34,15 +33,14 @@ class NearestAirportsScenario(Scenario):
         prompt: str,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
         llm_request=None,
+        request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
 
-        scenario_input = (state.get("scenario") or {}).get("input") or {}
-        pending = (state.get("scenario") or {}).get("pending")
-        if pending and pending.get("field") == "radius_km":
+        pending = state.get("pending")
+        if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "radius_km":
             radius = self._extract_radius(prompt)
             if radius is None:
                 self._log(
@@ -53,31 +51,22 @@ class NearestAirportsScenario(Scenario):
                     turn_id=turn_id,
                 )
                 return self._ask_radius(state, turn_id, stronger=True)
-            state["scenario"]["pending"] = None
+            state["pending"] = None
             return await self._fetch_and_respond(
                 state,
                 radius_km=radius,
                 turn_id=turn_id,
                 session_id=session_id,
-                intent_id=intent_id,
                 db=db,
             )
 
+        scenario_input = (state.get("scenario") or {}).get("input") or {}
         radius = scenario_input.get("radius_km")
         if isinstance(radius, str):
             radius = self._extract_radius(radius)
         if radius is None:
             radius = self._extract_radius(prompt)
         if radius is None:
-            radius = DEFAULT_NEAREST_AIRPORTS_RADIUS_KM
-        if radius is None:
-            state["scenario"]["pending"] = {
-                "field": "radius_km",
-                "validation_regex": r"^\\d{1,4}$",
-                "prompt": PROMPT_RADIUS,
-                "hint": HINT_RADIUS,
-                "status": "NEEDS_INPUT",
-            }
             return self._ask_radius(state, turn_id, stronger=False)
 
         return await self._fetch_and_respond(
@@ -85,7 +74,6 @@ class NearestAirportsScenario(Scenario):
             radius_km=radius,
             turn_id=turn_id,
             session_id=session_id,
-            intent_id=intent_id,
             db=db,
         )
 
@@ -108,6 +96,7 @@ class NearestAirportsScenario(Scenario):
             field="radius_km",
             prompt_text=prompt_text,
             validation_hint=hint,
+            validation_regex=r"^\d{1,4}$",
             turn_id=turn_id,
         )
         add_turn(state, role="assistant", text=prompt_text)
@@ -124,7 +113,6 @@ class NearestAirportsScenario(Scenario):
         radius_km: int,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
     ):
         self._log(
@@ -135,7 +123,8 @@ class NearestAirportsScenario(Scenario):
             turn_id=turn_id,
         )
         try:
-            _, pos_result = get_current_position()
+            with tool_context(state, self.id):
+                _, pos_result = get_current_position()
         except Exception as exc:
             error_text = f"Failed to get current position: {exc}"
             handler = self.display_result(
@@ -176,7 +165,8 @@ class NearestAirportsScenario(Scenario):
             turn_id=turn_id,
         )
         try:
-            _, airports_result = search_nearest_airports(radius_km=radius_km)
+            with tool_context(state, self.id):
+                _, airports_result = search_nearest_airports(radius_km=radius_km)
         except Exception as exc:
             error_text = f"Failed to search nearest airports: {exc}"
             handler = self.display_result(
@@ -209,7 +199,12 @@ class NearestAirportsScenario(Scenario):
                 "client_handler": handler,
             }
 
-        airports = ARTIFACTS.get("selected_airports") or []
+        with tool_context(state, self.id):
+            stored = get_artifact("nearest_airports") or {}
+        data = stored.get("data") if isinstance(stored, dict) else None
+        airports = (data or {}).get("airports") if isinstance(data, dict) else []
+        if not isinstance(airports, list):
+            airports = []
         summary_text = NEAREST_AIRPORTS_SUMMARY_TEMPLATE.format(radius_km=radius_km, count=len(airports))
 
         self._log(
@@ -222,19 +217,11 @@ class NearestAirportsScenario(Scenario):
 
         handler = self.display_result(
             state,
-            result_artifact_name="selected_airports",
+            result_artifact_name=f"{self.id}.nearest_airports",
             summary_text=summary_text,
             data={"airports": airports, "radius_km": radius_km},
             turn_id=turn_id,
-        )
-
-        await save_artifact(
-            db,
-            session_id=session_id,
-            intent_id=intent_id,
-            type="SCENARIO_ARTIFACT",
-            name="selected_airports",
-            data={"airports": airports, "radius_km": radius_km},
+            command="SHOW_AIRPORTS",
         )
 
         add_turn(state, role="assistant", text=summary_text)
@@ -242,35 +229,4 @@ class NearestAirportsScenario(Scenario):
             "success": True,
             "result": summary_text,
             "client_handler": handler,
-        }
-
-    def display_result(
-        self,
-        state: Dict[str, Any],
-        *,
-        result_artifact_name: str,
-        summary_text: str,
-        data: Dict[str, Any] | None,
-        turn_id: str,
-    ):
-        artifact: Dict[str, Any] = {"summary": summary_text}
-        if data is not None:
-            artifact["data"] = data
-        self._store_artifact(state, name=result_artifact_name, data=artifact, turn_id=turn_id)
-        self._log(
-            state,
-            status="DONE",
-            kind="RESULT_READY",
-            data={"artifact": result_artifact_name},
-            turn_id=turn_id,
-        )
-        if isinstance(state.get("scenario"), dict):
-            state["scenario"]["status"] = "DONE"
-        return {
-            "command": "SHOW_AIRPORTS",
-            "artifacts": {
-                "last": result_artifact_name,
-                "all": [result_artifact_name],
-                "payload": {result_artifact_name: artifact},
-            },
         }

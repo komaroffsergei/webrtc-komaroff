@@ -12,8 +12,8 @@ def _now_iso() -> str:
 
 class Scenario:
     id = "base"
-    title = "Базовый"
-    description = "Базовый сценарий."
+    title = "Base"
+    description = "Base scenario."
     input_hints: Dict[str, str] = {}
     input_types: Dict[str, str] = {}
 
@@ -30,15 +30,16 @@ class Scenario:
         field: str,
         prompt_text: str,
         validation_hint: str,
+        validation_regex: str | None = None,
         turn_id: str,
     ) -> AgentClientHandler:
-        artifact_name = f"{self.id}_request"
+        artifact_name = f"{self.id}.request.{field}.{turn_id}"
         artifact = {
             "field": field,
             "prompt": prompt_text,
             "hint": validation_hint,
         }
-        self._store_artifact(state, name=artifact_name, data=artifact, turn_id=turn_id)
+        self._store_artifact(state, name=artifact_name, data=artifact)
         self._log(
             state,
             status="NEEDS_INPUT",
@@ -48,6 +49,14 @@ class Scenario:
         )
         if isinstance(state.get("scenario"), dict):
             state["scenario"]["status"] = "NEEDS_INPUT"
+        state["pending"] = {
+            "scenario_id": self.id,
+            "kind": "input",
+            "field": field,
+            "prompt": prompt_text,
+            "hint": validation_hint,
+            "validation_regex": validation_regex,
+        }
         return {
             "command": "ASK_USER_INPUT",
             "artifacts": {
@@ -65,26 +74,34 @@ class Scenario:
         summary_text: str,
         data: Dict[str, Any] | None,
         turn_id: str,
+        command: str = "SHOW_MESSAGE",
     ) -> AgentClientHandler:
+        artifact_name = (
+            result_artifact_name
+            if result_artifact_name.startswith(f"{self.id}.")
+            else f"{self.id}.result.{result_artifact_name}"
+        )
         artifact: Dict[str, Any] = {"summary": summary_text}
         if data is not None:
             artifact["data"] = data
-        self._store_artifact(state, name=result_artifact_name, data=artifact, turn_id=turn_id)
+        self._store_artifact(state, name=artifact_name, data=artifact)
         self._log(
             state,
             status="DONE",
             kind="RESULT_READY",
-            data={"artifact": result_artifact_name},
+            data={"artifact": artifact_name},
             turn_id=turn_id,
         )
         if isinstance(state.get("scenario"), dict):
             state["scenario"]["status"] = "DONE"
+        if isinstance(state.get("pending"), dict) and state["pending"].get("scenario_id") == self.id:
+            state["pending"] = None
         return {
-            "command": "SHOW_MESSAGE",
+            "command": command,
             "artifacts": {
-                "last": result_artifact_name,
-                "all": [result_artifact_name],
-                "payload": {result_artifact_name: artifact},
+                "last": artifact_name,
+                "all": [artifact_name],
+                "payload": {artifact_name: artifact},
             },
         }
 
@@ -94,15 +111,17 @@ class Scenario:
         *,
         name: str,
         data: Dict[str, Any],
-        turn_id: str,
     ) -> None:
-        state.setdefault("artifacts", []).append({
-            "turn_id": turn_id,
-            "scenario_id": self.id,
-            "name": name,
-            "data": data,
-            "ts": _now_iso(),
-        })
+        scenarios = state.setdefault("scenario_artifacts", {})
+        scenario_store = scenarios.get(self.id)
+        if scenario_store is None:
+            scenario_store = {}
+            scenarios[self.id] = scenario_store
+        if not isinstance(scenario_store, dict):
+            raise RuntimeError("Invalid scenario_artifacts storage type")
+        if name in scenario_store:
+            raise RuntimeError(f"Artifact key collision: {self.id}.{name}")
+        scenario_store[name] = data
 
     def _log(
         self,

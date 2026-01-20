@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from contextvars import ContextVar
 from typing import Any, Optional, Dict
 from uuid import uuid4
 
 import asyncpg
+
+logger = logging.getLogger("src_agent.db")
+
+_ENSURE_STATE: ContextVar[tuple[str | None, bool]] = ContextVar("_ENSURE_STATE", default=(None, False))
 
 
 @dataclass
@@ -85,51 +91,68 @@ async def update_session_status(db: Database, *, session_id: str, status: str) -
 
 
 # ----------------------------
-# intents
-# ----------------------------
-
-async def create_intent(db: Database, *, session_id: str, intent_type: str) -> str:
-    iid = str(uuid4())
-    await db.execute(
-        """
-        insert into intents (intent_id, session_id, intent_type, status, created_at, updated_at)
-        values ($1, $2, $3, 'RUNNING', now(), now())
-        """,
-        iid,
-        session_id,
-        intent_type,
-    )
-    return iid
-
-
-async def finish_intent(db: Database, *, intent_id: str, status: str = "DONE") -> None:
-    await db.execute(
-        """
-        update intents
-        set status = $2,
-            updated_at = now()
-        where intent_id = $1
-        """,
-        intent_id,
-        status,
-    )
-
-
-# ----------------------------
 # events
 # ----------------------------
+
+async def _ensure_request_row(db: Database, *, session_id: str, request_id: str) -> None:
+    await db.execute(
+        """
+        insert into intents (intent_id, session_id, intent_type, status)
+        values ($1, $2, 'request', 'RUNNING')
+        on conflict (intent_id) do update
+        set updated_at = now()
+        """,
+        request_id,
+        session_id,
+    )
+
+def _attach_trace(payload: Optional[Dict[str, Any]], request_id: str) -> Dict[str, Any]:
+    if payload is None:
+        return {"trace": {"request_id": request_id}}
+    if not isinstance(payload, dict):
+        return {"trace": {"request_id": request_id}, "value": payload}
+    trace = payload.get("trace")
+    if isinstance(trace, dict) and trace.get("request_id") == request_id:
+        return payload
+    merged = dict(payload)
+    merged_trace: Dict[str, Any] = dict(trace) if isinstance(trace, dict) else {}
+    merged_trace.setdefault("request_id", request_id)
+    merged["trace"] = merged_trace
+    return merged
+
 
 async def log_event(
     db: Database,
     *,
     session_id: str,
-    intent_id: Optional[str],
+    request_id: Optional[str],
     role: str,
     event_type: str,
     name: Optional[str] = None,
     input: Optional[Dict[str, Any]] = None,
     output: Optional[Dict[str, Any]] = None,
 ) -> None:
+    intent_id = request_id
+    db_input = input
+    db_output = output
+    if request_id:
+        ensured_request_id, ensured_ok = _ENSURE_STATE.get()
+        if ensured_request_id != request_id:
+            try:
+                await _ensure_request_row(db, session_id=session_id, request_id=request_id)
+                _ENSURE_STATE.set((request_id, True))
+                ensured_ok = True
+            except asyncpg.PostgresError as exc:
+                _ENSURE_STATE.set((request_id, False))
+                ensured_ok = False
+                logger.warning(
+                    "Failed to upsert request trace row into intents; events.intent_id will be NULL. error=%s",
+                    str(exc),
+                )
+        if not ensured_ok:
+            intent_id = None
+            db_input = _attach_trace(input, request_id)
+            db_output = _attach_trace(output, request_id)
     await db.execute(
         """
         insert into events (
@@ -148,37 +171,9 @@ async def log_event(
         role,
         event_type,
         name,
-        _to_jsonb(input),
-        _to_jsonb(output),
+        _to_jsonb(db_input),
+        _to_jsonb(db_output),
     )
-
-
-# ----------------------------
-# artifacts
-# ----------------------------
-
-async def save_artifact(
-    db: Database,
-    *,
-    session_id: str,
-    intent_id: Optional[str],
-    type: str,
-    name: str,
-    data: Dict[str, Any],
-) -> None:
-    await db.execute(
-        """
-        insert into artifacts (artifact_id, session_id, intent_id, type, name, data)
-        values ($1, $2, $3, $4, $5, $6::jsonb)
-        """,
-        str(uuid4()),
-        session_id,
-        intent_id,
-        type,
-        name,
-        _to_jsonb(data),
-    )
-
 
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
@@ -201,9 +196,10 @@ def init_conversation(session_id: str) -> Dict[str, Any]:
         "session_id": session_id,
         "turns": [],
         "messages": [],
-        "scenario": {"id": None, "status": "RUNNING", "pending": None, "input": None},
+        "scenario": {"id": None, "status": "RUNNING", "input": None},
+        "pending": None,
         "scenario_log": [],
-        "artifacts": [],
+        "scenario_artifacts": {},
         "updated_at": _now_iso(),
     }
 
@@ -240,13 +236,13 @@ def truncate_conversation_after_turn(state: Dict[str, Any], turn_id: str) -> boo
 
     state["turns"] = kept_turns
     state["messages"] = []
-    state["artifacts"] = [a for a in state.get("artifacts", []) if a.get("turn_id") in kept_ids]
     state["scenario_log"] = [
         e for e in state.get("scenario_log", [])
         if e.get("turn_id") in kept_ids or e.get("turn_id") is None
     ]
     if isinstance(state.get("scenario"), dict):
-        state["scenario"]["pending"] = None
         state["scenario"]["status"] = "RUNNING"
         state["scenario"]["input"] = None
+    state["pending"] = None
+    state["scenario_artifacts"] = {}
     return True

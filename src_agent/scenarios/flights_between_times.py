@@ -35,15 +35,15 @@ class FlightsBetweenTimesScenario(Scenario):
         prompt: str,
         turn_id: str,
         session_id: str,
-        intent_id: str,
         db,
         llm_request=None,
+        request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
 
         scenario_input = (state.get("scenario") or {}).get("input") or {}
-        pending = (state.get("scenario") or {}).get("pending")
-        if pending and pending.get("field") == "time_range":
+        pending = state.get("pending")
+        if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "time_range":
             start_time, end_time = self._extract_time_range(prompt)
             if not start_time or not end_time:
                 self._log(
@@ -54,7 +54,7 @@ class FlightsBetweenTimesScenario(Scenario):
                     turn_id=turn_id,
                 )
                 return self._ask_time_range(state, turn_id, stronger=True)
-            state["scenario"]["pending"] = None
+            state["pending"] = None
             return self._respond_placeholder(state, turn_id, start_time, end_time)
 
         start_time = scenario_input.get("start_time")
@@ -62,13 +62,6 @@ class FlightsBetweenTimesScenario(Scenario):
         if not isinstance(start_time, str) or not isinstance(end_time, str):
             start_time, end_time = self._extract_time_range(prompt)
         if not start_time or not end_time:
-            state["scenario"]["pending"] = {
-                "field": "time_range",
-                "validation_regex": r"^\\d{1,2}(:\\d{2})?\\s*-\\s*\\d{1,2}(:\\d{2})?$",
-                "prompt": PROMPT_TIME_RANGE,
-                "hint": HINT_TIME_RANGE,
-                "status": "NEEDS_INPUT",
-            }
             return self._ask_time_range(state, turn_id, stronger=False)
 
         return self._respond_placeholder(state, turn_id, start_time, end_time)
@@ -98,6 +91,7 @@ class FlightsBetweenTimesScenario(Scenario):
             field="time_range",
             prompt_text=prompt_text,
             validation_hint=hint,
+            validation_regex=r"^\\d{1,2}(:\\d{2})?\\s*-\\s*\\d{1,2}(:\\d{2})?$",
             turn_id=turn_id,
         )
         add_turn(state, role="assistant", text=prompt_text)

@@ -56,6 +56,17 @@ def search_by_name(query: str):
         ]
     }
 
+@app.get("/api/airports/list")
+def list_airports(status: Optional[str] = None):
+    if status is not None and status not in ("open", "closed"):
+        return JSONResponse({"error": "status must be 'open' or 'closed'"}, status_code=400)
+    return {
+        "results": [
+            a for a in AIRPORTS
+            if status is None or a.get("status") == status
+        ]
+    }
+
 
 @app.get("/api/airports/nearest")
 def nearest_airports(

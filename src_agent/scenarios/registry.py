@@ -12,7 +12,12 @@ from src_agent.settings import (
 from .chitchat import ChitChatScenario
 from .flight_status import FlightStatusScenario
 from .flights_between_times import FlightsBetweenTimesScenario
+from .airports_clarify import AirportsClarifyScenario
+from .list_airports_all import ListAirportsAllScenario
+from .list_airports_open import ListAirportsOpenScenario
+from .list_airports_closed import ListAirportsClosedScenario
 from .nearest_airports import NearestAirportsScenario
+from .search_airports_by_name_or_code import SearchAirportsByNameOrCodeScenario
 
 _SCENARIOS: List[Scenario] = []
 _SCENARIO_BY_ID: Dict[str, Scenario] = {}
@@ -96,4 +101,9 @@ def select_scenario_tool(args: dict) -> dict:
 register_scenario(ChitChatScenario())
 register_scenario(FlightStatusScenario())
 register_scenario(FlightsBetweenTimesScenario())
+register_scenario(AirportsClarifyScenario())
+register_scenario(ListAirportsAllScenario())
+register_scenario(ListAirportsOpenScenario())
+register_scenario(ListAirportsClosedScenario())
 register_scenario(NearestAirportsScenario())
+register_scenario(SearchAirportsByNameOrCodeScenario())
