@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict
 
@@ -31,6 +32,7 @@ class Scenario:
         prompt_text: str,
         validation_hint: str,
         validation_regex: str | None = None,
+        meta: Dict[str, Any] | None = None,
         turn_id: str,
     ) -> AgentClientHandler:
         artifact_name = f"{self.id}.request.{field}.{turn_id}"
@@ -56,6 +58,7 @@ class Scenario:
             "prompt": prompt_text,
             "hint": validation_hint,
             "validation_regex": validation_regex,
+            "meta": meta,
         }
         return {
             "command": "ASK_USER_INPUT",
@@ -65,6 +68,41 @@ class Scenario:
                 "payload": {artifact_name: artifact},
             },
         }
+
+    async def build_clarification_question(
+        self,
+        *,
+        llm_request,
+        user_text: str,
+        meta: Dict[str, Any],
+    ) -> str:
+        payload = {
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You generate a single clarification question for the user.\n"
+                        "Rules:\n"
+                        "- Use the same language as the user.\n"
+                        "- Ask naturally; do not require a specific answer format.\n"
+                        "- Do not output menus like 'reply with one word'.\n"
+                        "- Output only the question text.\n"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps({"user_text": user_text, "meta": meta}, ensure_ascii=False),
+                },
+            ],
+            "think": False,
+            "options": {"temperature": 0.2},
+        }
+        resp = await llm_request(payload)
+        content = (resp.get("message") or {}).get("content")
+        question = content.strip() if isinstance(content, str) else ""
+        if not question:
+            raise RuntimeError("LLM did not return a clarification question")
+        return question
 
     def display_result(
         self,

@@ -216,6 +216,17 @@ export class AssistantApp {
         this.chat.addMessage(text, "server");
         return;
       }
+      case "transcription": {
+        const text = typeof event.data.text === "string" ? event.data.text : null;
+        if (!text) {
+          console.warn("[nats] Invalid transcription payload", event);
+          return;
+        }
+        this.chat.clearThinking();
+        this.chat.addMessage(text, "user");
+        this.chat.setThinking("Thinking…");
+        return;
+      }
       case "thought": {
         const summary = typeof event.data.summary === "string" ? event.data.summary : "Thinking…";
         const content = typeof event.data.content === "string" ? event.data.content : undefined;

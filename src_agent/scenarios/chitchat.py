@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
@@ -38,7 +37,7 @@ class ChitChatScenario(Scenario):
         }
         resp = await llm_request(llm_payload)
         content = (resp.get("message") or {}).get("content")
-        reply_text = self._strip_think(content) if isinstance(content, str) else ""
+        reply_text = content.strip() if isinstance(content, str) else ""
         if not reply_text:
             reply_text = CHITCHAT_FALLBACK_MESSAGE
 
@@ -67,7 +66,3 @@ class ChitChatScenario(Scenario):
             if role in ("user", "assistant") and isinstance(text, str):
                 messages.append({"role": role, "content": text})
         return messages
-
-    def _strip_think(self, text: str) -> str:
-        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-        return cleaned

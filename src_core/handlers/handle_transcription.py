@@ -17,6 +17,15 @@ async def handle_transcription(app, payload: dict):
     logger.info("handle_transcription: '%s'", text)
 
     session_id = payload.get("session_id")
+    phrase_id = payload.get("phrase_id")
+    if phrase_id:
+        await event_log(
+            "command",
+            "transcription",
+            {"text": text, "phrase_id": phrase_id},
+            app=app,
+            service=STACK_SERVICE_NAME,
+        )
     await event_log(
         "command",
         "voice",

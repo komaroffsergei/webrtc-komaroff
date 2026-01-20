@@ -23,7 +23,7 @@ class SearchAirportsByNameOrCodeScenario(Scenario):
         turn_id: str,
         session_id: str,
         db,
-        llm_request=None,
+        llm_request,
         request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
@@ -32,12 +32,12 @@ class SearchAirportsByNameOrCodeScenario(Scenario):
         if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "query":
             query = self._extract_query(prompt, allow_sentence=True)
             if not query:
-                return self._ask_query(state, turn_id, stronger=True)
+                return await self._ask_query(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=True)
             state["pending"] = None
         else:
             query = self._extract_query(prompt, allow_sentence=True)
         if not query:
-            return self._ask_query(state, turn_id, stronger=False)
+            return await self._ask_query(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=False)
 
         with tool_context(state, self.id):
             _, res = search_airports_by_name_or_code(query=query)
@@ -72,20 +72,40 @@ class SearchAirportsByNameOrCodeScenario(Scenario):
         add_turn(state, role="assistant", text=summary)
         return {"success": True, "result": summary, "client_handler": handler}
 
-    def _ask_query(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = "Please provide an airport name or code to search for."
-        if stronger:
-            prompt_text = "Provide a non-empty airport name or code (example: SVO)."
+    async def _ask_query(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
+        meta = {
+            "reason": "missing_required_parameter",
+            "scenario_id": self.id,
+            "missing": ["query"],
+            "constraints": {"query": "airport name or airport code"},
+            "previous_invalid": invalid,
+        }
+        try:
+            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+        except Exception as exc:
+            error_text = f"Unable to ask for clarification: {exc}"
+            handler = self.display_result(
+                state,
+                result_artifact_name="error",
+                summary_text=error_text,
+                data={"error": str(exc)},
+                turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
+            )
+            add_turn(state, role="assistant", text=error_text)
+            return {"success": True, "result": error_text, "client_handler": handler}
+
         handler = self.display_request(
             state,
             field="query",
-            prompt_text=prompt_text,
-            validation_hint="Example: SVO or Sheremetyevo",
+            prompt_text=question,
+            validation_hint="",
             validation_regex=None,
+            meta=meta,
             turn_id=turn_id,
         )
-        add_turn(state, role="assistant", text=prompt_text)
-        return {"success": True, "result": prompt_text, "client_handler": handler}
+        add_turn(state, role="assistant", text=question)
+        return {"success": True, "result": question, "client_handler": handler}
 
     def _extract_query(self, prompt: str, *, allow_sentence: bool) -> str | None:
         match = self._quoted.search(prompt or "")

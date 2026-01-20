@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 from uuid import uuid4
 
-from src_agent.settings import AGENT_MAX_STEPS, SYSTEM_PROMPT, TIMEOUT_SECONDS
+from src_agent.settings import AGENT_MAX_STEPS, CHITCHAT_FALLBACK_MESSAGE, SYSTEM_PROMPT, TIMEOUT_SECONDS
 
 from src_agent.utils.mcp_tools import AgentResponse
 from src_agent.utils.nats_logger import NatsLogger
@@ -42,6 +42,8 @@ _AIRPORT_OPEN_RE = re.compile(r"\b(open|открыт\w*|работа\w*)\b", re.
 _AIRPORT_CLOSED_RE = re.compile(r"\b(closed|закрыт\w*)\b", re.IGNORECASE)
 _AIRPORT_SEARCH_RE = re.compile(r"\b(search|find|lookup)\b|\b(поиск|найд\w*|ищ\w*)\b|\b(по\s*коду|по\s*названию)\b", re.IGNORECASE)
 _AIRPORT_DISTANCE_RE = re.compile(r"\b\d{1,4}\s*(?:км|km)\b", re.IGNORECASE)
+
+_THINK_RE = re.compile(r"<think>(.*?)</think>", flags=re.IGNORECASE | re.DOTALL)
 
 
 def _airport_route(prompt: str) -> str | None:
@@ -118,6 +120,44 @@ def _safe_llm_payload(payload: dict, preview_limit: int = 200) -> dict:
 
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
+
+def _split_think(text: str) -> tuple[str, str]:
+    if not text:
+        return "", ""
+    chunks = [c.strip() for c in _THINK_RE.findall(text) if isinstance(c, str) and c.strip()]
+    cleaned = _THINK_RE.sub("", text)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+    thought = "\n\n".join(chunks).strip()
+    return cleaned, thought
+
+
+def _thought_summary(thought: str, limit: int = 160) -> str:
+    s = " ".join((thought or "").split()).strip()
+    return s[:limit]
+
+
+def _sanitize_user_visible_container(container: object) -> tuple[object, str]:
+    think_parts: list[str] = []
+
+    def walk(obj: object, key: str | None = None) -> object:
+        if isinstance(obj, dict):
+            for k, v in list(obj.items()):
+                obj[k] = walk(v, k)
+            return obj
+        if isinstance(obj, list):
+            for i, v in enumerate(obj):
+                obj[i] = walk(v, key)
+            return obj
+        if isinstance(obj, str) and key in ("result", "prompt", "hint", "summary", "text", "message", "content"):
+            cleaned, thought = _split_think(obj)
+            if thought:
+                think_parts.append(thought)
+            return cleaned
+        return obj
+
+    updated = walk(container)
+    combined = "\n\n".join([t for t in think_parts if t]).strip()
+    return updated, combined
 
 
 def _build_messages_from_turns(turns: list[dict]) -> list[dict]:
@@ -543,6 +583,47 @@ class MCPAgent:
                 request_id=request_id,
             )
             if scenario_response:
+                extracted_think = ""
+                updated_response, extracted_think = _sanitize_user_visible_container(scenario_response)
+                scenario_response = updated_response if isinstance(updated_response, dict) else scenario_response
+
+                if state.get("turns") and state["turns"][-1].get("role") == "assistant":
+                    last_text = state["turns"][-1].get("text")
+                    if isinstance(last_text, str):
+                        cleaned_turn, thought_turn = _split_think(last_text)
+                        state["turns"][-1]["text"] = cleaned_turn
+                        if thought_turn:
+                            extracted_think = f"{extracted_think}\n\n{thought_turn}".strip() if extracted_think else thought_turn
+
+                if selected_scenario_id == "chitchat":
+                    result = scenario_response.get("result")
+                    if isinstance(result, str) and not result.strip():
+                        scenario_response["result"] = CHITCHAT_FALLBACK_MESSAGE
+                        handler = scenario_response.get("client_handler")
+                        if isinstance(handler, dict):
+                            artifacts = handler.get("artifacts")
+                            if isinstance(artifacts, dict):
+                                payload = artifacts.get("payload")
+                                if isinstance(payload, dict):
+                                    for v in payload.values():
+                                        if not isinstance(v, dict):
+                                            continue
+                                        if isinstance(v.get("summary"), str) and not v["summary"].strip():
+                                            v["summary"] = CHITCHAT_FALLBACK_MESSAGE
+                                        data = v.get("data")
+                                        if isinstance(data, dict) and isinstance(data.get("text"), str) and not data["text"].strip():
+                                            data["text"] = CHITCHAT_FALLBACK_MESSAGE
+                        if state.get("turns") and (state["turns"][-1].get("role") == "assistant"):
+                            state["turns"][-1]["text"] = CHITCHAT_FALLBACK_MESSAGE
+
+                if extracted_think and self._events:
+                    await self._emit_thought(
+                        summary=_thought_summary(extracted_think),
+                        content=extracted_think,
+                        scenario_id=selected_scenario_id,
+                        scenario_reason=selected_reason,
+                    )
+
                 scenario_state["input"] = None
                 scenario_response["session_id"] = session_id
                 state["messages"] = _build_messages_from_turns(state.get("turns", []))

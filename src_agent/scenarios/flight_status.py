@@ -5,10 +5,6 @@ from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
 from src_agent.settings import (
-    HINT_FLIGHT_NUMBER,
-    HINT_FLIGHT_NUMBER_STRONG,
-    PROMPT_FLIGHT_NUMBER,
-    PROMPT_FLIGHT_NUMBER_STRONG,
     SCENARIO_FLIGHT_STATUS_DESC,
     SCENARIO_FLIGHT_STATUS_TITLE,
 )
@@ -33,7 +29,7 @@ class FlightStatusScenario(Scenario):
         turn_id: str,
         session_id: str,
         db,
-        llm_request=None,
+        llm_request,
         request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
@@ -50,7 +46,7 @@ class FlightStatusScenario(Scenario):
                     data={"field": "flight_number", "text": prompt},
                     turn_id=turn_id,
                 )
-                return self._ask_flight_number(state, turn_id, stronger=True)
+                return await self._ask_flight_number(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=True)
             state["pending"] = None
             return await self._fetch_and_respond(
                 state,
@@ -65,7 +61,7 @@ class FlightStatusScenario(Scenario):
             flight_number = self._extract_flight_number(flight_number)
         flight_number = flight_number or self._extract_flight_number(prompt)
         if not flight_number:
-            return self._ask_flight_number(state, turn_id, stronger=False)
+            return await self._ask_flight_number(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=False)
 
         return await self._fetch_and_respond(
             state,
@@ -81,27 +77,40 @@ class FlightStatusScenario(Scenario):
             return None
         return match.group(1).upper()
 
-    def _ask_flight_number(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = PROMPT_FLIGHT_NUMBER
-        hint = HINT_FLIGHT_NUMBER
-        if stronger:
-            prompt_text = PROMPT_FLIGHT_NUMBER_STRONG
-            hint = HINT_FLIGHT_NUMBER_STRONG
+    async def _ask_flight_number(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
+        meta = {
+            "reason": "missing_required_parameter",
+            "scenario_id": self.id,
+            "missing": ["flight_number"],
+            "constraints": {"flight_number": "flight number like SU100"},
+            "previous_invalid": invalid,
+        }
+        try:
+            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+        except Exception as exc:
+            error_text = f"Unable to ask for clarification: {exc}"
+            handler = self.display_result(
+                state,
+                result_artifact_name="error",
+                summary_text=error_text,
+                data={"error": str(exc)},
+                turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
+            )
+            add_turn(state, role="assistant", text=error_text)
+            return {"success": True, "result": error_text, "client_handler": handler}
 
         handler = self.display_request(
             state,
             field="flight_number",
-            prompt_text=prompt_text,
-            validation_hint=hint,
-            validation_regex=r"^[A-Z]{1,3}\\d{1,4}$",
+            prompt_text=question,
+            validation_hint="",
+            validation_regex=None,
+            meta=meta,
             turn_id=turn_id,
         )
-        add_turn(state, role="assistant", text=prompt_text)
-        return {
-            "success": True,
-            "result": prompt_text,
-            "client_handler": handler,
-        }
+        add_turn(state, role="assistant", text=question)
+        return {"success": True, "result": question, "client_handler": handler}
 
     async def _fetch_and_respond(
         self,

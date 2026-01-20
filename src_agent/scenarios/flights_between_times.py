@@ -6,10 +6,6 @@ from typing import Any, Dict, Optional, Tuple
 from src_agent.scenarios.base import Scenario
 from src_agent.settings import (
     FLIGHTS_BETWEEN_TIMES_UNAVAILABLE_TEMPLATE,
-    HINT_TIME_RANGE,
-    HINT_TIME_RANGE_STRONG,
-    PROMPT_TIME_RANGE,
-    PROMPT_TIME_RANGE_STRONG,
     SCENARIO_FLIGHTS_BETWEEN_TIMES_DESC,
     SCENARIO_FLIGHTS_BETWEEN_TIMES_TITLE,
 )
@@ -36,7 +32,7 @@ class FlightsBetweenTimesScenario(Scenario):
         turn_id: str,
         session_id: str,
         db,
-        llm_request=None,
+        llm_request,
         request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
@@ -53,7 +49,7 @@ class FlightsBetweenTimesScenario(Scenario):
                     data={"field": "time_range", "text": prompt},
                     turn_id=turn_id,
                 )
-                return self._ask_time_range(state, turn_id, stronger=True)
+                return await self._ask_time_range(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=True)
             state["pending"] = None
             return self._respond_placeholder(state, turn_id, start_time, end_time)
 
@@ -62,7 +58,7 @@ class FlightsBetweenTimesScenario(Scenario):
         if not isinstance(start_time, str) or not isinstance(end_time, str):
             start_time, end_time = self._extract_time_range(prompt)
         if not start_time or not end_time:
-            return self._ask_time_range(state, turn_id, stronger=False)
+            return await self._ask_time_range(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=False)
 
         return self._respond_placeholder(state, turn_id, start_time, end_time)
 
@@ -79,27 +75,40 @@ class FlightsBetweenTimesScenario(Scenario):
         minute = match.group(2) or "00"
         return f"{hour.zfill(2)}:{minute}"
 
-    def _ask_time_range(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = PROMPT_TIME_RANGE
-        hint = HINT_TIME_RANGE
-        if stronger:
-            prompt_text = PROMPT_TIME_RANGE_STRONG
-            hint = HINT_TIME_RANGE_STRONG
+    async def _ask_time_range(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
+        meta = {
+            "reason": "missing_required_parameter",
+            "scenario_id": self.id,
+            "missing": ["start_time", "end_time"],
+            "constraints": {"start_time": "time like 12:00", "end_time": "time like 16:00"},
+            "previous_invalid": invalid,
+        }
+        try:
+            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+        except Exception as exc:
+            error_text = f"Unable to ask for clarification: {exc}"
+            handler = self.display_result(
+                state,
+                result_artifact_name="error",
+                summary_text=error_text,
+                data={"error": str(exc)},
+                turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
+            )
+            add_turn(state, role="assistant", text=error_text)
+            return {"success": True, "result": error_text, "client_handler": handler}
 
         handler = self.display_request(
             state,
             field="time_range",
-            prompt_text=prompt_text,
-            validation_hint=hint,
-            validation_regex=r"^\\d{1,2}(:\\d{2})?\\s*-\\s*\\d{1,2}(:\\d{2})?$",
+            prompt_text=question,
+            validation_hint="",
+            validation_regex=None,
+            meta=meta,
             turn_id=turn_id,
         )
-        add_turn(state, role="assistant", text=prompt_text)
-        return {
-            "success": True,
-            "result": prompt_text,
-            "client_handler": handler,
-        }
+        add_turn(state, role="assistant", text=question)
+        return {"success": True, "result": question, "client_handler": handler}
 
     def _respond_placeholder(self, state: Dict[str, Any], turn_id: str, start: str, end: str):
         summary = FLIGHTS_BETWEEN_TIMES_UNAVAILABLE_TEMPLATE.format(start=start, end=end)

@@ -5,11 +5,7 @@ from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
 from src_agent.settings import (
-    HINT_RADIUS,
-    HINT_RADIUS_STRONG,
     NEAREST_AIRPORTS_SUMMARY_TEMPLATE,
-    PROMPT_RADIUS,
-    PROMPT_RADIUS_STRONG,
     SCENARIO_NEAREST_AIRPORTS_DESC,
     SCENARIO_NEAREST_AIRPORTS_TITLE,
 )
@@ -34,7 +30,7 @@ class NearestAirportsScenario(Scenario):
         turn_id: str,
         session_id: str,
         db,
-        llm_request=None,
+        llm_request,
         request_id: str,
     ):
         self.on_user_turn(state, prompt, turn_id)
@@ -50,7 +46,7 @@ class NearestAirportsScenario(Scenario):
                     data={"field": "radius_km", "text": prompt},
                     turn_id=turn_id,
                 )
-                return self._ask_radius(state, turn_id, stronger=True)
+                return await self._ask_radius(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=True)
             state["pending"] = None
             return await self._fetch_and_respond(
                 state,
@@ -67,7 +63,7 @@ class NearestAirportsScenario(Scenario):
         if radius is None:
             radius = self._extract_radius(prompt)
         if radius is None:
-            return self._ask_radius(state, turn_id, stronger=False)
+            return await self._ask_radius(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=False)
 
         return await self._fetch_and_respond(
             state,
@@ -84,27 +80,40 @@ class NearestAirportsScenario(Scenario):
         value = int(match.group(1))
         return value if value > 0 else None
 
-    def _ask_radius(self, state: Dict[str, Any], turn_id: str, *, stronger: bool):
-        prompt_text = PROMPT_RADIUS
-        hint = HINT_RADIUS
-        if stronger:
-            prompt_text = PROMPT_RADIUS_STRONG
-            hint = HINT_RADIUS_STRONG
+    async def _ask_radius(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
+        meta = {
+            "reason": "missing_required_parameter",
+            "scenario_id": self.id,
+            "missing": ["radius_km"],
+            "constraints": {"radius_km": "integer number of kilometers"},
+            "previous_invalid": invalid,
+        }
+        try:
+            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+        except Exception as exc:
+            error_text = f"Unable to ask for clarification: {exc}"
+            handler = self.display_result(
+                state,
+                result_artifact_name="error",
+                summary_text=error_text,
+                data={"error": str(exc)},
+                turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
+            )
+            add_turn(state, role="assistant", text=error_text)
+            return {"success": True, "result": error_text, "client_handler": handler}
 
         handler = self.display_request(
             state,
             field="radius_km",
-            prompt_text=prompt_text,
-            validation_hint=hint,
-            validation_regex=r"^\d{1,4}$",
+            prompt_text=question,
+            validation_hint="",
+            validation_regex=None,
+            meta=meta,
             turn_id=turn_id,
         )
-        add_turn(state, role="assistant", text=prompt_text)
-        return {
-            "success": True,
-            "result": prompt_text,
-            "client_handler": handler,
-        }
+        add_turn(state, role="assistant", text=question)
+        return {"success": True, "result": question, "client_handler": handler}
 
     async def _fetch_and_respond(
         self,
