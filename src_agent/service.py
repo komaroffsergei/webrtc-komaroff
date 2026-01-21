@@ -94,6 +94,10 @@ class AgentServer:
 
             if not session_id:
                 session_id = await create_session(self.db, user_id=self.user_id)
+            else:
+                # session_id can come from external services (e.g. WebRTC signaling);
+                # ensure the DB session row exists to satisfy FK constraints.
+                await create_session(self.db, user_id=self.user_id, session_id=session_id)
 
             result = await self.agent.run(prompt=prompt, session_id=session_id, edit=edit)
             await self._publish_result_event(result)
@@ -175,8 +179,6 @@ class AgentServer:
         artifacts = self._normalize_artifacts(raw_artifacts)
 
         text = self._extract_message_text(result, artifacts)
-        if not text and result.get("success") is True:
-            text = "Done."
         if text:
             data: dict[str, object] = {
                 "type": "answer" if result.get("success") is True else "system",
@@ -186,12 +188,26 @@ class AgentServer:
                 data["artifacts"] = artifacts
             await self.nats_logger.log("command", "message", data)
 
+        extra_events = result.get("client_events")
+        if isinstance(extra_events, list):
+            for e in extra_events:
+                if not isinstance(e, dict):
+                    continue
+                command = e.get("command")
+                raw = e.get("artifacts")
+                ev_artifacts = self._normalize_artifacts(raw) if isinstance(raw, dict) else None
+                if isinstance(command, str) and command:
+                    data: dict[str, object] = {"command": command}
+                    if ev_artifacts:
+                        data["artifacts"] = ev_artifacts
+                    await self.nats_logger.log("command", "client", data)
+
         command = client_handler.get("command")
         if isinstance(command, str) and command and command not in ("ASK_USER_INPUT", "SHOW_MESSAGE", "SHOW_ERROR_MESSAGE"):
             data: dict[str, object] = {"command": command}
             if artifacts:
                 data["artifacts"] = artifacts
-            await self.nats_logger.log("command", "client_handler", data)
+            await self.nats_logger.log("command", "client", data)
 
     def _normalize_artifacts(self, raw: object) -> dict[str, object] | None:
         if not isinstance(raw, dict):

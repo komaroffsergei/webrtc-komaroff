@@ -12,6 +12,10 @@ export class CommandHandler {
     this.sessionId = sessionId;
   }
 
+  getSessionId(): string | null {
+    return this.sessionId;
+  }
+
   // async handleServerEvent(event: ServerEvent): Promise<boolean> {
   //   if (event && "type" in event && event.type === "command" && event.method) {
   //     const h = this.handlers.get(event.method);

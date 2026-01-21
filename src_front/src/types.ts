@@ -5,6 +5,11 @@ export type AgentCommandContext = {
   warning: {
     show(payload: { message: string }): void;
   };
+  map?: {
+    setAirports(airports: Array<{ lat: number; lon: number; id?: string; code?: string; name?: string; status?: string }>): void;
+    setCurrentPosition(lat: number, lon: number): void;
+    drawRoute(route: { geometry: Array<[number, number]>; distance_km?: number }): void;
+  };
 };
 
 export type ServerEvent = {

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
@@ -16,10 +15,23 @@ class FlightStatusScenario(Scenario):
     id = "flight_status"
     title = SCENARIO_FLIGHT_STATUS_TITLE
     description = SCENARIO_FLIGHT_STATUS_DESC
-    input_hints = {"flight_number": "Номер рейса, например SU100."}
-    input_types = {"flight_number": "string"}
+    llm_prompt = (
+        "Ты извлекаешь один из следующих параметров:\n"
+        "- flight_number: строка или null\n"
+        "- surname: строка или null\n"
+        "Правила:\n"
+        "- Принимай любой пользовательский ввод (любая строка).\n"
+        "- Самостоятельно определи, является ли ввод номером рейса или фамилией.\n"
+        "- Если ты не можешь уверенно определить ни то ни другое, установи оба значения в null.\n"
+        "- Никогда не выдумывай значения.\n"
+    )
 
-    _flight_re = re.compile(r"\b([A-Z]{1,3}\d{1,4})\b", re.IGNORECASE)
+    input_hints = {
+        "flight_number": "Номер рейса в любом формате или null, если отсутствует.",
+        "surname": "Фамилия пассажира в любом формате или null, если отсутствует.",
+    }
+
+    input_types = {"flight_number": "string", "surname": "string"}
 
     async def handle(
         self,
@@ -34,59 +46,30 @@ class FlightStatusScenario(Scenario):
     ):
         self.on_user_turn(state, prompt, turn_id)
 
-        scenario_input = (state.get("scenario") or {}).get("input") or {}
-        pending = state.get("pending")
-        if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "flight_number":
-            flight_number = self._extract_flight_number(prompt)
-            if not flight_number:
-                self._log(
-                    state,
-                    status="NEEDS_INPUT",
-                    kind="INPUT_INVALID",
-                    data={"field": "flight_number", "text": prompt},
-                    turn_id=turn_id,
-                )
-                return await self._ask_flight_number(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=True)
-            state["pending"] = None
-            return await self._fetch_and_respond(
-                state,
-                flight_number=flight_number,
-                turn_id=turn_id,
-                session_id=session_id,
-                db=db,
-            )
+        scenario_input = (state.get("scenario") or {}).get("input")
+        if not isinstance(scenario_input, dict):
+            scenario_input = {}
 
         flight_number = scenario_input.get("flight_number")
+        surname = scenario_input.get("surname")
+
         if isinstance(flight_number, str):
-            flight_number = self._extract_flight_number(flight_number)
-        flight_number = flight_number or self._extract_flight_number(prompt)
-        if not flight_number:
-            return await self._ask_flight_number(state, turn_id, llm_request=llm_request, user_text=prompt, invalid=False)
+            return await self._fetch_and_respond(state, turn_id, flight_number=flight_number, surname=None)
+        if isinstance(surname, str):
+            return await self._fetch_and_respond(state, turn_id, flight_number=None, surname=surname)
 
-        return await self._fetch_and_respond(
-            state,
-            flight_number=flight_number,
-            turn_id=turn_id,
-            session_id=session_id,
-            db=db,
-        )
-
-    def _extract_flight_number(self, prompt: str) -> str | None:
-        match = self._flight_re.search(prompt or "")
-        if not match:
-            return None
-        return match.group(1).upper()
-
-    async def _ask_flight_number(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
         meta = {
             "reason": "missing_required_parameter",
             "scenario_id": self.id,
-            "missing": ["flight_number"],
-            "constraints": {"flight_number": "flight number like SU100"},
-            "previous_invalid": invalid,
+            "missing": ["flight_number", "surname"],
+            "constraints": {
+                "flight_number": "Example: SU100",
+                "surname": "Example: Ivanov",
+            },
         }
+
         try:
-            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+            question = await self.build_clarification_question(llm_request=llm_request, user_text=prompt, meta=meta)
         except Exception as exc:
             error_text = f"Unable to ask for clarification: {exc}"
             handler = self.display_result(
@@ -102,7 +85,7 @@ class FlightStatusScenario(Scenario):
 
         handler = self.display_request(
             state,
-            field="flight_number",
+            field="flight_query",
             prompt_text=question,
             validation_hint="",
             validation_regex=None,
@@ -115,23 +98,22 @@ class FlightStatusScenario(Scenario):
     async def _fetch_and_respond(
         self,
         state: Dict[str, Any],
-        *,
-        flight_number: str,
         turn_id: str,
-        session_id: str,
-        db,
+        *,
+        flight_number: str | None,
+        surname: str | None,
     ):
         self._log(
             state,
             status="RUNNING",
             kind="TOOL_CALLED",
-            data={"tool": "get_flight_status", "flight_number": flight_number},
+            data={"tool": "get_flight_status"},
             turn_id=turn_id,
         )
 
         try:
             with tool_context(state, self.id):
-                cont, result = get_flight_status(flight_number=flight_number)
+                _, result = get_flight_status(flight_number=flight_number, surname=surname)
         except Exception as exc:
             error_text = f"Failed to fetch flight status: {exc}"
             handler = self.display_result(
@@ -140,55 +122,37 @@ class FlightStatusScenario(Scenario):
                 summary_text=error_text,
                 data={"error": str(exc)},
                 turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
             )
             add_turn(state, role="assistant", text=error_text)
-            return {
-                "success": True,
-                "result": error_text,
-                "client_handler": handler,
-            }
-        if result.get("status") != "ok":
-            error_text = result.get("message") or "Unable to fetch flight status."
+            return {"success": True, "result": error_text, "client_handler": handler}
+
+        if not isinstance(result, dict) or result.get("status") != "ok":
+            error_text = "Unable to fetch flight status."
             handler = self.display_result(
                 state,
                 result_artifact_name="flight_status_error",
                 summary_text=error_text,
                 data={"error": result},
                 turn_id=turn_id,
+                command="SHOW_ERROR_MESSAGE",
             )
             add_turn(state, role="assistant", text=error_text)
-            return {
-                "success": True,
-                "result": error_text,
-                "client_handler": handler,
-            }
+            return {"success": True, "result": error_text, "client_handler": handler}
 
         with tool_context(state, self.id):
-            data = get_artifact("flight_status") or {}
-        summary_text = self._format_summary(data)
-
-        self._log(
-            state,
-            status="DONE",
-            kind="TOOL_RESULT_STORED",
-            data={"artifact": "flight_status"},
-            turn_id=turn_id,
-        )
-
+            data = get_artifact("flight_status")
+        data_dict = data if isinstance(data, dict) else {}
+        summary_text = self._format_summary(data_dict)
         handler = self.display_result(
             state,
             result_artifact_name="flight_status",
             summary_text=summary_text,
-            data=data,
+            data=data_dict,
             turn_id=turn_id,
         )
-
         add_turn(state, role="assistant", text=summary_text)
-        return {
-            "success": True,
-            "result": summary_text,
-            "client_handler": handler,
-        }
+        return {"success": True, "result": summary_text, "client_handler": handler}
 
     def _format_summary(self, data: Dict[str, Any]) -> str:
         if not data:
@@ -201,6 +165,7 @@ class FlightStatusScenario(Scenario):
         arrival = data.get("arrival_time", "unknown time")
         terminal = data.get("terminal")
         gate = data.get("gate")
+        surname = data.get("surname")
 
         parts = [
             f"Flight {flight_number} status: {status}.",
@@ -208,6 +173,8 @@ class FlightStatusScenario(Scenario):
             f"Departure: {departure}.",
             f"Arrival: {arrival}.",
         ]
+        if surname:
+            parts.append(f"Surname: {surname}.")
         if terminal or gate:
             parts.append(f"Terminal {terminal or '-'}, gate {gate or '-'}.")
         return " ".join(parts)

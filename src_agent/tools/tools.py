@@ -1,4 +1,6 @@
 import os
+import re
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Tuple, Dict, Any
@@ -10,7 +12,8 @@ from src_agent.settings import (
     TOOL_ASK_USER_INPUT_DESCRIPTION,
     TOOL_ASK_USER_INPUT_MESSAGE_PARAM,
     TOOL_FLIGHT_STATUS_DESCRIPTION,
-    TOOL_FLIGHT_STATUS_PARAM,
+    TOOL_FLIGHT_STATUS_FLIGHT_NUMBER_PARAM,
+    TOOL_FLIGHT_STATUS_SURNAME_PARAM,
 )
 
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
@@ -59,8 +62,6 @@ def put_artifact(label: str, value: Any) -> str:
     state, scenario_id = _require_context()
     key = _artifact_key(label)
     store = _scenario_artifacts(state, scenario_id)
-    if key in store:
-        raise RuntimeError(f"Artifact key collision: {key}")
     store[key] = value
     return key
 
@@ -137,19 +138,19 @@ def ask_user_input(*, message: str) -> Tuple[bool, Dict[str, Any]]:
     description=TOOL_FLIGHT_STATUS_DESCRIPTION,
     provides=["flight_status"],
     parameters={
-        "flight_number": TOOL_FLIGHT_STATUS_PARAM
-    }
+        "flight_number": TOOL_FLIGHT_STATUS_FLIGHT_NUMBER_PARAM,
+        "surname": TOOL_FLIGHT_STATUS_SURNAME_PARAM,
+    },
 )
-def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:
-    if not isinstance(flight_number, str) or not flight_number.strip():
-        return True, {
-            "status": "error",
-            "message": "flight_number is required",
-        }
-
+def get_flight_status(*, flight_number: str | None = None, surname: str | None = None) -> Tuple[bool, Dict[str, Any]]:
+    params: dict[str, object] = {}
+    if flight_number is not None:
+        params["flight_number"] = flight_number
+    if surname is not None:
+        params["surname"] = surname
     r = requests.get(
         FLIGHTS_API_URL,
-        params={"flight_number": flight_number.strip().upper()},
+        params=params,
         timeout=10,
     )
     r.raise_for_status()
@@ -173,12 +174,146 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     r.raise_for_status()
     pos = r.json()
 
-    key = put_artifact("current_position", pos)
+    lat = pos.get("lat")
+    lon = pos.get("lon")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return True, {
+            "status": "error",
+            "message": "Invalid position payload",
+        }
+
+    key = put_artifact("current_position", {"data": {"current_position": {"lat": float(lat), "lon": float(lon)}}})
 
     return True, {
         "status": "ok",
         "artifact_key": key,
+        "lat": float(lat),
+        "lon": float(lon),
     }
+
+
+@mcp_tool(
+    description="Fetches the full airport list from the mock API (airports.json).",
+    provides=["airports_list"],
+    client_handler="SET_AIRPORTS",
+)
+def list_airports() -> Tuple[bool, Dict[str, Any]]:
+    r = requests.get(f"{API}/airports/list", timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_list", {"data": {"airports": airports}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
+    }
+
+
+@mcp_tool(
+    description="Builds a great-circle route between two points using the mock API.",
+    provides=["route_geometry"],
+    parameters={
+        "start_lat": "Start latitude",
+        "start_lon": "Start longitude",
+        "end_lat": "End latitude",
+        "end_lon": "End longitude",
+    },
+    client_handler="BUILD_ROUTE",
+)
+def build_route(*, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Tuple[bool, Dict[str, Any]]:
+    r = requests.post(
+        f"{API}/routes/build",
+        params={"start_lat": start_lat, "start_lon": start_lon, "end_lat": end_lat, "end_lon": end_lon},
+        timeout=10,
+    )
+    r.raise_for_status()
+    data = r.json()
+    geometry = data.get("geometry")
+    distance = data.get("distance_km")
+    key = put_artifact("route_geometry", {"data": {"geometry": geometry, "distance_km": distance}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "distance_km": distance,
+    }
+
+
+@mcp_tool(
+    description="Resolves an airport from arbitrary user text using the mock API search.",
+    provides=["resolved_airport"],
+    parameters={"user_text": "User text containing an airport name/code."},
+)
+def resolve_airport(*, user_text: str) -> Tuple[bool, Dict[str, Any]]:
+    if not isinstance(user_text, str) or not user_text.strip():
+        return True, {"status": "error", "message": "user_text must be a non-empty string"}
+
+    text = user_text.strip()
+    code_match = None
+    m = re.search(r"\\b([A-Za-z]{3,4})\\b", text)
+    if m:
+        code_match = m.group(1).upper()
+
+    candidates: list[str] = []
+    candidates.append(text)
+    if code_match:
+        candidates.append(code_match)
+    cleaned = re.sub(r"\\b(airport|airports|aerodrome|aerodromes)\\b", "", text, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\\b(аэропорт|аэропорты|аэродром|аэродромы)\\b", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^(до|от|из|в|к)\\b", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\\s+", " ", cleaned).strip()
+    if cleaned and cleaned not in candidates:
+        candidates.append(cleaned)
+
+    seen: dict[str, dict] = {}
+    for q in candidates:
+        if not q:
+            continue
+        r = requests.get(f"{API}/airports/search_by_name", params={"query": q}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            continue
+        for a in results:
+            if not isinstance(a, dict):
+                continue
+            aid = str(a.get("id") or "")
+            acode = str(a.get("code") or "")
+            key = aid or acode
+            if not key:
+                continue
+            if key not in seen:
+                seen[key] = a
+
+    options = list(seen.values())
+    slim = [
+        {
+            "id": a.get("id"),
+            "code": a.get("code"),
+            "name": a.get("name"),
+            "lat": a.get("lat"),
+            "lon": a.get("lon"),
+            "status": a.get("status"),
+        }
+        for a in options
+    ]
+
+    if code_match:
+        for a in slim:
+            if str(a.get("code") or "").upper() == code_match or str(a.get("id") or "").upper() == code_match:
+                put_artifact("resolved_airport", {"data": {"status": "ok", "airport": a}})
+                return True, {"status": "ok", "airport": a}
+
+    if len(slim) == 1:
+        put_artifact("resolved_airport", {"data": {"status": "ok", "airport": slim[0]}})
+        return True, {"status": "ok", "airport": slim[0]}
+    if len(slim) > 1:
+        put_artifact("resolved_airport", {"data": {"status": "ambiguous", "options": slim}})
+        return True, {"status": "ambiguous", "options": slim}
+
+    put_artifact("resolved_airport", {"data": {"status": "not_found"}})
+    return True, {"status": "not_found"}
 
 @mcp_tool(
     description="Fetches all airports from the mock API (airports.json).",
@@ -267,7 +402,7 @@ def search_airports_by_name_or_code(*, query: str) -> Tuple[bool, Dict[str, Any]
 )
 def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     try:
-        pos = get_artifact("current_position")
+        stored = get_artifact("current_position")
     except RuntimeError:
         return True, {
             "status": "error",
@@ -275,11 +410,19 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
             "message": "Current position is required. Call get_current_position first.",
         }
 
+    pos = (stored.get("data") or {}).get("current_position") if isinstance(stored, dict) else None
+    if not isinstance(pos, dict):
+        return True, {
+            "status": "error",
+            "code": "INVALID_CURRENT_POSITION",
+            "message": "Current position payload is invalid.",
+        }
+
     r = requests.get(
         f"{API}/airports/nearest",
         params={
-            "lat": pos["lat"],
-            "lon": pos["lon"],
+            "lat": pos.get("lat"),
+            "lon": pos.get("lon"),
             "radius_km": radius_km
         },
         timeout=10
@@ -296,6 +439,41 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
         "count": len(airports),
         "message": f"Found {len(airports)} airports within {radius_km} km.",
     }
+
+
+def _haversine_km(*, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2.0) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+    )
+    return 2.0 * r * math.asin(math.sqrt(a))
+
+
+@mcp_tool(
+    description="Selects one airport by distance from the current position (nearest or farthest).",
+    consumes=["current_position"],
+    provides=["airport_by_distance"],
+    parameters={"mode": "Either 'nearest' or 'farthest'."},
+)
+def find_airport_by_distance(*, mode: str) -> Tuple[bool, Dict[str, Any]]:
+    stored = get_artifact("current_position")
+    pos = (stored["data"] or {})["current_position"]
+    lat = float(pos["lat"])
+    lon = float(pos["lon"])
+
+    r = requests.get(f"{API}/airports/list", timeout=10)
+    r.raise_for_status()
+    airports = r.json()["results"]
+
+    key_fn = lambda a: _haversine_km(lat1=lat, lon1=lon, lat2=float(a["lat"]), lon2=float(a["lon"]))
+    selected = min(airports, key=key_fn) if mode == "nearest" else max(airports, key=key_fn)
+    distance_km = round(key_fn(selected), 2)
+
+    key = put_artifact("airport_by_distance", {"data": {"airport": selected, "distance_km": distance_km, "mode": mode}})
+    return True, {"status": "ok", "artifact_key": key, "airport": selected, "distance_km": distance_km}
 
 
 @mcp_tool(

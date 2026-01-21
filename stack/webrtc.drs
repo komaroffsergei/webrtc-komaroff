@@ -28,6 +28,7 @@ Service :src_core, image: webrtc_registry['core']do
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
       NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       NATS_REQUEST_TIMEOUT: ENV.fetch("NATS_REQUEST_TIMEOUT", "600"),
       STACK_SERVICE_NAME: 'src_core',
       USER_ID: USER_ID,

@@ -5,6 +5,7 @@ from pathlib import Path
 from aiohttp import web
 
 from src_core.handlers.handle_message import message_handler
+from src_core.handlers.handle_init_map import init_map_handler
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
@@ -34,6 +35,7 @@ def setup_routes(app):
     app.router.add_get("/core", handle_index)
     app.router.add_post("/core/offer", handle_offer)
     app.router.add_post("/core/message", message_handler)
+    app.router.add_post("/core/init_map", init_map_handler)
 
     app.on_startup.append(handle_startup)
     app.on_shutdown.append(handle_shutdown)

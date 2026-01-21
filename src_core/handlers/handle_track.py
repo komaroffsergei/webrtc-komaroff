@@ -14,7 +14,7 @@ from ..settings import STACK_SERVICE_NAME
 logger = logging.getLogger("track")
 
 
-async def handle_track(track, pc, audio_transceiver, app, echo_ref):
+async def handle_track(track, pc, audio_transceiver, app, echo_ref, *, session_id: str | None = None):
     if track.kind != "audio":
         return
 
@@ -51,6 +51,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref):
             app['services']['nats_client'],  # publish frames
             app['vars']['NATS_ASR_SUBJECT'],  # whisper input
             on_transcription= lambda data: handle_transcription(app, data) ,  # whisper output
+            session_id=session_id,
             sample_rate=16000,
             min_speech_duration_ms=250,
             min_silence_duration_ms=500,

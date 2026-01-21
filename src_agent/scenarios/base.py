@@ -17,6 +17,7 @@ class Scenario:
     description = "Base scenario."
     input_hints: Dict[str, str] = {}
     input_types: Dict[str, str] = {}
+    llm_prompt: str
 
     def on_user_turn(self, state: Dict[str, Any], prompt: str, turn_id: str) -> None:
         self._log(state, status="RUNNING", kind="USER_TURN", data={"text": prompt}, turn_id=turn_id)
@@ -51,6 +52,7 @@ class Scenario:
         )
         if isinstance(state.get("scenario"), dict):
             state["scenario"]["status"] = "NEEDS_INPUT"
+            state["scenario"]["id"] = self.id
         state["pending"] = {
             "scenario_id": self.id,
             "kind": "input",
@@ -76,6 +78,12 @@ class Scenario:
         user_text: str,
         meta: Dict[str, Any],
     ) -> str:
+        wants_russian = any("\u0400" <= ch <= "\u04FF" for ch in (user_text or ""))
+        lang_hint = (
+            "The user writes in Russian. Output must be in Russian."
+            if wants_russian
+            else "Use the same language as the user."
+        )
         payload = {
             "messages": [
                 {
@@ -83,9 +91,15 @@ class Scenario:
                     "content": (
                         "You generate a single clarification question for the user.\n"
                         "Rules:\n"
-                        "- Use the same language as the user.\n"
+                        f"- {lang_hint}\n"
+                        "- Your goal is to collect missing information from the user.\n"
+                        "- The missing fields are listed in meta.missing. Ask the user to provide them.\n"
+                        "- Use meta.constraints (if present) to add a short example.\n"
+                        "- Do not ask about UI (e.g. 'where should I enter'). Ask for the value itself.\n"
+                        "- Do not mention scenarios, tools, meta, or system internals.\n"
                         "- Ask naturally; do not require a specific answer format.\n"
                         "- Do not output menus like 'reply with one word'.\n"
+                        "- Do not include <think> blocks.\n"
                         "- Output only the question text.\n"
                     ),
                 },
@@ -95,7 +109,7 @@ class Scenario:
                 },
             ],
             "think": False,
-            "options": {"temperature": 0.2},
+            "options": {"temperature": 0.0},
         }
         resp = await llm_request(payload)
         content = (resp.get("message") or {}).get("content")

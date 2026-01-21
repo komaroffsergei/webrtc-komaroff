@@ -16,6 +16,10 @@ class FlightsBetweenTimesScenario(Scenario):
     id = "flights_between_times"
     title = SCENARIO_FLIGHTS_BETWEEN_TIMES_TITLE
     description = SCENARIO_FLIGHTS_BETWEEN_TIMES_DESC
+    llm_prompt = (
+        "Извлеки start_time и end_time как строки в формате HH:MM, если пользователь их указал.\n"
+        "Если одно из значений отсутствует, не угадывай и не выдумывай."
+    )
     input_hints = {
         "start_time": "Время начала, формат HH:MM.",
         "end_time": "Время окончания, формат HH:MM.",

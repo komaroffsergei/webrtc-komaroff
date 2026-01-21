@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
 from typing import Any, Dict
 
 from src_agent.scenarios.base import Scenario
@@ -11,7 +10,7 @@ from src_agent.utils.db import add_turn
 class AirportsClarifyScenario(Scenario):
     id = "airports_clarify"
     title = "Clarify airport request"
-    description = "Asks the user to clarify what kind of airport data they need."
+    description = "Clarifies an ambiguous airports request (not used for nearest/farthest by distance)."
 
     async def handle(
         self,
@@ -26,24 +25,29 @@ class AirportsClarifyScenario(Scenario):
     ):
         self.on_user_turn(state, prompt, turn_id)
 
+        candidates = [
+            "nearest_airports",
+            "list_airports_all",
+            "list_airports_open",
+            "list_airports_closed",
+            "search_airports_by_name_or_code",
+        ]
+
         pending = state.get("pending")
-        if isinstance(pending, dict) and pending.get("scenario_id") == self.id and pending.get("field") == "airports_intent":
-            candidates = (pending.get("meta") or {}).get("candidates") or []
-            if not isinstance(candidates, list) or not all(isinstance(x, str) for x in candidates):
-                candidates = []
-            if not candidates:
-                candidates = [
-                    "nearest_airports",
-                    "list_airports_all",
-                    "list_airports_open",
-                    "list_airports_closed",
-                    "search_airports_by_name_or_code",
-                ]
+        pending_active = (
+            isinstance(pending, dict)
+            and pending.get("scenario_id") == self.id
+            and pending.get("field") == "airports_intent"
+        )
+        if pending_active:
+            meta = pending.get("meta") if isinstance(pending.get("meta"), dict) else None
+            if meta:
+                meta_candidates = meta.get("candidates")
+                if isinstance(meta_candidates, list) and all(isinstance(x, str) for x in meta_candidates):
+                    candidates = meta_candidates
 
-            choice = await self._select_candidate(llm_request, user_text=prompt, candidates=candidates)
-            if not choice:
-                return await self._ask_via_llm(state, turn_id, llm_request=llm_request, stronger=True)
-
+        choice = await self._select_candidate(llm_request, user_text=prompt, candidates=candidates)
+        if isinstance(choice, str):
             state["pending"] = None
             if isinstance(state.get("scenario"), dict):
                 state["scenario"]["id"] = choice
@@ -77,38 +81,24 @@ class AirportsClarifyScenario(Scenario):
                 request_id=request_id,
             )
 
-        return await self._ask_via_llm(state, turn_id, llm_request=llm_request, stronger=False)
+        return await self._ask_via_llm(state, turn_id, llm_request=llm_request, user_text=prompt, candidates=candidates)
 
-    async def _ask_via_llm(self, state: Dict[str, Any], turn_id: str, *, llm_request, stronger: bool):
-        user_text = (state.get("turns") or [])[-1].get("text") if state.get("turns") else ""
-        user_text = str(user_text) if isinstance(user_text, str) else ""
-        geo_signals = bool(re.search(r"\b\d{1,4}\s*(?:км|km)\b", user_text, re.IGNORECASE)) or bool(
-            re.search(r"\b(nearest|nearby|closest|around|within|radius)\b|\b(рядом|поблизости|ближайш\w*|окрестн\w*|в\s*радиус\w*|возле|недалеко|вблизи|около)\b", user_text, re.IGNORECASE)
-        )
-        list_all_signals = bool(re.search(r"\b(all|все|полный|весь)\b", user_text, re.IGNORECASE))
-        status_open_signals = bool(re.search(r"\b(open|открыт\w*|работа\w*)\b", user_text, re.IGNORECASE))
-        status_closed_signals = bool(re.search(r"\b(closed|закрыт\w*)\b", user_text, re.IGNORECASE))
-        search_signals = bool(re.search(r"\b(search|find|lookup)\b|\b(поиск|найд\w*|ищ\w*)\b|\b(по\s*коду|по\s*названию)\b", user_text, re.IGNORECASE))
-
-        meta = {
-            "reason": "airport_request_ambiguous",
-            "candidates": [
-                "nearest_airports",
-                "list_airports_all",
-                "list_airports_open",
-                "list_airports_closed",
-                "search_airports_by_name_or_code",
-            ],
-            "signals": {
-                "geo": geo_signals,
-                "list_all": list_all_signals,
-                "status_open": status_open_signals,
-                "status_closed": status_closed_signals,
-                "search": search_signals,
-            },
-        }
+    async def _ask_via_llm(
+        self,
+        state: Dict[str, Any],
+        turn_id: str,
+        *,
+        llm_request,
+        user_text: str,
+        candidates: list[str],
+    ):
+        meta = {"reason": "airport_request_ambiguous", "candidates": candidates}
         try:
-            question = await self.build_clarification_question(llm_request=llm_request, user_text=user_text, meta=meta)
+            question = await self.build_clarification_question(
+                llm_request=llm_request,
+                user_text=user_text,
+                meta=meta,
+            )
         except Exception as exc:
             error_text = f"Unable to ask for clarification: {exc}"
             handler = self.display_result(

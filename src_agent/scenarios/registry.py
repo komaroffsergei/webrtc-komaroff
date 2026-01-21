@@ -18,6 +18,7 @@ from .list_airports_open import ListAirportsOpenScenario
 from .list_airports_closed import ListAirportsClosedScenario
 from .nearest_airports import NearestAirportsScenario
 from .search_airports_by_name_or_code import SearchAirportsByNameOrCodeScenario
+from .route_builder import RouteBuilderScenario
 
 _SCENARIOS: List[Scenario] = []
 _SCENARIO_BY_ID: Dict[str, Scenario] = {}
@@ -107,3 +108,4 @@ register_scenario(ListAirportsOpenScenario())
 register_scenario(ListAirportsClosedScenario())
 register_scenario(NearestAirportsScenario())
 register_scenario(SearchAirportsByNameOrCodeScenario())
+register_scenario(RouteBuilderScenario())
