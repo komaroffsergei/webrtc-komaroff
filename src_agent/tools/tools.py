@@ -1,5 +1,6 @@
 import os
 import re
+import math
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Tuple, Dict, Any
@@ -401,7 +402,7 @@ def search_airports_by_name_or_code(*, query: str) -> Tuple[bool, Dict[str, Any]
 )
 def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
     try:
-        pos = get_artifact("current_position")
+        stored = get_artifact("current_position")
     except RuntimeError:
         return True, {
             "status": "error",
@@ -409,11 +410,19 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
             "message": "Current position is required. Call get_current_position first.",
         }
 
+    pos = (stored.get("data") or {}).get("current_position") if isinstance(stored, dict) else None
+    if not isinstance(pos, dict):
+        return True, {
+            "status": "error",
+            "code": "INVALID_CURRENT_POSITION",
+            "message": "Current position payload is invalid.",
+        }
+
     r = requests.get(
         f"{API}/airports/nearest",
         params={
-            "lat": pos["lat"],
-            "lon": pos["lon"],
+            "lat": pos.get("lat"),
+            "lon": pos.get("lon"),
             "radius_km": radius_km
         },
         timeout=10
@@ -430,6 +439,41 @@ def search_nearest_airports(*, radius_km: int) -> Tuple[bool, Dict[str, Any]]:
         "count": len(airports),
         "message": f"Found {len(airports)} airports within {radius_km} km.",
     }
+
+
+def _haversine_km(*, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2.0) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+    )
+    return 2.0 * r * math.asin(math.sqrt(a))
+
+
+@mcp_tool(
+    description="Selects one airport by distance from the current position (nearest or farthest).",
+    consumes=["current_position"],
+    provides=["airport_by_distance"],
+    parameters={"mode": "Either 'nearest' or 'farthest'."},
+)
+def find_airport_by_distance(*, mode: str) -> Tuple[bool, Dict[str, Any]]:
+    stored = get_artifact("current_position")
+    pos = (stored["data"] or {})["current_position"]
+    lat = float(pos["lat"])
+    lon = float(pos["lon"])
+
+    r = requests.get(f"{API}/airports/list", timeout=10)
+    r.raise_for_status()
+    airports = r.json()["results"]
+
+    key_fn = lambda a: _haversine_km(lat1=lat, lon1=lon, lat2=float(a["lat"]), lon2=float(a["lon"]))
+    selected = min(airports, key=key_fn) if mode == "nearest" else max(airports, key=key_fn)
+    distance_km = round(key_fn(selected), 2)
+
+    key = put_artifact("airport_by_distance", {"data": {"airport": selected, "distance_km": distance_km, "mode": mode}})
+    return True, {"status": "ok", "artifact_key": key, "airport": selected, "distance_km": distance_km}
 
 
 @mcp_tool(

@@ -303,7 +303,10 @@ class MCPAgent:
 
         state["messages"] = _build_messages_from_turns(state.get("turns", []))
 
-        scenario_state = state.get("scenario") or {"id": None, "status": "RUNNING", "input": None}
+        scenario_state = state.get("scenario")
+        if not isinstance(scenario_state, dict):
+            scenario_state = {"id": None, "status": "RUNNING", "input": None}
+            state["scenario"] = scenario_state
         current_scenario_id = scenario_state.get("id")
         pending = state.get("pending")
         has_pending = isinstance(pending, dict) and bool(pending.get("scenario_id"))
@@ -334,6 +337,10 @@ class MCPAgent:
                         "context": {
                             "current_scenario_id": current_scenario_id,
                             "current_scenario_status": scenario_state.get("status"),
+                            "pending": {
+                                "active": isinstance(state.get("pending"), dict),
+                                "scenario_id": (state.get("pending") or {}).get("scenario_id") if isinstance(state.get("pending"), dict) else None,
+                            },
                         }
                     },
                     ensure_ascii=False,
