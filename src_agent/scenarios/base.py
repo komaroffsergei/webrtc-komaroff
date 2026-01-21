@@ -76,6 +76,8 @@ class Scenario:
         user_text: str,
         meta: Dict[str, Any],
     ) -> str:
+        wants_russian = any("\u0400" <= ch <= "\u04FF" for ch in (user_text or ""))
+        lang_hint = "The user writes in Russian. Ask in Russian." if wants_russian else "Use the same language as the user."
         payload = {
             "messages": [
                 {
@@ -83,7 +85,7 @@ class Scenario:
                     "content": (
                         "You generate a single clarification question for the user.\n"
                         "Rules:\n"
-                        "- Use the same language as the user.\n"
+                        f"- {lang_hint}\n"
                         "- Ask naturally; do not require a specific answer format.\n"
                         "- Do not output menus like 'reply with one word'.\n"
                         "- Output only the question text.\n"

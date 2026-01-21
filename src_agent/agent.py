@@ -45,6 +45,11 @@ _AIRPORT_DISTANCE_RE = re.compile(r"\b\d{1,4}\s*(?:км|km)\b", re.IGNORECASE)
 
 _THINK_RE = re.compile(r"<think>(.*?)</think>", flags=re.IGNORECASE | re.DOTALL)
 
+_ROUTE_WORD_RE = re.compile(
+    r"\b(route|routes|routing)\b|\b(маршрут|маршруты|проложи|проложить|построй|построить)\b",
+    re.IGNORECASE,
+)
+
 
 def _airport_route(prompt: str) -> str | None:
     text = (prompt or "").strip()
@@ -78,6 +83,12 @@ def _airport_route(prompt: str) -> str | None:
     if mode == "search":
         return "search_airports_by_name_or_code"
     return "airports_clarify"
+
+def _route_builder_route(prompt: str) -> str | None:
+    text = (prompt or "").strip()
+    if not text or not _ROUTE_WORD_RE.search(text):
+        return None
+    return "route_builder"
 
 
 def _preview_text(s: Any, limit: int) -> Optional[str]:
@@ -337,118 +348,123 @@ class MCPAgent:
             if selected_scenario_id:
                 scenario_state["id"] = selected_scenario_id
         else:
-            airport_scenario = _airport_route(prompt)
-            if airport_scenario:
-                selected_scenario_id = airport_scenario
-                selected_reason = "deterministic_airport_router"
+            route_scenario = _route_builder_route(prompt)
+            if route_scenario:
+                selected_scenario_id = route_scenario
+                selected_reason = "deterministic_route_router"
             else:
-                routing_messages = [
-                    {"role": "system", "content": ROUTING_SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ]
-                routing_payload = {
-                    "messages": routing_messages,
-                    "tools": [build_select_scenario_tool_schema()],
-                    "think": False,
-                    "options": {"temperature": 0.0},
-                }
-                await log_event(
-                    self.db,
-                    session_id=session_id,
-                    request_id=request_id,
-                    role="LLM",
-                    event_type="ROUTING_REQUEST",
-                    input={
-                        "tools": ["select_scenario"],
-                        "messages": _safe_llm_messages(routing_messages, preview_limit=200),
+                airport_scenario = _airport_route(prompt)
+                if airport_scenario:
+                    selected_scenario_id = airport_scenario
+                    selected_reason = "deterministic_airport_router"
+                else:
+                    routing_messages = [
+                        {"role": "system", "content": ROUTING_SYSTEM_PROMPT},
+                        {"role": "user", "content": prompt},
+                    ]
+                    routing_payload = {
+                        "messages": routing_messages,
+                        "tools": [build_select_scenario_tool_schema()],
+                        "think": False,
                         "options": {"temperature": 0.0},
-                    },
-                )
-                logger.info(
-                    "ROUTING LLM request tools=select_scenario messages=%d user=%s",
-                    len(routing_messages),
-                    _preview_text(prompt, 120),
-                )
-                try:
-                    routing_resp = await self._request_llm(routing_payload)
-                except Exception as exc:
+                    }
                     await log_event(
                         self.db,
                         session_id=session_id,
                         request_id=request_id,
-                        role="SYSTEM",
-                        event_type="ERROR",
-                        output={"type": "LLM_EXCEPTION", "message": str(exc), "step": 0},
+                        role="LLM",
+                        event_type="ROUTING_REQUEST",
+                        input={
+                            "tools": ["select_scenario"],
+                            "messages": _safe_llm_messages(routing_messages, preview_limit=200),
+                            "options": {"temperature": 0.0},
+                        },
                     )
-                    await update_session_status(self.db, session_id=session_id, status="FAILED")
-                    return self._error(
-                        "LLM_EXCEPTION",
-                        str(exc),
-                        prompt=prompt,
-                        steps=0,
-                        model=None,
-                        total_time=None,
-                        session_id=session_id,
+                    logger.info(
+                        "ROUTING LLM request tools=select_scenario messages=%d user=%s",
+                        len(routing_messages),
+                        _preview_text(prompt, 120),
                     )
+                    try:
+                        routing_resp = await self._request_llm(routing_payload)
+                    except Exception as exc:
+                        await log_event(
+                            self.db,
+                            session_id=session_id,
+                            request_id=request_id,
+                            role="SYSTEM",
+                            event_type="ERROR",
+                            output={"type": "LLM_EXCEPTION", "message": str(exc), "step": 0},
+                        )
+                        await update_session_status(self.db, session_id=session_id, status="FAILED")
+                        return self._error(
+                            "LLM_EXCEPTION",
+                            str(exc),
+                            prompt=prompt,
+                            steps=0,
+                            model=None,
+                            total_time=None,
+                            session_id=session_id,
+                        )
 
-                routing_msg = routing_resp.get("message") or {}
-                tool_calls = routing_msg.get("tool_calls") or []
-                scenario_ids = {s.id for s in list_selectable_scenarios()}
-                await log_event(
-                    self.db,
-                    session_id=session_id,
-                    request_id=request_id,
-                    role="LLM",
-                    event_type="ROUTING_RESPONSE",
-                    output={
-                        "tool_calls": [{"name": c.get("function", {}).get("name")} for c in tool_calls],
-                        "content_preview": _preview_text(routing_msg.get("content"), 300),
-                        "model": routing_resp.get("model"),
-                    },
-                )
-                logger.info(
-                    "ROUTING LLM response tools=%s content=%s",
-                    ",".join(c.get("function", {}).get("name") or "" for c in tool_calls),
-                    _preview_text(routing_msg.get("content"), 120),
-                )
-                if routing_resp.get("error"):
+                    routing_msg = routing_resp.get("message") or {}
+                    tool_calls = routing_msg.get("tool_calls") or []
+                    scenario_ids = {s.id for s in list_selectable_scenarios()}
                     await log_event(
                         self.db,
                         session_id=session_id,
                         request_id=request_id,
-                        role="SYSTEM",
-                        event_type="ERROR",
+                        role="LLM",
+                        event_type="ROUTING_RESPONSE",
                         output={
-                            "type": "LLM_EXCEPTION",
-                            "message": routing_resp.get("details") or routing_resp.get("error"),
-                            "step": 0,
+                            "tool_calls": [{"name": c.get("function", {}).get("name")} for c in tool_calls],
+                            "content_preview": _preview_text(routing_msg.get("content"), 300),
                             "model": routing_resp.get("model"),
                         },
                     )
-                    await update_session_status(self.db, session_id=session_id, status="FAILED")
-                    return self._error(
-                        "LLM_EXCEPTION",
-                        routing_resp.get("details") or routing_resp.get("error"),
-                        prompt=prompt,
-                        steps=0,
-                        model=routing_resp.get("model"),
-                        total_time=None,
-                        session_id=session_id,
+                    logger.info(
+                        "ROUTING LLM response tools=%s content=%s",
+                        ",".join(c.get("function", {}).get("name") or "" for c in tool_calls),
+                        _preview_text(routing_msg.get("content"), 120),
                     )
+                    if routing_resp.get("error"):
+                        await log_event(
+                            self.db,
+                            session_id=session_id,
+                            request_id=request_id,
+                            role="SYSTEM",
+                            event_type="ERROR",
+                            output={
+                                "type": "LLM_EXCEPTION",
+                                "message": routing_resp.get("details") or routing_resp.get("error"),
+                                "step": 0,
+                                "model": routing_resp.get("model"),
+                            },
+                        )
+                        await update_session_status(self.db, session_id=session_id, status="FAILED")
+                        return self._error(
+                            "LLM_EXCEPTION",
+                            routing_resp.get("details") or routing_resp.get("error"),
+                            prompt=prompt,
+                            steps=0,
+                            model=routing_resp.get("model"),
+                            total_time=None,
+                            session_id=session_id,
+                        )
 
-                for call in tool_calls:
-                    fn_name = call.get("function", {}).get("name")
-                    if fn_name in scenario_ids:
-                        selected_scenario_id = fn_name
-                        selected_reason = "routing_tool_name"
+                    for call in tool_calls:
+                        fn_name = call.get("function", {}).get("name")
+                        if fn_name in scenario_ids:
+                            selected_scenario_id = fn_name
+                            selected_reason = "routing_tool_name"
+                            break
+                        if fn_name != "select_scenario":
+                            continue
+                        raw_args = call.get("function", {}).get("arguments") or {}
+                        selected = select_scenario_tool(raw_args)
+                        selected_scenario_id = selected.get("scenario_id")
+                        selected_reason = selected.get("reason")
                         break
-                    if fn_name != "select_scenario":
-                        continue
-                    raw_args = call.get("function", {}).get("arguments") or {}
-                    selected = select_scenario_tool(raw_args)
-                    selected_scenario_id = selected.get("scenario_id")
-                    selected_reason = selected.get("reason")
-                    break
 
         if selected_scenario_id:
             kind = "SCENARIO_SELECTED"

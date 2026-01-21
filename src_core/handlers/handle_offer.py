@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from uuid import uuid4
 
 from aiohttp import web
 from aiortc import RTCSessionDescription, RTCConfiguration, RTCPeerConnection
@@ -38,6 +39,8 @@ async def handle_offer_connect(request, params):
     conf.iceServers = []
     pc = RTCPeerConnection(configuration=conf)
     audio_transceiver = pc.addTransceiver("audio", direction="sendrecv")
+    session_id = str(uuid4())
+    setattr(pc, "_session_id", session_id)
 
     pcs = request.app["pcs"]
     alive = {p for p in pcs if p.connectionState not in ("failed", "closed")}
@@ -65,11 +68,13 @@ async def handle_offer_connect(request, params):
             pc, 
             audio_transceiver, 
             request.app,
-            echo_ref
+            echo_ref,
+            session_id=session_id,
         )
 
     try:
         resp = await establish_connection(pc, offer)
+        resp["session_id"] = session_id
         await event_log(
                         "log",
                         "info",

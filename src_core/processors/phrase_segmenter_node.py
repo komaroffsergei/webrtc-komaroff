@@ -50,6 +50,7 @@ class PhraseSegmenterNode(ConsumerNode):
         nats_client,
         whisper_subject: str,
         on_transcription: Callable[[dict], Awaitable[None]],
+        session_id: str | None = None,
         sample_rate: int = 16000,
         min_speech_duration_ms: int = 250,
         min_silence_duration_ms: int = 500,
@@ -67,6 +68,7 @@ class PhraseSegmenterNode(ConsumerNode):
         self.nc = nats_client
         self.whisper_subject = whisper_subject
         self.on_transcription = on_transcription
+        self.session_id = session_id
 
         self.target_sample_rate = sample_rate
         self.min_speech_duration_ms = min_speech_duration_ms
@@ -266,6 +268,8 @@ class PhraseSegmenterNode(ConsumerNode):
                     return
 
                 data.setdefault("phrase_id", phrase.phrase_id)
+                if self.session_id:
+                    data.setdefault("session_id", self.session_id)
                 await self.on_transcription(data)
 
         except NatsTimeoutError:

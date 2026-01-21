@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@provide/nats.ws": "^1.0.6",
-    "buffer": "^6.0.3"
+    "buffer": "^6.0.3",
+    "maplibre-gl": "^5.7.0"
   },
   "devDependencies": {
     "@types/node": "^25.0.9",

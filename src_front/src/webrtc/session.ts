@@ -22,8 +22,8 @@ export async function connectSession(
   el: AssistantElements,
   audio: AudioState,
   onVadText: (t: string) => void,
-): Promise<void> {
-  if (session) return;
+): Promise<string | null> {
+  if (session) return null;
 
   const micStream = await startMic(audio);
   const peer = createPeer(config);
@@ -43,9 +43,10 @@ export async function connectSession(
 
   const waves = startWaveforms(el, config, micStream);
 
-  await negotiate(peer, config);
+  const sessionId = await negotiate(peer, config);
 
   session = { peer, sender, micStream, vad, wavesStop: waves.stop };
+  return sessionId;
 }
 
 export function disconnectSession(): void {

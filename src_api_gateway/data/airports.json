@@ -58,5 +58,26 @@
         "status": "closed"
       }
     ]
+  },
+  {
+    "id": "UUBW",
+    "code": "ZIA",
+    "name": "Жуковский",
+    "aliases": [
+      "Zhukovsky",
+      "Ramenskoye",
+      "Раменское"
+    ],
+    "lat": 55.5533,
+    "lon": 38.1500,
+    "status": "open",
+    "runways": [
+      {
+        "id": "12/30",
+        "length_m": 5400,
+        "surface": "concrete",
+        "status": "free"
+      }
+    ]
   }
 ]

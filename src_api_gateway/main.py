@@ -35,6 +35,81 @@ def haversine(lat1, lon1, lat2, lon2):
     )
     return 2 * R * math.asin(math.sqrt(a))
 
+def _to_vec(lat: float, lon: float) -> tuple[float, float, float]:
+    lat_r = math.radians(lat)
+    lon_r = math.radians(lon)
+    x = math.cos(lat_r) * math.cos(lon_r)
+    y = math.cos(lat_r) * math.sin(lon_r)
+    z = math.sin(lat_r)
+    return x, y, z
+
+
+def _normalize(v: tuple[float, float, float]) -> tuple[float, float, float]:
+    x, y, z = v
+    mag = math.sqrt(x * x + y * y + z * z)
+    if mag == 0.0:
+        return 0.0, 0.0, 0.0
+    return x / mag, y / mag, z / mag
+
+
+def _dot(a: tuple[float, float, float], b: tuple[float, float, float]) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _from_vec(v: tuple[float, float, float]) -> tuple[float, float]:
+    x, y, z = v
+    lat = math.degrees(math.asin(max(-1.0, min(1.0, z))))
+    lon = math.degrees(math.atan2(y, x))
+    return lat, lon
+
+
+def great_circle_geometry(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    points: int = 64,
+) -> list[list[float]]:
+    if points < 2:
+        points = 2
+
+    v0 = _normalize(_to_vec(start_lat, start_lon))
+    v1 = _normalize(_to_vec(end_lat, end_lon))
+    d = max(-1.0, min(1.0, _dot(v0, v1)))
+    omega = math.acos(d)
+    if omega < 1e-9:
+        return [[start_lon, start_lat], [end_lon, end_lat]]
+
+    sin_omega = math.sin(omega)
+    if abs(sin_omega) < 1e-12:
+        return [[start_lon, start_lat], [end_lon, end_lat]]
+
+    coords: list[list[float]] = []
+    for i in range(points):
+        t = i / (points - 1)
+        a = math.sin((1.0 - t) * omega) / sin_omega
+        b = math.sin(t * omega) / sin_omega
+        v = _normalize((a * v0[0] + b * v1[0], a * v0[1] + b * v1[1], a * v0[2] + b * v1[2]))
+        lat, lon = _from_vec(v)
+        coords.append([lon, lat])
+    return coords
+
+
+def _airport_matches_query(airport: dict, query: str) -> bool:
+    q = (query or "").strip().lower()
+    if not q:
+        return False
+    for key in ("name", "code", "id"):
+        v = airport.get(key)
+        if isinstance(v, str) and q in v.lower():
+            return True
+    aliases = airport.get("aliases")
+    if isinstance(aliases, list):
+        for a in aliases:
+            if isinstance(a, str) and q in a.lower():
+                return True
+    return False
 
 # -------------------------
 # endpoints
@@ -48,11 +123,10 @@ def get_current_position():
 
 @app.get("/api/airports/search_by_name")
 def search_by_name(query: str):
-    q = query.lower()
     return {
         "results": [
             a for a in AIRPORTS
-            if q in a["name"].lower() or q in a["code"].lower()
+            if _airport_matches_query(a, query)
         ]
     }
 
@@ -140,11 +214,15 @@ def build_route(
     end_lat: float,
     end_lon: float
 ):
+    geometry = great_circle_geometry(
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        points=64,
+    )
     return {
-        "geometry": [
-            [start_lon, start_lat],
-            [end_lon, end_lat]
-        ],
+        "geometry": geometry,
         "distance_km": round(
             haversine(start_lat, start_lon, end_lat, end_lon), 2
         )

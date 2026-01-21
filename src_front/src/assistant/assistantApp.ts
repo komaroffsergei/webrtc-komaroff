@@ -15,6 +15,7 @@ import {CommandHandler} from "../core/commandHandler";
 import {logError, logEvent} from "../core/logging";
 import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
 import {ClientHandlerCommand, ServerEvent} from "../types";
+import { MapController } from "../map/mapController";
 
 /* ===========================
    AssistantApp
@@ -24,6 +25,7 @@ export class AssistantApp {
 
   private chat: ChatUI;
   private warning: WarningUI;
+  private map = new MapController();
 
   private audio = createAudioState(this.el, this.config);
   private commands = new CommandHandler();
@@ -35,6 +37,7 @@ export class AssistantApp {
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
 
   constructor(private config: AppConfig) {
+    this.map.init("mapRoot");
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
     this.chat = new ChatUI(
@@ -52,6 +55,7 @@ export class AssistantApp {
     this.agentCommands = new AgentCommandHandler({
       chat: this.chat,
       warning: this.warning,
+      map: this.map,
     });
 
     /* ---------- UI bindings ---------- */
@@ -61,7 +65,6 @@ export class AssistantApp {
     this.registerBuiltinCommands();
 
     this.chat.addMessage("Голосовой ассистент готов к работе", "status");
-    this.chat.addMessage("Покажи аэропорты в радиусе 100км", "user");
   }
 
   /* ===========================
@@ -109,9 +112,10 @@ export class AssistantApp {
     }
 
     try {
-      await connectSession(this.config, this.el, this.audio, (t) => {
+      const sessionId = await connectSession(this.config, this.el, this.audio, (t) => {
         if (this.el.vadLevel) this.el.vadLevel.textContent = t;
       });
+      if (sessionId) this.commands.setSessionId(sessionId);
 
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
@@ -256,10 +260,10 @@ export class AssistantApp {
         this.chat.setVoiceBlocked(blocked);
         return;
       }
-      case "client_handler": {
+      case "client": {
         const command = typeof event.data.command === "string" ? event.data.command : null;
         if (!command) {
-          console.warn("[nats] Invalid client_handler payload", event);
+          console.warn("[nats] Invalid client payload", event);
           return;
         }
         const artifacts = this.readArtifacts(event.data.artifacts);

@@ -19,6 +19,7 @@ AGentClientCommands = Literal[
     "ASK_USER_INPUT",
     "SHOW_ERROR_MESSAGE",
     "SET_POSITION",
+    "SET_AIRPORTS",
     "SHOW_AIRPORTS",
     "BUILD_ROUTE",
     "SHOW_MESSAGE",

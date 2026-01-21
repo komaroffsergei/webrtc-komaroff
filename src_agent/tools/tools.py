@@ -1,4 +1,5 @@
 import os
+import re
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Tuple, Dict, Any
@@ -59,8 +60,6 @@ def put_artifact(label: str, value: Any) -> str:
     state, scenario_id = _require_context()
     key = _artifact_key(label)
     store = _scenario_artifacts(state, scenario_id)
-    if key in store:
-        raise RuntimeError(f"Artifact key collision: {key}")
     store[key] = value
     return key
 
@@ -173,12 +172,146 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
     r.raise_for_status()
     pos = r.json()
 
-    key = put_artifact("current_position", pos)
+    lat = pos.get("lat")
+    lon = pos.get("lon")
+    if not isinstance(lat, (int, float)) or not isinstance(lon, (int, float)):
+        return True, {
+            "status": "error",
+            "message": "Invalid position payload",
+        }
+
+    key = put_artifact("current_position", {"data": {"current_position": {"lat": float(lat), "lon": float(lon)}}})
 
     return True, {
         "status": "ok",
         "artifact_key": key,
+        "lat": float(lat),
+        "lon": float(lon),
     }
+
+
+@mcp_tool(
+    description="Fetches the full airport list from the mock API (airports.json).",
+    provides=["airports_list"],
+    client_handler="SET_AIRPORTS",
+)
+def list_airports() -> Tuple[bool, Dict[str, Any]]:
+    r = requests.get(f"{API}/airports/list", timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    airports = data.get("results", [])
+    key = put_artifact("airports_list", {"data": {"airports": airports}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "count": len(airports) if isinstance(airports, list) else None,
+    }
+
+
+@mcp_tool(
+    description="Builds a great-circle route between two points using the mock API.",
+    provides=["route_geometry"],
+    parameters={
+        "start_lat": "Start latitude",
+        "start_lon": "Start longitude",
+        "end_lat": "End latitude",
+        "end_lon": "End longitude",
+    },
+    client_handler="BUILD_ROUTE",
+)
+def build_route(*, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Tuple[bool, Dict[str, Any]]:
+    r = requests.post(
+        f"{API}/routes/build",
+        params={"start_lat": start_lat, "start_lon": start_lon, "end_lat": end_lat, "end_lon": end_lon},
+        timeout=10,
+    )
+    r.raise_for_status()
+    data = r.json()
+    geometry = data.get("geometry")
+    distance = data.get("distance_km")
+    key = put_artifact("route_geometry", {"data": {"geometry": geometry, "distance_km": distance}})
+    return True, {
+        "status": "ok",
+        "artifact_key": key,
+        "distance_km": distance,
+    }
+
+
+@mcp_tool(
+    description="Resolves an airport from arbitrary user text using the mock API search.",
+    provides=["resolved_airport"],
+    parameters={"user_text": "User text containing an airport name/code."},
+)
+def resolve_airport(*, user_text: str) -> Tuple[bool, Dict[str, Any]]:
+    if not isinstance(user_text, str) or not user_text.strip():
+        return True, {"status": "error", "message": "user_text must be a non-empty string"}
+
+    text = user_text.strip()
+    code_match = None
+    m = re.search(r"\\b([A-Za-z]{3,4})\\b", text)
+    if m:
+        code_match = m.group(1).upper()
+
+    candidates: list[str] = []
+    candidates.append(text)
+    if code_match:
+        candidates.append(code_match)
+    cleaned = re.sub(r"\\b(airport|airports|aerodrome|aerodromes)\\b", "", text, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\\b(аэропорт|аэропорты|аэродром|аэродромы)\\b", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"^(до|от|из|в|к)\\b", "", cleaned, flags=re.IGNORECASE).strip()
+    cleaned = re.sub(r"\\s+", " ", cleaned).strip()
+    if cleaned and cleaned not in candidates:
+        candidates.append(cleaned)
+
+    seen: dict[str, dict] = {}
+    for q in candidates:
+        if not q:
+            continue
+        r = requests.get(f"{API}/airports/search_by_name", params={"query": q}, timeout=10)
+        r.raise_for_status()
+        data = r.json()
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            continue
+        for a in results:
+            if not isinstance(a, dict):
+                continue
+            aid = str(a.get("id") or "")
+            acode = str(a.get("code") or "")
+            key = aid or acode
+            if not key:
+                continue
+            if key not in seen:
+                seen[key] = a
+
+    options = list(seen.values())
+    slim = [
+        {
+            "id": a.get("id"),
+            "code": a.get("code"),
+            "name": a.get("name"),
+            "lat": a.get("lat"),
+            "lon": a.get("lon"),
+            "status": a.get("status"),
+        }
+        for a in options
+    ]
+
+    if code_match:
+        for a in slim:
+            if str(a.get("code") or "").upper() == code_match or str(a.get("id") or "").upper() == code_match:
+                put_artifact("resolved_airport", {"data": {"status": "ok", "airport": a}})
+                return True, {"status": "ok", "airport": a}
+
+    if len(slim) == 1:
+        put_artifact("resolved_airport", {"data": {"status": "ok", "airport": slim[0]}})
+        return True, {"status": "ok", "airport": slim[0]}
+    if len(slim) > 1:
+        put_artifact("resolved_airport", {"data": {"status": "ambiguous", "options": slim}})
+        return True, {"status": "ambiguous", "options": slim}
+
+    put_artifact("resolved_airport", {"data": {"status": "not_found"}})
+    return True, {"status": "not_found"}
 
 @mcp_tool(
     description="Fetches all airports from the mock API (airports.json).",

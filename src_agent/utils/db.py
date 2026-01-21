@@ -4,15 +4,12 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from contextvars import ContextVar
 from typing import Any, Optional, Dict
 from uuid import uuid4
 
 import asyncpg
 
 logger = logging.getLogger("src_agent.db")
-
-_ENSURE_STATE: ContextVar[tuple[str | None, bool]] = ContextVar("_ENSURE_STATE", default=(None, False))
 
 
 @dataclass
@@ -94,18 +91,6 @@ async def update_session_status(db: Database, *, session_id: str, status: str) -
 # events
 # ----------------------------
 
-async def _ensure_request_row(db: Database, *, session_id: str, request_id: str) -> None:
-    await db.execute(
-        """
-        insert into intents (intent_id, session_id, intent_type, status)
-        values ($1, $2, 'request', 'RUNNING')
-        on conflict (intent_id) do update
-        set updated_at = now()
-        """,
-        request_id,
-        session_id,
-    )
-
 def _attach_trace(payload: Optional[Dict[str, Any]], request_id: str) -> Dict[str, Any]:
     if payload is None:
         return {"trace": {"request_id": request_id}}
@@ -135,45 +120,59 @@ async def log_event(
     intent_id = request_id
     db_input = input
     db_output = output
-    if request_id:
-        ensured_request_id, ensured_ok = _ENSURE_STATE.get()
-        if ensured_request_id != request_id:
+
+    if db._pool is None:
+        raise RuntimeError("Database pool is not connected")
+
+    async with db._pool.acquire() as conn:
+        if request_id:
             try:
-                await _ensure_request_row(db, session_id=session_id, request_id=request_id)
-                _ENSURE_STATE.set((request_id, True))
-                ensured_ok = True
+                await conn.execute(
+                    """
+                    insert into intents (intent_id, session_id, intent_type, status)
+                    values ($1, $2, 'request', 'RUNNING')
+                    on conflict (intent_id) do update
+                    set updated_at = now()
+                    """,
+                    request_id,
+                    session_id,
+                )
             except asyncpg.PostgresError as exc:
-                _ENSURE_STATE.set((request_id, False))
-                ensured_ok = False
                 logger.warning(
                     "Failed to upsert request trace row into intents; events.intent_id will be NULL. error=%s",
                     str(exc),
                 )
-        if not ensured_ok:
-            intent_id = None
-            db_input = _attach_trace(input, request_id)
-            db_output = _attach_trace(output, request_id)
-    await db.execute(
-        """
-        insert into events (
-          session_id, intent_id,
-          role, event_type, name,
-          input, output
-        )
-        values (
-          $1, $2,
-          $3, $4, $5,
-          $6::jsonb, $7::jsonb
-        )
-        """,
-        session_id,
-        intent_id,
-        role,
-        event_type,
-        name,
-        _to_jsonb(db_input),
-        _to_jsonb(db_output),
-    )
+                intent_id = None
+                db_input = _attach_trace(input, request_id)
+                db_output = _attach_trace(output, request_id)
+
+        try:
+            await conn.execute(
+                """
+                insert into events (
+                  session_id, intent_id,
+                  role, event_type, name,
+                  input, output
+                )
+                values (
+                  $1, $2,
+                  $3, $4, $5,
+                  $6::jsonb, $7::jsonb
+                )
+                """,
+                session_id,
+                intent_id,
+                role,
+                event_type,
+                name,
+                _to_jsonb(db_input),
+                _to_jsonb(db_output),
+            )
+        except asyncpg.PostgresError as exc:
+            logger.warning(
+                "Failed to insert event row; skipped. error=%s",
+                str(exc),
+            )
 
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
@@ -216,7 +215,11 @@ def save_conversation(state: Dict[str, Any]) -> None:
 
 def add_turn(state: Dict[str, Any], *, role: str, text: str, turn_id: Optional[str] = None) -> str:
     tid = turn_id or str(uuid4())
-    state["turns"].append({
+    turns = state.get("turns")
+    if not isinstance(turns, list):
+        turns = []
+        state["turns"] = turns
+    turns.append({
         "turn_id": tid,
         "role": role,
         "text": text,
