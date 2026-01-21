@@ -11,7 +11,8 @@ from src_agent.settings import (
     TOOL_ASK_USER_INPUT_DESCRIPTION,
     TOOL_ASK_USER_INPUT_MESSAGE_PARAM,
     TOOL_FLIGHT_STATUS_DESCRIPTION,
-    TOOL_FLIGHT_STATUS_PARAM,
+    TOOL_FLIGHT_STATUS_FLIGHT_NUMBER_PARAM,
+    TOOL_FLIGHT_STATUS_SURNAME_PARAM,
 )
 
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
@@ -136,19 +137,19 @@ def ask_user_input(*, message: str) -> Tuple[bool, Dict[str, Any]]:
     description=TOOL_FLIGHT_STATUS_DESCRIPTION,
     provides=["flight_status"],
     parameters={
-        "flight_number": TOOL_FLIGHT_STATUS_PARAM
-    }
+        "flight_number": TOOL_FLIGHT_STATUS_FLIGHT_NUMBER_PARAM,
+        "surname": TOOL_FLIGHT_STATUS_SURNAME_PARAM,
+    },
 )
-def get_flight_status(*, flight_number: str) -> Tuple[bool, Dict[str, Any]]:
-    if not isinstance(flight_number, str) or not flight_number.strip():
-        return True, {
-            "status": "error",
-            "message": "flight_number is required",
-        }
-
+def get_flight_status(*, flight_number: str | None = None, surname: str | None = None) -> Tuple[bool, Dict[str, Any]]:
+    params: dict[str, object] = {}
+    if flight_number is not None:
+        params["flight_number"] = flight_number
+    if surname is not None:
+        params["surname"] = surname
     r = requests.get(
         FLIGHTS_API_URL,
-        params={"flight_number": flight_number.strip().upper()},
+        params=params,
         timeout=10,
     )
     r.raise_for_status()

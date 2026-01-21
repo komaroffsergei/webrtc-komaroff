@@ -17,6 +17,11 @@ class NearestAirportsScenario(Scenario):
     id = "nearest_airports"
     title = SCENARIO_NEAREST_AIRPORTS_TITLE
     description = SCENARIO_NEAREST_AIRPORTS_DESC
+    llm_prompt = (
+        "Извлеки radius_km (целое число километров), если пользователь явно указал радиус.\n"
+        "Если пользователь не указал радиус, не угадывай и не выдумывай значение."
+    )
+
     input_hints = {"radius_km": "Радиус в километрах, целое число."}
     input_types = {"radius_km": "integer"}
 

@@ -187,24 +187,50 @@ def filter_airports(
 
 
 @app.get("/api/flights/status")
-def flight_status(flight_number: str | None = Query(default=None)):
-    if not flight_number:
-        return JSONResponse({"error": "flight_number is required"}, status_code=400)
+def flight_status(
+    flight_number: str | None = Query(default=None),
+    surname: str | None = Query(default=None),
+):
+    flights = [
+        {
+            "flight_number": "SU123",
+            "surname": "Ivanov",
+            "status": "ON_TIME",
+            "from": "SVO",
+            "to": "AMS",
+            "departure_time": "2026-01-14T12:30:00Z",
+            "arrival_time": "2026-01-14T15:10:00Z",
+            "gate": "A12",
+            "terminal": "C",
+        },
+        {
+            "flight_number": "S123",
+            "surname": "Petrov",
+            "status": "DELAYED",
+            "from": "DME",
+            "to": "LED",
+            "departure_time": "2026-01-14T09:10:00Z",
+            "arrival_time": "2026-01-14T10:35:00Z",
+            "gate": "B07",
+            "terminal": "B",
+        },
+    ]
 
-    flight_number = flight_number.strip().upper()
-    statuses = ["DELAYED", "ON_TIME", "CANCELLED"]
-    status = statuses[sum(ord(ch) for ch in flight_number) % len(statuses)]
+    if isinstance(flight_number, str) and flight_number.strip():
+        q = flight_number.strip().upper()
+        found = next((f for f in flights if f.get("flight_number") == q), None)
+        if not found:
+            return JSONResponse({"error": "not_found", "flight_number": q}, status_code=404)
+        return found
 
-    return {
-        "flight_number": flight_number,
-        "status": status,
-        "from": "SVO",
-        "to": "AMS",
-        "departure_time": "2026-01-14T12:30:00Z",
-        "arrival_time": "2026-01-14T15:10:00Z",
-        "gate": "A12",
-        "terminal": "C",
-    }
+    if isinstance(surname, str) and surname.strip():
+        q = surname.strip().lower()
+        found = next((f for f in flights if isinstance(f.get("surname"), str) and f["surname"].lower() == q), None)
+        if not found:
+            return JSONResponse({"error": "not_found", "surname": surname.strip()}, status_code=404)
+        return found
+
+    return JSONResponse({"error": "flight_number or surname is required"}, status_code=400)
 
 
 @app.post("/api/routes/build")

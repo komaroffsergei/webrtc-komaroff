@@ -17,6 +17,7 @@ class Scenario:
     description = "Base scenario."
     input_hints: Dict[str, str] = {}
     input_types: Dict[str, str] = {}
+    llm_prompt: str
 
     def on_user_turn(self, state: Dict[str, Any], prompt: str, turn_id: str) -> None:
         self._log(state, status="RUNNING", kind="USER_TURN", data={"text": prompt}, turn_id=turn_id)
@@ -78,7 +79,11 @@ class Scenario:
         meta: Dict[str, Any],
     ) -> str:
         wants_russian = any("\u0400" <= ch <= "\u04FF" for ch in (user_text or ""))
-        lang_hint = "The user writes in Russian. Ask in Russian." if wants_russian else "Use the same language as the user."
+        lang_hint = (
+            "The user writes in Russian. Output must be in Russian."
+            if wants_russian
+            else "Use the same language as the user."
+        )
         payload = {
             "messages": [
                 {
@@ -104,7 +109,7 @@ class Scenario:
                 },
             ],
             "think": False,
-            "options": {"temperature": 0.2},
+            "options": {"temperature": 0.0},
         }
         resp = await llm_request(payload)
         content = (resp.get("message") or {}).get("content")
