@@ -194,7 +194,7 @@ def flight_status(
     flights = [
         {
             "flight_number": "SU123",
-            "surname": "Ivanov",
+            "surname": "Иванов",
             "status": "ON_TIME",
             "from": "SVO",
             "to": "AMS",
@@ -205,7 +205,7 @@ def flight_status(
         },
         {
             "flight_number": "S123",
-            "surname": "Petrov",
+            "surname": "Петров",
             "status": "DELAYED",
             "from": "DME",
             "to": "LED",
@@ -224,8 +224,8 @@ def flight_status(
         return found
 
     if isinstance(surname, str) and surname.strip():
-        q = surname.strip().lower()
-        found = next((f for f in flights if isinstance(f.get("surname"), str) and f["surname"].lower() == q), None)
+        q = surname.strip().casefold()
+        found = next((f for f in flights if isinstance(f.get("surname"), str) and f["surname"].strip().casefold() == q), None)
         if not found:
             return JSONResponse({"error": "not_found", "surname": surname.strip()}, status_code=404)
         return found

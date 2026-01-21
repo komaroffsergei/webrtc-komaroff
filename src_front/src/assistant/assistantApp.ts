@@ -9,6 +9,7 @@ import {
   connectSession,
   disconnectSession,
   isConnected,
+  setMicEnabled,
 } from "../webrtc/session";
 import {FrontendNatsClient} from "../net/natsClient";
 import {CommandHandler} from "../core/commandHandler";
@@ -258,6 +259,9 @@ export class AssistantApp {
           return;
         }
         this.chat.setVoiceBlocked(blocked);
+        setMicEnabled(!blocked);
+        if (this.el.micWaveform) this.el.micWaveform.style.display = blocked ? "none" : "";
+        if (this.el.waveBackground) this.el.waveBackground.style.display = blocked ? "none" : "";
         return;
       }
       case "client": {

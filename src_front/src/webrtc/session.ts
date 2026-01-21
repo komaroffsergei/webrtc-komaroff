@@ -65,3 +65,9 @@ export function disconnectSession(): void {
 export function isConnected(): boolean {
   return !!session;
 }
+
+export function setMicEnabled(enabled: boolean): void {
+  if (!session) return;
+  const track = session.sender.track;
+  if (track) track.enabled = enabled;
+}
