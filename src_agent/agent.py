@@ -309,21 +309,33 @@ class MCPAgent:
             state["scenario"] = scenario_state
         current_scenario_id = scenario_state.get("id")
         pending = state.get("pending")
-        has_pending = isinstance(pending, dict) and bool(pending.get("scenario_id"))
-        if not has_pending and scenario_state.get("status") == "NEEDS_INPUT" and scenario_state.get("id"):
-            # Defensive: if a scenario asked for input but the pending dict is missing,
-            # resume the last scenario instead of re-routing.
-            pending = {"scenario_id": scenario_state.get("id")}
-            has_pending = True
+        has_pending = (
+            isinstance(pending, dict)
+            and isinstance(pending.get("scenario_id"), str)
+            and bool(pending.get("scenario_id"))
+        ) or (
+            scenario_state.get("status") == "NEEDS_INPUT"
+            and isinstance(scenario_state.get("id"), str)
+            and bool(scenario_state.get("id"))
+        )
+        if (
+            not isinstance(pending, dict)
+            and scenario_state.get("status") == "NEEDS_INPUT"
+            and isinstance(scenario_state.get("id"), str)
+            and bool(scenario_state.get("id"))
+        ):
+            state["pending"] = {"scenario_id": scenario_state.get("id")}
+            pending = state["pending"]
         selected_scenario_id: str | None = None
         selected_reason: str | None = None
         invalid_routing_tool_calls = False
         routing_model: str | None = None
 
         if has_pending:
-            selected_scenario_id = pending.get("scenario_id")
+            selected_scenario_id = scenario_state.get("id") if isinstance(scenario_state.get("id"), str) else None
+            if not selected_scenario_id and isinstance(pending, dict) and isinstance(pending.get("scenario_id"), str):
+                selected_scenario_id = pending.get("scenario_id")
             selected_reason = "pending_input"
-            scenario_state["input"] = None
             if selected_scenario_id:
                 scenario_state["id"] = selected_scenario_id
         else:
@@ -556,7 +568,6 @@ class MCPAgent:
             )
 
         state["scenario"] = scenario_state
-        save_conversation(state)
 
         scenario = get_scenario(selected_scenario_id)
         await self._emit_thought(
@@ -699,7 +710,13 @@ class MCPAgent:
                         scenario_reason=selected_reason,
                     )
 
-                scenario_state["input"] = None
+                if scenario_state.get("status") != "NEEDS_INPUT":
+                    state["pending"] = None
+                    scenario_state["input"] = None
+                    state["scenario"] = {"id": None, "status": "RUNNING", "input": None}
+                else:
+                    if not isinstance(state.get("pending"), dict):
+                        state["pending"] = {"scenario_id": selected_scenario_id}
                 scenario_response["session_id"] = session_id
                 state["messages"] = _build_messages_from_turns(state.get("turns", []))
                 save_conversation(state)

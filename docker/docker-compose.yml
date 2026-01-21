@@ -37,6 +37,8 @@ services:
     depends_on:
       - nats
       - src_api_gateway
+    environment:
+      API_URL: http://src_api_gateway:8100/api
 
   src_agent:
     build:

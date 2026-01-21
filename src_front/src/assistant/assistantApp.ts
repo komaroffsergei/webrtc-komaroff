@@ -169,6 +169,7 @@ export class AssistantApp {
       await this.nats.subscribe(this.config.nats.eventsSubject, (payload) =>
         this.handleNatsPayload(payload),
       );
+      void this.requestInitMap();
     } catch (err) {
       logError("nats", err);
       setStatus(this.el, "Ошибка подключения к событиям");
@@ -191,6 +192,15 @@ export class AssistantApp {
       void this.handleServerEvent(event);
     } catch (err) {
       logError("nats", err);
+    }
+  }
+
+  private async requestInitMap(): Promise<void> {
+    try {
+      const resp = await fetch("/core/init_map", {method: "POST"});
+      if (!resp.ok) logError("core", new Error(`init_map failed: ${resp.status}`));
+    } catch (err) {
+      logError("core", err);
     }
   }
 

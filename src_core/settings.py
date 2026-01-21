@@ -15,6 +15,8 @@ NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
 NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "600"))
 
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8100/api")
+
 
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))
 CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")

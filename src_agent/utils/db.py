@@ -207,6 +207,8 @@ def save_conversation(state: Dict[str, Any]) -> None:
     existing = get_conversation(state["session_id"])
     state["updated_at"] = _now_iso()
     if existing is not None:
+        if existing is state:
+            return
         existing.clear()
         existing.update(state)
         return
