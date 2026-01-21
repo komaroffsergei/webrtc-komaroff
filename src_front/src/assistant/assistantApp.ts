@@ -195,7 +195,8 @@ export class AssistantApp {
     if (event.type === "log") {
       const txt = typeof event.data.text === "string" ? event.data.text : null;
       if (event.kind === "error" && txt) {
-        this.chat.addMessage(txt, "status");
+        console.log(event)
+        // this.chat.addMessage(txt, "status");
       }
       return;
     }
