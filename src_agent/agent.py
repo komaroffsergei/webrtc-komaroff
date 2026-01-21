@@ -50,6 +50,9 @@ _ROUTE_WORD_RE = re.compile(
     re.IGNORECASE,
 )
 
+_FLIGHT_WORD_RE = re.compile(r"\b(flight)\b|\b(рейс)\b", re.IGNORECASE)
+_FLIGHT_NUMBER_RE = re.compile(r"\b([A-Z]{1,3}\s*\d{1,5})\b", re.IGNORECASE)
+
 
 def _airport_route(prompt: str) -> str | None:
     text = (prompt or "").strip()
@@ -86,9 +89,19 @@ def _airport_route(prompt: str) -> str | None:
 
 def _route_builder_route(prompt: str) -> str | None:
     text = (prompt or "").strip()
-    if not text or not _ROUTE_WORD_RE.search(text):
+    if not text:
         return None
-    return "route_builder"
+    return "route_builder" if _ROUTE_WORD_RE.search(text) else None
+
+def _flight_route(prompt: str) -> str | None:
+    text = (prompt or "").strip()
+    if not text:
+        return None
+    if _FLIGHT_NUMBER_RE.search(text):
+        return "flight_status"
+    if _FLIGHT_WORD_RE.search(text):
+        return "flight_status"
+    return None
 
 
 def _preview_text(s: Any, limit: int) -> Optional[str]:
@@ -338,6 +351,11 @@ class MCPAgent:
         current_scenario_id = scenario_state.get("id")
         pending = state.get("pending")
         has_pending = isinstance(pending, dict) and bool(pending.get("scenario_id"))
+        if not has_pending and scenario_state.get("status") == "NEEDS_INPUT" and scenario_state.get("id"):
+            # Defensive: if a scenario asked for input but the pending dict is missing,
+            # resume the last scenario instead of re-routing.
+            pending = {"scenario_id": scenario_state.get("id")}
+            has_pending = True
         selected_scenario_id: str | None = None
         selected_reason: str | None = None
 
@@ -348,38 +366,43 @@ class MCPAgent:
             if selected_scenario_id:
                 scenario_state["id"] = selected_scenario_id
         else:
-            route_scenario = _route_builder_route(prompt)
-            if route_scenario:
-                selected_scenario_id = route_scenario
-                selected_reason = "deterministic_route_router"
+            flight_scenario = _flight_route(prompt)
+            if flight_scenario:
+                selected_scenario_id = flight_scenario
+                selected_reason = "deterministic_flight_router"
             else:
-                airport_scenario = _airport_route(prompt)
-                if airport_scenario:
-                    selected_scenario_id = airport_scenario
-                    selected_reason = "deterministic_airport_router"
+                route_scenario = _route_builder_route(prompt)
+                if route_scenario:
+                    selected_scenario_id = route_scenario
+                    selected_reason = "deterministic_route_router"
                 else:
-                    routing_messages = [
-                        {"role": "system", "content": ROUTING_SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ]
-                    routing_payload = {
-                        "messages": routing_messages,
-                        "tools": [build_select_scenario_tool_schema()],
-                        "think": False,
-                        "options": {"temperature": 0.0},
-                    }
-                    await log_event(
-                        self.db,
-                        session_id=session_id,
-                        request_id=request_id,
-                        role="LLM",
-                        event_type="ROUTING_REQUEST",
-                        input={
-                            "tools": ["select_scenario"],
-                            "messages": _safe_llm_messages(routing_messages, preview_limit=200),
+                    airport_scenario = _airport_route(prompt)
+                    if airport_scenario:
+                        selected_scenario_id = airport_scenario
+                        selected_reason = "deterministic_airport_router"
+                    else:
+                        routing_messages = [
+                            {"role": "system", "content": ROUTING_SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ]
+                        routing_payload = {
+                            "messages": routing_messages,
+                            "tools": [build_select_scenario_tool_schema()],
+                            "think": False,
                             "options": {"temperature": 0.0},
-                        },
-                    )
+                        }
+                        await log_event(
+                            self.db,
+                            session_id=session_id,
+                            request_id=request_id,
+                            role="LLM",
+                            event_type="ROUTING_REQUEST",
+                            input={
+                                "tools": ["select_scenario"],
+                                "messages": _safe_llm_messages(routing_messages, preview_limit=200),
+                                "options": {"temperature": 0.0},
+                            },
+                        )
                     logger.info(
                         "ROUTING LLM request tools=select_scenario messages=%d user=%s",
                         len(routing_messages),
@@ -409,7 +432,6 @@ class MCPAgent:
 
                     routing_msg = routing_resp.get("message") or {}
                     tool_calls = routing_msg.get("tool_calls") or []
-                    scenario_ids = {s.id for s in list_selectable_scenarios()}
                     await log_event(
                         self.db,
                         session_id=session_id,
@@ -454,10 +476,6 @@ class MCPAgent:
 
                     for call in tool_calls:
                         fn_name = call.get("function", {}).get("name")
-                        if fn_name in scenario_ids:
-                            selected_scenario_id = fn_name
-                            selected_reason = "routing_tool_name"
-                            break
                         if fn_name != "select_scenario":
                             continue
                         raw_args = call.get("function", {}).get("arguments") or {}
@@ -465,6 +483,26 @@ class MCPAgent:
                         selected_scenario_id = selected.get("scenario_id")
                         selected_reason = selected.get("reason")
                         break
+                    if selected_scenario_id and not get_scenario(selected_scenario_id):
+                        error_text = f"Unknown scenario: {selected_scenario_id}"
+                        await log_event(
+                            self.db,
+                            session_id=session_id,
+                            request_id=request_id,
+                            role="SYSTEM",
+                            event_type="ERROR",
+                            output={"type": "UNKNOWN_SCENARIO", "scenario_id": selected_scenario_id},
+                        )
+                        await update_session_status(self.db, session_id=session_id, status="FAILED")
+                        return self._error(
+                            "UNSUPPORTED_REQUEST",
+                            error_text,
+                            prompt=prompt,
+                            steps=0,
+                            model=routing_resp.get("model"),
+                            total_time=None,
+                            session_id=session_id,
+                        )
 
         if selected_scenario_id:
             kind = "SCENARIO_SELECTED"

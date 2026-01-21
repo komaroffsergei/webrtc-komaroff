@@ -85,7 +85,7 @@ class NearestAirportsScenario(Scenario):
             "reason": "missing_required_parameter",
             "scenario_id": self.id,
             "missing": ["radius_km"],
-            "constraints": {"radius_km": "integer number of kilometers"},
+            "constraints": {"radius_km": "Радиус в километрах, целое число"},
             "previous_invalid": invalid,
         }
         try:

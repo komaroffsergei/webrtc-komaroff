@@ -1,6 +1,10 @@
 import type { AppConfig } from "../config/appConfig";
 
-export async function negotiate(pc: RTCPeerConnection, config: AppConfig): Promise<string | null> {
+export async function negotiate(
+  pc: RTCPeerConnection,
+  config: AppConfig,
+  opts?: { sessionId?: string | null },
+): Promise<string | null> {
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
@@ -9,10 +13,14 @@ export async function negotiate(pc: RTCPeerConnection, config: AppConfig): Promi
   const local = pc.localDescription;
   if (!local) throw new Error("localDescription is missing");
 
+  const body: Record<string, unknown> = { sdp: local.sdp, type: local.type };
+  const sessionId = opts?.sessionId;
+  if (typeof sessionId === "string" && sessionId) body.session_id = sessionId;
+
   const resp = await fetch(config.signaling.offerEndpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sdp: local.sdp, type: local.type }),
+    body: JSON.stringify(body),
   });
 
   if (!resp.ok) throw new Error(`Signaling server responded with ${resp.status}`);

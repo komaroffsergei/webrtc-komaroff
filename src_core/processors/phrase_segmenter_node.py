@@ -284,7 +284,7 @@ class PhraseSegmenterNode(ConsumerNode):
             logger.error("No whisper responders for phrase %s", phrase.phrase_id)
             await event_log(
                 "log",
-                "error",
+                "warning",
                 {"text": "Whisper service unavailable"},
                 app=self.app,
             )

@@ -114,7 +114,7 @@ export class AssistantApp {
     try {
       const sessionId = await connectSession(this.config, this.el, this.audio, (t) => {
         if (this.el.vadLevel) this.el.vadLevel.textContent = t;
-      });
+      }, { sessionId: this.commands.getSessionId() });
       if (sessionId) this.commands.setSessionId(sessionId);
 
       setStatus(this.el, "Подключено");

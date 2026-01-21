@@ -19,7 +19,7 @@ class FlightStatusScenario(Scenario):
     input_hints = {"flight_number": "Номер рейса, например SU100."}
     input_types = {"flight_number": "string"}
 
-    _flight_re = re.compile(r"\b([A-Z]{1,3}\d{1,4})\b", re.IGNORECASE)
+    _flight_re = re.compile(r"\b([A-Z]{1,3})\s*(\d{1,5})\b", re.IGNORECASE)
 
     async def handle(
         self,
@@ -75,14 +75,14 @@ class FlightStatusScenario(Scenario):
         match = self._flight_re.search(prompt or "")
         if not match:
             return None
-        return match.group(1).upper()
+        return f"{match.group(1).upper()}{match.group(2)}"
 
     async def _ask_flight_number(self, state: Dict[str, Any], turn_id: str, *, llm_request, user_text: str, invalid: bool):
         meta = {
             "reason": "missing_required_parameter",
             "scenario_id": self.id,
             "missing": ["flight_number"],
-            "constraints": {"flight_number": "flight number like SU100"},
+            "constraints": {"flight_number": "Номер рейса, например SU100"},
             "previous_invalid": invalid,
         }
         try:
