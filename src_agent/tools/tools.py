@@ -193,7 +193,7 @@ def get_current_position() -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Fetches the full airport list from the mock API (airports.json).",
+    description="Получает полный список аэропортов из мок-API (airports.json).",
     provides=["airports_list"],
     client_handler="SET_AIRPORTS",
 )
@@ -211,13 +211,13 @@ def list_airports() -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Builds a great-circle route between two points using the mock API.",
+    description="Строит маршрут по дуге большого круга между двумя точками, используя мок-API.",
     provides=["route_geometry"],
     parameters={
-        "start_lat": "Start latitude",
-        "start_lon": "Start longitude",
-        "end_lat": "End latitude",
-        "end_lon": "End longitude",
+        "start_lat": "Начальная широта",
+        "start_lon": "Начальная долгота",
+        "end_lat": "Конечная широта",
+        "end_lon": "Конечная долгота",
     },
     client_handler="BUILD_ROUTE",
 )
@@ -240,9 +240,11 @@ def build_route(*, start_lat: float, start_lon: float, end_lat: float, end_lon: 
 
 
 @mcp_tool(
-    description="Resolves an airport from arbitrary user text using the mock API search.",
+    description="Определяет аэропорт из произвольного пользовательского текста с помощью поиска в мок-API.",
     provides=["resolved_airport"],
-    parameters={"user_text": "User text containing an airport name/code."},
+    parameters={
+        "user_text": "Пользовательский текст, содержащий название или код аэропорта."
+    },
 )
 def resolve_airport(*, user_text: str) -> Tuple[bool, Dict[str, Any]]:
     if not isinstance(user_text, str) or not user_text.strip():
@@ -316,7 +318,7 @@ def resolve_airport(*, user_text: str) -> Tuple[bool, Dict[str, Any]]:
     return True, {"status": "not_found"}
 
 @mcp_tool(
-    description="Fetches all airports from the mock API (airports.json).",
+    description="Загружает все аэропорты из мок-API (airports.json).",
     provides=["airports_all"],
     client_handler="SHOW_AIRPORTS",
 )
@@ -334,7 +336,7 @@ def get_all_airports() -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Fetches open airports from the mock API (airports.json).",
+    description="Загружает открытые аэропорты из мок-API (airports.json).",
     provides=["airports_open"],
     client_handler="SHOW_AIRPORTS",
 )
@@ -352,7 +354,7 @@ def get_open_airports() -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Fetches closed airports from the mock API (airports.json).",
+    description="Загружает закрытые аэропорты из мок-API (airports.json).",
     provides=["airports_closed"],
     client_handler="SHOW_AIRPORTS",
 )
@@ -370,9 +372,11 @@ def get_closed_airports() -> Tuple[bool, Dict[str, Any]]:
 
 
 @mcp_tool(
-    description="Searches airports by name or code using the mock API (airports.json).",
+    description="Ищет аэропорты по названию или коду с использованием мок-API (airports.json).",
     provides=["airports_search"],
-    parameters={"query": "Search query (name or code)."},
+    parameters={
+        "query": "Поисковый запрос (название или код)."
+    },
     client_handler="SHOW_AIRPORTS",
 )
 def search_airports_by_name_or_code(*, query: str) -> Tuple[bool, Dict[str, Any]]:
@@ -453,10 +457,12 @@ def _haversine_km(*, lat1: float, lon1: float, lat2: float, lon2: float) -> floa
 
 
 @mcp_tool(
-    description="Selects one airport by distance from the current position (nearest or farthest).",
+    description="Выбирает один аэропорт по расстоянию от текущей позиции (ближайший или самый дальний).",
     consumes=["current_position"],
     provides=["airport_by_distance"],
-    parameters={"mode": "Either 'nearest' or 'farthest'."},
+    parameters={
+        "mode": "Либо 'nearest', либо 'farthest'."
+    },
 )
 def find_airport_by_distance(*, mode: str) -> Tuple[bool, Dict[str, Any]]:
     stored = get_artifact("current_position")
