@@ -566,6 +566,8 @@ class MCPAgent:
                 data={"from": current_scenario_id},
                 turn_id=turn_id,
             )
+            # Chitchat should not persist artifacts across turns.
+            state.setdefault("scenario_artifacts", {}).pop("chitchat", None)
 
         state["scenario"] = scenario_state
 
