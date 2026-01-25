@@ -4,3 +4,4 @@ aiohttp==3.10.5
 numpy~=1.26
 nats-py~=2.11.0
 onnxruntime>=1.18.0
+otel @ git+https://gitlab%2Bdeploy-token-1:gldt-XUenTz8nxN6MhAxzYs-P@git.giscloud.ru/voice-chat/helpers.git@v0.1.0#subdirectory=otel

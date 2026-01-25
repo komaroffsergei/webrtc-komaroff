@@ -37,6 +37,8 @@ agents.md
 .venv
 #.version
 collect_file_contents.sh
+src_front
+src_api_gateway
 src_postgres
 src_whisper
 src_lang_graph_1
