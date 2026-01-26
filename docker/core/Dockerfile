@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libavformat-dev libavcodec-dev \
     libavdevice-dev libavfilter-dev libswresample-dev libswscale-dev \
-    pkg-config libgomp1 \
+    pkg-config libgomp1 git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
