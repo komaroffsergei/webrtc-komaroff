@@ -13,7 +13,6 @@ tracer = trace.get_tracer(__name__)
 
 
 async def message_handler(request: web.Request):
-    # HTTP span уже создан aiohttp-инструментацией
     with tracer.start_as_current_span("core.message") as span:
         span.set_attribute("http.route", "/core/message")
         span.set_attribute("service.name", STACK_SERVICE_NAME)
