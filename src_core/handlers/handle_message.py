@@ -1,98 +1,117 @@
 import logging
+import json
 from aiohttp import web
 
-from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
+from otel import OTelBootstrap
 from src_core.handlers.handle_transcription import handle_transcription
 from src_core.settings import STACK_SERVICE_NAME
 from src_core.utils.event_bus import event_log
 
 logger = logging.getLogger("handle_message")
-tracer = trace.get_tracer(__name__)
+
+def _attrs_from_aiohttp_json_response(resp: web.StreamResponse):
+    attrs = {"message.ok": getattr(resp, "status", 200) < 400}
+    body = getattr(resp, "body", None)
+    if not body:
+        return attrs
+    try:
+        data = json.loads(body.decode("utf-8"))
+    except Exception:
+        return attrs
+    attrs["response.session_id.present"] = bool(data.get("session_id")) if isinstance(data, dict) else False
+    return attrs
 
 
+@OTelBootstrap.span("message.parse_json")
+async def _parse_json(request: web.Request):
+    return await request.json()
+
+
+@OTelBootstrap.span(
+    "message.validate",
+    attributes_from_result=lambda r: {
+        "message.text.length": len(r[1]),
+        "message.session_id.present": bool(r[2]),
+        "message.edit.present": bool(r[3]),
+    },
+    status_from_result=lambda r: StatusCode.ERROR if not r[0] else None,
+)
+def _validate_payload(data):
+    text = data.get("text", "")
+    text = text.strip() if isinstance(text, str) else ""
+
+    session_id = data.get("session_id")
+    edit = data.get("edit")
+    ok = bool(text)
+    return ok, text, session_id, edit
+
+
+@OTelBootstrap.span(
+    "event_log.message",
+    attributes={"event.type": "log", "event.level": "info"},
+)
+async def _event_log_message(app: web.Application, text: str) -> None:
+    await event_log(
+        "log",
+        "info",
+        {"text": text},
+        app=app,
+        service=STACK_SERVICE_NAME,
+    )
+
+
+@OTelBootstrap.span(
+    "transcription.handle",
+    attributes_from_args=lambda app, payload, has_session_id: {"transcription.session_id.present": bool(has_session_id)},
+)
+async def _transcription_handle(app: web.Application, payload, *, has_session_id: bool):
+    return await handle_transcription(app, payload)
+
+
+@OTelBootstrap.span(
+    "core.message",
+    attributes={"http.route": "/core/message", "service.name": STACK_SERVICE_NAME},
+    attributes_from_result=_attrs_from_aiohttp_json_response,
+    ignored_exceptions=(web.HTTPBadRequest,),
+)
 async def message_handler(request: web.Request):
-    with tracer.start_as_current_span("core.message") as span:
-        span.set_attribute("http.route", "/core/message")
-        span.set_attribute("service.name", STACK_SERVICE_NAME)
-
+    try:
         try:
-            # --- Parse JSON
-            with tracer.start_as_current_span("message.parse_json") as sp:
-                try:
-                    data = await request.json()
-                except Exception as e:
-                    sp.record_exception(e)
-                    sp.set_status(StatusCode.ERROR)
-                    logger.exception("Invalid JSON")
-                    span.set_status(StatusCode.ERROR)
-                    return web.json_response({"error": "Invalid JSON"}, status=400)
+            data = await _parse_json(request)
+        except Exception as exc:
+            logger.exception("Invalid JSON")
+            raise web.HTTPBadRequest(
+                text=json.dumps({"error": "Invalid JSON"}),
+                content_type="application/json",
+            ) from exc
 
-            # --- Validate payload
-            with tracer.start_as_current_span("message.validate") as sp:
-                text = data.get("text", "")
-                text = text.strip() if isinstance(text, str) else ""
-
-                sp.set_attribute("message.text.length", len(text))
-
-                if not text:
-                    sp.set_status(StatusCode.ERROR)
-                    span.set_status(StatusCode.ERROR)
-                    return web.json_response(
-                        {"error": "text field is required"},
-                        status=400,
-                    )
-
-                session_id = data.get("session_id")
-                edit = data.get("edit")
-
-                sp.set_attribute("message.session_id.present", bool(session_id))
-                sp.set_attribute("message.edit.present", bool(edit))
-
-            # --- Event log (can block / fail, so separate span)
-            with tracer.start_as_current_span("event_log.message") as sp:
-                sp.set_attribute("event.type", "log")
-                sp.set_attribute("event.level", "info")
-                await event_log(
-                    "log",
-                    "info",
-                    {"text": text},
-                    app=request.app,
-                    service=STACK_SERVICE_NAME,
-                )
-
-            # --- Build payload for transcription
-            payload = {"text": text}
-            if session_id:
-                payload["session_id"] = session_id
-            if edit:
-                payload["edit"] = edit
-
-            # --- Transcription handler
-            with tracer.start_as_current_span("transcription.handle") as sp:
-                sp.set_attribute("transcription.session_id.present", bool(session_id))
-                response = await handle_transcription(request.app, payload)
-
-            # --- Build response
-            session_id_out = (
-                response.get("session_id")
-                if isinstance(response, dict)
-                else None
-            )
-            span.set_attribute("response.session_id.present", bool(session_id_out))
-            span.set_attribute("message.ok", True)
-
-            return web.json_response(
-                {"status": "ok", "session_id": session_id_out},
+        ok, text, session_id, edit = _validate_payload(data)
+        if not ok:
+            raise web.HTTPBadRequest(
+                text=json.dumps({"error": "text field is required"}),
+                content_type="application/json",
             )
 
-        except Exception as e:
-            # Любой неожиданный косяк
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR)
-            logger.exception("Unhandled error in message_handler")
-            return web.json_response(
-                {"error": "internal error"},
-                status=500,
-            )
+        await _event_log_message(request.app, text)
+
+        payload = {"text": text}
+        if session_id:
+            payload["session_id"] = session_id
+        if edit:
+            payload["edit"] = edit
+
+        response = await _transcription_handle(request.app, payload, has_session_id=bool(session_id))
+
+        session_id_out = response.get("session_id") if isinstance(response, dict) else None
+        return web.json_response({"status": "ok", "session_id": session_id_out})
+
+    except web.HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Unhandled error in message_handler")
+        raise web.HTTPInternalServerError(
+            text=json.dumps({"error": "internal error"}),
+            content_type="application/json",
+        ) from exc

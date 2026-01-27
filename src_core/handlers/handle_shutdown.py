@@ -1,47 +1,44 @@
 import asyncio
 from aiohttp import web
 
-from opentelemetry import trace
 from opentelemetry.trace import StatusCode
 
-tracer = trace.get_tracer(__name__)
+from otel import OTelBootstrap
 
 
+@OTelBootstrap.span(
+    "webrtc.pcs.close_all",
+    attributes_from_result=lambda errors: {"webrtc.pcs.close.errors": len(errors)},
+    record_exceptions_from_result=lambda errors: errors[:1],
+    status_from_result=lambda errors: StatusCode.ERROR if errors else None,
+)
+async def _pcs_close_all(pcs):
+    results = await asyncio.gather(*(pc.close() for pc in pcs), return_exceptions=True)
+    return [r for r in results if isinstance(r, Exception)]
+
+
+@OTelBootstrap.span("webrtc.pcs.clear")
+def _pcs_clear(app: web.Application) -> None:
+    if "pcs" in app:
+        app["pcs"].clear()
+
+
+@OTelBootstrap.span(
+    "otel.shutdown",
+    attributes_from_args=lambda otel_obj: {"otel.present": otel_obj is not None},
+)
+def _otel_shutdown(otel_obj) -> None:
+    if otel_obj is not None:
+        otel_obj.shutdown()
+
+
+@OTelBootstrap.span(
+    "app.shutdown",
+    attributes_from_args=lambda app: {"webrtc.pcs.count": len(app.get("pcs", []))},
+    ok_attributes={"shutdown.ok": True},
+)
 async def handle_shutdown(app: web.Application):
-    with tracer.start_as_current_span("app.shutdown") as span:
-        try:
-            pcs = list(app.get("pcs", []))
-            span.set_attribute("webrtc.pcs.count", len(pcs))
-
-            # --- Close peer connections
-            with tracer.start_as_current_span("webrtc.pcs.close_all") as sp:
-                results = await asyncio.gather(*(pc.close() for pc in pcs), return_exceptions=True)
-
-                # посчитаем, сколько реально упало при закрытии
-                errors = [r for r in results if isinstance(r, Exception)]
-                sp.set_attribute("webrtc.pcs.close.errors", len(errors))
-
-                if errors:
-                    # записывать все исключения подряд может быть шумно,
-                    # поэтому пишем первое, остальное считается метрикой выше
-                    sp.record_exception(errors[0])
-                    sp.set_status(StatusCode.ERROR)
-
-            # --- Clear pcs set
-            with tracer.start_as_current_span("webrtc.pcs.clear"):
-                if "pcs" in app:
-                    app["pcs"].clear()
-
-            # --- Shutdown OTel (best-effort)
-            otel_obj = app.get("otel")
-            with tracer.start_as_current_span("otel.shutdown") as sp:
-                sp.set_attribute("otel.present", otel_obj is not None)
-                if otel_obj is not None:
-                    otel_obj.shutdown()
-
-            span.set_attribute("shutdown.ok", True)
-
-        except Exception as e:
-            span.record_exception(e)
-            span.set_status(StatusCode.ERROR)
-            raise
+    pcs = list(app.get("pcs", []))
+    await _pcs_close_all(pcs)
+    _pcs_clear(app)
+    _otel_shutdown(app.get("otel"))

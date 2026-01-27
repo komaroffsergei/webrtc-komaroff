@@ -31,3 +31,4 @@ coverage
 /src_front/dist/
 /src_front/tsconfig.tsbuildinfo
 /src_llm/models/
+/otel/
