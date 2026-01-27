@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -10,7 +11,6 @@ if str(ROOT_DIR) not in sys.path:
 
 # --- OTel ---
 from otel import OTelBootstrap
-
 
 # --- src_core imports ---
 from src_core.handlers.handle_index import handle_index
@@ -28,7 +28,8 @@ from src_core.settings import (
     USER_ID,
     NATS_EVENTS_SUBJECT,
     NATS_AGENT_SUBJECT,
-    NATS_ASR_SUBJECT,
+    NATS_ASR_SUBJECT, OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_ENDPOINT_FRONT, OTEL_LOG_LEVEL,
+    OTEL_RESOURCE_ATTRIBUTES, OTEL_TRACES_EXPORTER,
 )
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
@@ -58,8 +59,18 @@ if __name__ == "__main__":
     }
 
     # --- OTel bootstrap ---
-    otelb = OTelBootstrap.from_env(service_name=STACK_SERVICE_NAME, )
-    otelb.instrument_aiohttp_app(app)  # includes start() inside bootstrap (если не стартовал)
+    otelb = OTelBootstrap.from_env(
+        service_name=STACK_SERVICE_NAME,
+        OTEL_EXPORTER_OTLP_ENDPOINT=OTEL_EXPORTER_OTLP_ENDPOINT,
+        OTEL_EXPORTER_OTLP_ENDPOINT_FRONT=OTEL_EXPORTER_OTLP_ENDPOINT_FRONT,
+        OTEL_LOG_LEVEL=OTEL_LOG_LEVEL,
+        OTEL_RESOURCE_ATTRIBUTES=OTEL_RESOURCE_ATTRIBUTES,
+        OTEL_TRACES_EXPORTER=OTEL_TRACES_EXPORTER,
+    )
+
+    otelb.instrument_aiohttp_app(app)
+    app["otel"] = otelb
+
     app["otel"] = otelb
 
     setup_routes(app)

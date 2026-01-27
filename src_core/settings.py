@@ -43,3 +43,9 @@ VAD_MODEL_URL = os.getenv(
     "VAD_MODEL_URL",
     "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx",
 )
+
+OTEL_EXPORTER_OTLP_ENDPOINT=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otlp_collector:4318/")
+OTEL_EXPORTER_OTLP_ENDPOINT_FRONT=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT_FRONT", "/v1/traces")
+OTEL_LOG_LEVEL=os.getenv("OTEL_LOG_LEVEL", "debug")
+OTEL_RESOURCE_ATTRIBUTES=os.getenv("OTEL_RESOURCE_ATTRIBUTES")
+OTEL_TRACES_EXPORTER=os.getenv("OTEL_TRACES_EXPORTER", "otlp"),
