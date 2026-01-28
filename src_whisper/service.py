@@ -3,9 +3,14 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import signal
 import time
+import uuid
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import nats
 import numpy as np
@@ -14,11 +19,24 @@ from nats.aio.msg import Msg
 
 from src_whisper.utils.model_downloader import ensure_model_path
 from src_whisper.utils.nats_logger import NatsLogger
-
+from src_whisper.utils.audio_utils import resample_audio
+from src_whisper.utils.silero_onnx_vad import SileroOnnxVAD, download_model_file, get_speech_timestamps
+from src_whisper.utils.wire_packet import parse_wire_packet
 from src_whisper.utils.phrase_packet import PhrasePacket
 
 
 logger = logging.getLogger("whisper_service")
+
+
+@dataclass(slots=True)
+class StreamState:
+    reply_subject: str
+    session_id: str | None
+    buffer: list[np.ndarray]
+    buffer_sample_rate: int
+    buffer_samples: int
+    check_in_progress: bool = False
+    flush_requested: bool = False
 
 
 class WhisperService:
@@ -37,6 +55,15 @@ class WhisperService:
         min_phrase_ms: int = 100,
         max_concurrency: int = 1,
         beam_size: int = 1,
+        vad_models_dir: str | Path = "/app/models/vad",
+        vad_model_url: str = "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx",
+        vad_sample_rate: int = 16000,
+        min_speech_duration_ms: int = 250,
+        min_silence_duration_ms: int = 500,
+        max_speech_duration_s: float = 30.0,
+        speech_pad_ms: int = 30,
+        vad_threshold: float = 0.8,
+        buffer_check_interval_s: float = 1.0,
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
@@ -58,6 +85,22 @@ class WhisperService:
         self._stop_event = asyncio.Event()
         self._model_task: Optional[asyncio.Task] = None
         self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
+
+        self._vad_models_dir = Path(vad_models_dir)
+        self._vad_model_url = vad_model_url
+        self._vad_sample_rate = int(vad_sample_rate)
+        self._min_speech_duration_ms = int(min_speech_duration_ms)
+        self._min_silence_duration_ms = int(min_silence_duration_ms)
+        self._max_speech_duration_s = float(max_speech_duration_s)
+        self._speech_pad_ms = int(speech_pad_ms)
+        self._vad_threshold = float(vad_threshold)
+        self._buffer_check_interval_s = float(buffer_check_interval_s)
+
+        self._vad_model: SileroOnnxVAD | None = None
+        self._vad_model_lock = asyncio.Lock()
+        self._vad_run_lock = asyncio.Lock()
+
+        self._streams: dict[str, StreamState] = {}
 
     async def run(self) -> None:
         await self._connect()
@@ -101,6 +144,7 @@ class WhisperService:
         for task in list(self._tasks):
             task.cancel()
 
+        self._streams.clear()
         if self._nc:
             try:
                 await self._nc.drain()
@@ -128,9 +172,25 @@ class WhisperService:
             return
 
         try:
-            packet = PhrasePacket.from_bytes(msg.data)
+            meta, audio = parse_wire_packet(msg.data)
         except Exception as exc:
             logger.warning("Invalid packet: %s", exc)
+            await self._nats_logger.error(f"Invalid packet: {exc}")
+            await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
+            return
+
+        msg_type = str(meta.get("type") or "phrase")
+        if msg_type == "frame":
+            await self._handle_stream_frame(msg, meta, audio)
+            return
+        if msg_type == "end":
+            await self._handle_stream_end(msg, meta)
+            return
+
+        try:
+            packet = PhrasePacket.from_bytes(msg.data)
+        except Exception as exc:
+            logger.warning("Invalid phrase packet: %s", exc)
             await self._nats_logger.error(f"Invalid packet: {exc}")
             await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
             return
@@ -179,6 +239,207 @@ class WhisperService:
             name="transcription_result",
         )
         await self._reply(msg, message)
+
+    async def _handle_stream_frame(self, msg: Msg, meta: dict[str, Any], audio: np.ndarray) -> None:
+        if not msg.reply or not self._nats_logger:
+            return
+
+        stream_id = str(meta.get("stream_id") or msg.reply)
+        session_id = meta.get("session_id")
+        sr = int(meta.get("sample_rate") or self._vad_sample_rate)
+
+        state = self._streams.get(stream_id)
+        if not state:
+            state = StreamState(
+                reply_subject=msg.reply,
+                session_id=str(session_id) if session_id else None,
+                buffer=[],
+                buffer_sample_rate=sr,
+                buffer_samples=0,
+            )
+            self._streams[stream_id] = state
+            await self._nats_logger.info(f"Stream opened id={stream_id}")
+        else:
+            state.reply_subject = msg.reply
+            if session_id and not state.session_id:
+                state.session_id = str(session_id)
+            if sr:
+                state.buffer_sample_rate = sr
+
+        if audio.size:
+            state.buffer.append(audio)
+            state.buffer_samples += int(audio.size)
+
+        buffer_duration = (
+            state.buffer_samples / max(1, state.buffer_sample_rate)
+            if state.buffer_samples
+            else 0.0
+        )
+        if buffer_duration >= self._buffer_check_interval_s and not state.check_in_progress:
+            task = asyncio.create_task(self._check_stream_buffer(stream_id, flush=False))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+
+    async def _handle_stream_end(self, msg: Msg, meta: dict[str, Any]) -> None:
+        if not msg.reply:
+            return
+        stream_id = str(meta.get("stream_id") or msg.reply)
+        state = self._streams.get(stream_id)
+        if not state:
+            return
+
+        state.flush_requested = True
+        if not state.check_in_progress:
+            task = asyncio.create_task(self._check_stream_buffer(stream_id, flush=True))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
+
+    async def _check_stream_buffer(self, stream_id: str, *, flush: bool) -> None:
+        state = self._streams.get(stream_id)
+        if not state or state.check_in_progress:
+            return
+
+        state.check_in_progress = True
+        try:
+            if not state.buffer:
+                return
+
+            audio = np.concatenate(state.buffer)
+            source_sr = int(state.buffer_sample_rate or self._vad_sample_rate)
+            target_sr = int(self._vad_sample_rate)
+            if source_sr != target_sr:
+                audio = resample_audio(audio, source_sr, target_sr)
+
+            if not flush and (len(audio) / target_sr) < 1.0:
+                return
+
+            timestamps = await self._get_timestamps(audio)
+            if not timestamps:
+                if (len(audio) / target_sr) > 5.0:
+                    state.buffer.clear()
+                    state.buffer_samples = 0
+                return
+
+            should_flush = flush
+            if not should_flush:
+                last_end_sample = int(timestamps[-1]["end"])
+                silence_after = (len(audio) - last_end_sample) / target_sr
+                should_flush = silence_after >= (self._min_silence_duration_ms / 1000.0)
+            if not should_flush:
+                return
+
+            reply_subject = state.reply_subject
+            session_id = state.session_id
+            for ts in timestamps:
+                start_sample = int(ts["start"])
+                end_sample = int(ts["end"])
+                segment_audio = audio[start_sample:end_sample]
+                duration = float(len(segment_audio) / target_sr) if target_sr else 0.0
+                phrase_id = str(uuid.uuid4())
+
+                packet = PhrasePacket(
+                    phrase_id=phrase_id,
+                    sample_rate=target_sr,
+                    duration=duration,
+                    audio=segment_audio,
+                )
+                task = asyncio.create_task(
+                    self._transcribe_and_publish(reply_subject, session_id, packet)
+                )
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
+
+            state.buffer.clear()
+            state.buffer_samples = 0
+        finally:
+            state.check_in_progress = False
+            if flush or state.flush_requested:
+                self._streams.pop(stream_id, None)
+
+    async def _transcribe_and_publish(
+        self,
+        reply_subject: str,
+        session_id: str | None,
+        packet: PhrasePacket,
+    ) -> None:
+        if not self._nats_logger:
+            return
+
+        try:
+            model = await self._ensure_model_loaded()
+        except Exception as exc:
+            await self._nats_logger.error(f"Model not ready: {exc}")
+            await self._publish_reply(reply_subject, {"phrase_id": packet.phrase_id, "error": "model_error"})
+            return
+
+        started = time.perf_counter()
+        async with self._semaphore:
+            try:
+                text = await asyncio.to_thread(self._transcribe, model, packet)
+            except Exception as exc:
+                logger.exception("Transcription error: %s", exc)
+                await self._nats_logger.error(f"Transcription error: {exc}")
+                await self._publish_reply(
+                    reply_subject,
+                    {"phrase_id": packet.phrase_id, "error": "transcription_failed", "details": str(exc)},
+                )
+                return
+
+        transcribe_time = time.perf_counter() - started
+        message: dict[str, Any] = {
+            "phrase_id": packet.phrase_id,
+            "text": text,
+            "duration": packet.duration,
+            "transcribe_time": transcribe_time,
+        }
+        if session_id:
+            message["session_id"] = session_id
+
+        await self._publish_reply(reply_subject, message)
+
+    async def _publish_reply(self, subject: str, payload: dict[str, Any]) -> None:
+        if not self._nc:
+            return
+        await self._nc.publish(subject, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
+
+    async def _get_timestamps(self, audio_array: np.ndarray) -> list[dict[str, Any]]:
+        await self._ensure_vad_loaded()
+        if not self._vad_model:
+            return []
+
+        async with self._vad_run_lock:
+            return await asyncio.to_thread(
+                get_speech_timestamps,
+                audio_array,
+                self._vad_model,
+                threshold=self._vad_threshold,
+                sampling_rate=self._vad_sample_rate,
+                min_speech_duration_ms=self._min_speech_duration_ms,
+                min_silence_duration_ms=self._min_silence_duration_ms,
+                max_speech_duration_s=self._max_speech_duration_s,
+                speech_pad_ms=self._speech_pad_ms,
+                return_seconds=False,
+            )
+
+    async def _ensure_vad_loaded(self) -> None:
+        if self._vad_model:
+            return
+        async with self._vad_model_lock:
+            if self._vad_model:
+                return
+
+            url = self._vad_model_url
+            filename = os.path.basename(urlparse(url).path)
+            base_path = self._vad_models_dir.expanduser()
+            model_path = base_path if base_path.suffix.lower() == ".onnx" else (base_path / filename)
+            model_path.parent.mkdir(parents=True, exist_ok=True)
+
+            if not model_path.exists():
+                await asyncio.to_thread(download_model_file, str(model_path), url)
+
+            self._vad_model = await asyncio.to_thread(SileroOnnxVAD, str(model_path))
+            if self._nats_logger:
+                await self._nats_logger.info(f"Silero VAD model loaded from {model_path}")
 
     async def _ensure_model_loaded(self) -> WhisperModel:
         if self._whisper_model:

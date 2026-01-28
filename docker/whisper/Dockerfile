@@ -8,6 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    libgomp1 \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,7 +20,6 @@ COPY . /app/src_whisper
 
 WORKDIR /app/src_whisper
 
-RUN mkdir -p "/models/asr"
+RUN mkdir -p "/models/asr" "/models/vad"
 
 CMD ["python", "-m", "src_whisper.main"]
-

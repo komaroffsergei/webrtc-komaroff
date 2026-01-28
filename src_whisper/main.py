@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 from src_whisper.service import WhisperService
 from src_whisper.settings import STACK_SERVICE_NAME, NATS_URL, NATS_ASR_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, \
-    ASR_MODEL_ID
+    ASR_MODEL_ID, VAD_MODEL_URL
 
 current_dir = Path(__file__).parent.resolve()
 env_file = current_dir / '.env'
@@ -18,6 +18,9 @@ load_dotenv(env_local_file if os.path.exists(env_local_file) else env_file)
 
 ASR_MODELS = current_dir / Path(os.getenv("ASR_MODELS", "models/asr"))
 ASR_MODELS.mkdir(parents=True, exist_ok=True)
+
+VAD_MODELS_DIR = current_dir / Path(os.getenv("VAD_MODELS", "models/vad"))
+VAD_MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def configure_logging() -> None:
@@ -35,6 +38,8 @@ async def _run_service() -> None:
         logs_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         models_dir=ASR_MODELS,
         model_id=ASR_MODEL_ID,
+        vad_models_dir=VAD_MODELS_DIR,
+        vad_model_url=VAD_MODEL_URL,
         compute_type="float32",
     )
     await service.run()

@@ -2,9 +2,8 @@ import logging
 from aiohttp import web
 
 from otel import OTelBootstrap
-from src_core.settings import NATS_URL, STACK_SERVICE_NAME, VAD_MODEL_URL
+from src_core.settings import NATS_URL, STACK_SERVICE_NAME
 from src_core.utils.nats_client import NatsClient
-from src_core.utils.silero_downloader import ensure_silero_model
 from src_core.utils.event_bus import register_event_bus, event_log
 
 logger = logging.getLogger("startup")
@@ -54,14 +53,6 @@ async def _event_log_started(app: web.Application) -> None:
 
 
 @OTelBootstrap.span(
-    "vad.ensure_model",
-    attributes={"model.url": VAD_MODEL_URL},
-)
-async def _vad_ensure_model(app: web.Application) -> None:
-    await ensure_silero_model(app, url=VAD_MODEL_URL)
-
-
-@OTelBootstrap.span(
     "event_log.startup_failed",
     attributes_from_args=lambda app, exc: {
         "event.type": "log",
@@ -84,7 +75,6 @@ async def _event_log_startup_failed(app: web.Application, exc: Exception) -> Non
     attributes={
         "service.name": STACK_SERVICE_NAME,
         "nats.url.set": bool(NATS_URL),
-        "vad.model_url.set": bool(VAD_MODEL_URL),
     },
     ok_attributes={"startup.ok": True},
 )
@@ -93,7 +83,6 @@ async def handle_startup(app: web.Application):
         nats_client = await _nats_connect(app)
         _event_bus_register(app, nats_client=nats_client)
         await _event_log_started(app)
-        await _vad_ensure_model(app)
 
         logger.info("Startup complete")
 

@@ -9,7 +9,6 @@ import shutil
 import warnings
 from pathlib import Path
 from typing import Callable, List, Optional
-from urllib.parse import urlparse
 from urllib.request import urlopen
 
 import numpy as np
@@ -30,37 +29,31 @@ def ensure_model_path(model_path: str) -> str:
     return str(resolved)
 
 
-def download_model_file(model_path: str, url: Optional[str] = None) -> str:
+def download_model_file(model_path: str, url: str) -> str:
     """Download the Silero ONNX model to the given path."""
 
     target = Path(model_path).expanduser().resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_suffix(target.suffix + ".tmp")
 
-    download_url = url
-    logger.info("Downloading Silero VAD model from %s", download_url)
-    with urlopen(download_url) as response, open(tmp_path, "wb") as dst:
+    logger.info("Downloading Silero VAD model from %s", url)
+    with urlopen(url) as response, open(tmp_path, "wb") as dst:
         shutil.copyfileobj(response, dst)
     tmp_path.replace(target)
     logger.info("Silero VAD model saved to %s", target)
     return str(target)
 
 
-
-
 class SileroOnnxVAD:
     """Thin wrapper around the Silero ONNX model with state management."""
 
     def __init__(self, model_path: str, force_cpu: bool = True):
-
         self.model_path = ensure_model_path(model_path)
         opts = ort.SessionOptions()
         opts.inter_op_num_threads = 1
         opts.intra_op_num_threads = 1
 
-        providers = None
-        if force_cpu:
-            providers = ["CPUExecutionProvider"]
+        providers = ["CPUExecutionProvider"] if force_cpu else None
 
         self.session = ort.InferenceSession(
             self.model_path,
@@ -258,102 +251,44 @@ def get_speech_timestamps(
                 speeches.append(current_speech)
                 current_speech = {}
                 next_start = prev_end + dur
-
-                if next_start < prev_end + cur_sample:
-                    current_speech["start"] = next_start
-                else:
-                    triggered = False
-                prev_end = next_start = temp_end = 0
                 possible_ends = []
-            else:
-                if prev_end:
-                    current_speech["end"] = prev_end
-                    speeches.append(current_speech)
-                    current_speech = {}
-                    if next_start < prev_end:
-                        triggered = False
-                    else:
-                        current_speech["start"] = next_start
-                    prev_end = next_start = temp_end = 0
-                    possible_ends = []
-                else:
-                    current_speech["end"] = cur_sample
-                    speeches.append(current_speech)
-                    current_speech = {}
-                    prev_end = next_start = temp_end = 0
-                    triggered = False
-                    possible_ends = []
-                    continue
+                triggered = False
+                continue
+
+            current_speech["end"] = cur_sample
+            speeches.append(current_speech)
+            current_speech = {}
+            possible_ends = []
+            triggered = False
+            continue
 
         if (speech_prob < neg_threshold) and triggered:
             if not temp_end:
                 temp_end = cur_sample
-            sil_dur_now = cur_sample - temp_end
-
+            if cur_sample - temp_end < min_silence_samples:
+                continue
+            current_speech["end"] = temp_end
             if (
-                not use_max_poss_sil_at_max_speech
-                and sil_dur_now > min_silence_samples_at_max_speech
+                current_speech["end"] - current_speech["start"] > min_speech_samples
             ):
-                prev_end = temp_end
+                speeches.append(current_speech)
+            current_speech = {}
+            possible_ends = []
+            triggered = False
+            temp_end = 0
+            continue
 
-            if sil_dur_now < min_silence_samples:
-                continue
-            else:
-                current_speech["end"] = temp_end
-                if (current_speech["end"] - current_speech["start"]) > min_speech_samples:
-                    speeches.append(current_speech)
-                current_speech = {}
-                prev_end = next_start = temp_end = 0
-                triggered = False
-                possible_ends = []
-                continue
-
-    if current_speech and (audio_length_samples - current_speech["start"]) > min_speech_samples:
+    if current_speech and (audio_length_samples - current_speech["start"] > min_speech_samples):
         current_speech["end"] = audio_length_samples
         speeches.append(current_speech)
 
-    for i, speech in enumerate(speeches):
-        if i == 0:
-            speech["start"] = int(max(0, speech["start"] - speech_pad_samples))
-        if i != len(speeches) - 1:
-            silence_duration = speeches[i + 1]["start"] - speech["end"]
-            if silence_duration < 2 * speech_pad_samples:
-                speech["end"] += int(silence_duration // 2)
-                speeches[i + 1]["start"] = int(
-                    max(0, speeches[i + 1]["start"] - silence_duration // 2)
-                )
-            else:
-                speech["end"] = int(min(audio_length_samples, speech["end"] + speech_pad_samples))
-                speeches[i + 1]["start"] = int(
-                    max(0, speeches[i + 1]["start"] - speech_pad_samples)
-                )
-        else:
-            speech["end"] = int(min(audio_length_samples, speech["end"] + speech_pad_samples))
-
     if return_seconds:
-        audio_length_seconds = audio_length_samples / sampling_rate
-        for speech_dict in speeches:
-            speech_dict["start"] = max(
-                round(speech_dict["start"] / sampling_rate, time_resolution), 0
-            )
-            speech_dict["end"] = min(
-                round(speech_dict["end"] / sampling_rate, time_resolution),
-                audio_length_seconds,
-            )
-    elif step > 1:
-        for speech_dict in speeches:
-            speech_dict["start"] *= step
-            speech_dict["end"] *= step
+        for seg in speeches:
+            seg["start"] = round(seg["start"] / sampling_rate, time_resolution)
+            seg["end"] = round(seg["end"] / sampling_rate, time_resolution)
 
     if visualize_probs:
-        _maybe_visualize(speech_probs, window_size_samples / sampling_rate)
+        _maybe_visualize(speech_probs, step=window_size_samples / sampling_rate)
 
     return speeches
 
-
-__all__ = [
-    "SileroOnnxVAD",
-    "get_speech_timestamps",
-    "ensure_model_path",
-    "download_model_file",
-]

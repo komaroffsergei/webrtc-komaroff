@@ -25,14 +25,15 @@ class NatsClient:
 
     async def subscribe(self, subject: str, cb):
         """Subscribe to logs subject."""
-        await self.nc.subscribe(subject, cb=cb)
+        sub = await self.nc.subscribe(subject, cb=cb)
         logger.info(f"NATS logs client subscribed: {subject}")
+        return sub
 
 
     async def request(self, subject, data, timeout=NATS_REQUEST_TIMEOUT):
         logger.info(f"NATS logs client request: {subject} `{data}`")
         return await self.nc.request(subject, data, timeout=timeout)
 
-    async def publish(self, subject: str, data: bytes) -> None:
+    async def publish(self, subject: str, data: bytes, *, reply: str | None = None) -> None:
         logger.info("NATS publish: %s (%d bytes)", subject, len(data))
-        await self.nc.publish(subject, data)
+        await self.nc.publish(subject, data, reply=reply)
