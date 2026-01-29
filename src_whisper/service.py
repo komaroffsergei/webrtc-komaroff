@@ -428,6 +428,9 @@ class WhisperService:
             if self._vad_model:
                 return
 
+            if self._nats_logger:
+                await self._nats_logger.log("command", "status_vad", {"status": "downloading"})
+
             url = self._vad_model_url
             filename = os.path.basename(urlparse(url).path)
             base_path = self._vad_models_dir.expanduser()
@@ -440,6 +443,7 @@ class WhisperService:
             self._vad_model = await asyncio.to_thread(SileroOnnxVAD, str(model_path))
             if self._nats_logger:
                 await self._nats_logger.info(f"Silero VAD model loaded from {model_path}")
+                await self._nats_logger.log("command", "status_vad", {"status": "ready"})
 
     async def _ensure_model_loaded(self) -> WhisperModel:
         if self._whisper_model:

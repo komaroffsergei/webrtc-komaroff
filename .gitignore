@@ -32,3 +32,4 @@ coverage
 /src_front/tsconfig.tsbuildinfo
 /src_llm/models/
 /otel/
+/vendor/
