@@ -1,6 +1,7 @@
 langgraph>=0.2.0
 langchain>=0.2.0
 langchain-community
+packaging>=23.2,<26.0
 pydantic>=2.0
 langchain-ollama
 langchain_core

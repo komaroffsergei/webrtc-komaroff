@@ -49,3 +49,16 @@ OTEL_EXPORTER_OTLP_ENDPOINT_FRONT=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT_FRONT",
 OTEL_LOG_LEVEL=os.getenv("OTEL_LOG_LEVEL", "debug")
 OTEL_RESOURCE_ATTRIBUTES=os.getenv("OTEL_RESOURCE_ATTRIBUTES")
 OTEL_TRACES_EXPORTER=os.getenv("OTEL_TRACES_EXPORTER", "otlp")
+
+# Default observability stack:
+# - traces -> Grafana Tempo (OTLP/HTTP)
+# - metrics -> Grafana Agent/Alloy (OTLP/HTTP receiver) or another OTLP metrics gateway
+OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = os.getenv(
+    "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
+    "http://tempo:4318/v1/traces",
+)
+OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = os.getenv(
+    "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
+    "http://grafana:4318/v1/metrics",
+)
+OTEL_METRICS_EXPORTER = os.getenv("OTEL_METRICS_EXPORTER", "otlp")
