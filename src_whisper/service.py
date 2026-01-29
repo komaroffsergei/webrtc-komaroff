@@ -47,10 +47,7 @@ class WhisperService:
         *,
         service_name: str,
         nats_url: str,
-        asr_subject: str | None = None,
-        asr_subjects: list[str] | None = None,
-        asr_prefix: str | None = None,
-        allowed_suffixes: set[str] | None = None,
+        asr_subject: str,
         logs_subject: str,
         models_dir,
         model_id: str,
@@ -72,17 +69,7 @@ class WhisperService:
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
-        if asr_subjects:
-            self._asr_subjects = [s for s in asr_subjects if s]
-        elif asr_subject:
-            self._asr_subjects = [asr_subject]
-        else:
-            raise ValueError("asr_subject or asr_subjects is required")
-        if not self._asr_subjects:
-            raise ValueError("ASR subject list is empty")
-
-        self._asr_prefix = (asr_prefix or "").strip()
-        self._allowed_suffixes = set(allowed_suffixes) if allowed_suffixes else None
+        self._asr_subject = asr_subject
         self._events_subject = logs_subject
         self._models_dir = models_dir
         self._model_id = model_id
@@ -100,7 +87,6 @@ class WhisperService:
         self._stop_event = asyncio.Event()
         self._model_task: Optional[asyncio.Task] = None
         self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
-        self._asr_subscriptions: list[Any] = []
 
         self._vad_models_dir = Path(vad_models_dir)
         self._vad_model_url = vad_model_url
@@ -150,11 +136,9 @@ class WhisperService:
         self._model_task = asyncio.create_task(self._warmup_model())
         self._model_task.add_done_callback(self._handle_model_task_done)
 
-        for subject in self._asr_subjects:
-            sub = await self._nc.subscribe(subject, cb=self._handle_message)
-            self._asr_subscriptions.append(sub)
-            logger.info("Subscribed to: %s", subject)
-            await self._nats_logger.info(f"Subscribed to: {subject}")
+        await self._nc.subscribe(self._asr_subject, cb=self._handle_message)
+        logger.info("Subscribed to: %s", self._asr_subject)
+        await self._nats_logger.info(f"Subscribed to: {self._asr_subject}")
 
     async def _shutdown(self) -> None:
         if self._model_task:
@@ -164,12 +148,6 @@ class WhisperService:
             task.cancel()
 
         self._streams.clear()
-        for sub in list(self._asr_subscriptions):
-            try:
-                await sub.unsubscribe()
-            except Exception:
-                logger.exception("Failed to unsubscribe from ASR subject")
-        self._asr_subscriptions.clear()
         if self._nc:
             try:
                 await self._nc.drain()
@@ -198,18 +176,6 @@ class WhisperService:
 
         logger.info("Received msg on subject: %s, reply: %s", msg.subject, msg.reply)
         await self._nats_logger.info(f"Received msg on subject: {msg.subject}, reply: {msg.reply}")
-
-        if self._allowed_suffixes is not None:
-            if not self._asr_prefix:
-                logger.warning("ASR_ALLOWED_SUFFIXES is set but prefix is empty; allowlist is ignored")
-            elif not msg.subject.startswith(self._asr_prefix):
-                logger.warning("Ignoring msg: subject is outside prefix (%s)", self._asr_prefix)
-                return
-            else:
-                suffix = msg.subject[len(self._asr_prefix) :]
-                if suffix not in self._allowed_suffixes:
-                    logger.info("Ignoring msg: subject suffix is not allowed (%s)", suffix)
-                    return
 
         try:
             meta, audio = parse_wire_packet(msg.data)

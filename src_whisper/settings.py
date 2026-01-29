@@ -12,13 +12,6 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
 
-# NATS subscription behavior for ASR subject(s).
-# - exact: subscribe only to `prefix + USER_ID` (backward compatible default)
-# - wildcard: subscribe only to `prefix + >` (or to provided wildcard pattern)
-# - both: subscribe to both exact and wildcard
-ASR_SUBSCRIBE_MODE = os.getenv("ASR_SUBSCRIBE_MODE", "exact").strip().lower()
-ASR_ALLOWED_SUFFIXES = os.getenv("ASR_ALLOWED_SUFFIXES", "").strip()
-
 ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 

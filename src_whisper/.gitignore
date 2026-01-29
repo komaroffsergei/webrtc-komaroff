@@ -32,3 +32,6 @@ recordings_raw/
 /models/*
 /.venv/
 .env.local
+
+# Local test artifacts
+tests/*.wav

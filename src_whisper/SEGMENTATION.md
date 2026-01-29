@@ -14,23 +14,9 @@ The whisper service replies to that inbox with JSON messages.
 
 ### NATS subject subscription
 
-By default the service subscribes to a single **exact** subject: `NATS_ASR_SUBJECT + USER_ID`.
+The service subscribes to a single **exact** subject: `NATS_ASR_SUBJECT + USER_ID`.
 
-You can enable wildcard subscription so the service can accept streams on any subject under a prefix:
-
-- `ASR_SUBSCRIBE_MODE=exact`: subscribe only to `prefix + USER_ID` (default, backward compatible)
-- `ASR_SUBSCRIBE_MODE=wildcard`: subscribe only to `prefix + >` (preferred) or to `NATS_ASR_SUBJECT` if it already contains `*`/`>`
-- `ASR_SUBSCRIBE_MODE=both`: subscribe to both exact and wildcard (migration mode)
-
-Prefix normalization:
-
-- `NATS_ASR_SUBJECT` is treated as a prefix and will be normalized to end with `.` (e.g. `asr.whisper` -> `asr.whisper.`).
-- If `NATS_ASR_SUBJECT` already contains `*`/`>`, it will be used as a wildcard subject as-is (a warning is logged).
-
-Optional isolation:
-
-- `ASR_ALLOWED_SUFFIXES` (comma-separated) restricts wildcard (and exact) traffic to a known list of suffixes.
-  Suffix is the part after the normalized prefix and may contain dots (e.g. `team.a`).
+`NATS_ASR_SUBJECT` is treated as a prefix and normalized to end with `.` (e.g. `asr.whisper` -> `asr.whisper.`).
 
 Incoming `meta` fields (required/used):
 
@@ -82,4 +68,10 @@ Use `src_whisper/tools/test_whisper_service.py` to publish a short stream and co
 
 ```bash
 python -m src_whisper.tools.test_whisper_service --subject asr.whisper.test1 --timeout-s 10
+```
+
+If `nats://127.0.0.1:4222` is not reachable in your setup, you can use NATS WebSocket listener:
+
+```bash
+python -m src_whisper.tools.test_whisper_service --nats-url ws://127.0.0.1:9222 --subject asr.whisper.test1 --timeout-s 10
 ```

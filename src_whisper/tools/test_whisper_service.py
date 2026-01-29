@@ -6,6 +6,7 @@ import json
 import time
 import uuid
 import wave
+from urllib.parse import urlparse
 
 import nats
 import numpy as np
@@ -39,7 +40,20 @@ def _generate_test_audio(sr: int) -> np.ndarray:
 
 
 async def _run(args: argparse.Namespace) -> int:
-    nc = await nats.connect(servers=[args.nats_url])
+    url = urlparse(args.nats_url)
+    fallback = "ws://127.0.0.1:9222"
+    if args.nats_url in {"nats://127.0.0.1:4222", "nats://localhost:4222"}:
+        try:
+            await asyncio.wait_for(asyncio.open_connection(url.hostname or "127.0.0.1", url.port or 4222), timeout=0.2)
+        except Exception:
+            print(f"TCP NATS is not reachable at {args.nats_url}. Using {fallback} ...")
+            args.nats_url = fallback
+
+    nc = await nats.connect(
+        servers=[args.nats_url],
+        max_reconnect_attempts=0,
+        connect_timeout=0.5,
+    )
     inbox = nc.new_inbox()
     sub = await nc.subscribe(inbox)
 
@@ -121,7 +135,11 @@ async def _run(args: argparse.Namespace) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Publish audio to src_whisper over NATS and collect reply messages.")
     parser.add_argument("--nats-url", default="nats://127.0.0.1:4222")
-    parser.add_argument("--subject", required=True, help="Target subject, e.g. asr.whisper.test1")
+    parser.add_argument(
+        "--subject",
+        default="",
+        help="Target subject. If empty, uses NATS_ASR_SUBJECT + USER_ID from env.",
+    )
     parser.add_argument("--mode", choices=["frame", "phrase"], default="frame")
     parser.add_argument("--wav", help="Optional WAV (mono, 16kHz, 16-bit PCM). If omitted, generates synthetic audio.")
     parser.add_argument("--sample-rate", type=int, default=16000)
@@ -133,10 +151,19 @@ def main() -> None:
     parser.add_argument("--allow-no-replies", action="store_true")
     args = parser.parse_args()
     args.stop_after = int(args.stop_after) if args.stop_after else 0
+    if not args.subject:
+        import os
+
+        prefix = (os.getenv("NATS_ASR_SUBJECT", "") or "").strip()
+        user_id = (os.getenv("USER_ID", "") or "").strip()
+        if not prefix or not user_id:
+            raise SystemExit("Provide --subject or set NATS_ASR_SUBJECT and USER_ID in env")
+        if not prefix.endswith("."):
+            prefix += "."
+        args.subject = prefix + user_id
 
     raise SystemExit(asyncio.run(_run(args)))
 
 
 if __name__ == "__main__":
     main()
-

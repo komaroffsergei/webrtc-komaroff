@@ -9,9 +9,7 @@ from dotenv import load_dotenv
 
 from src_whisper.service import WhisperService
 from src_whisper.settings import (
-    ASR_ALLOWED_SUFFIXES,
     ASR_MODEL_ID,
-    ASR_SUBSCRIBE_MODE,
     BUFFER_CHECK_INTERVAL_S,
     MAX_SPEECH_DURATION_S,
     MIN_SILENCE_DURATION_MS,
@@ -30,7 +28,6 @@ from src_whisper.settings import (
     WHISPER_LANGUAGE,
     WHISPER_MAX_CONCURRENCY,
 )
-from src_whisper.utils.asr_subjects import build_asr_subjects, parse_allowed_suffixes
 
 current_dir = Path(__file__).parent.resolve()
 env_file = current_dir / '.env'
@@ -54,20 +51,20 @@ def configure_logging() -> None:
 
 
 async def _run_service() -> None:
-    asr_subjects, warnings = build_asr_subjects(
-        NATS_ASR_SUBJECT,
-        USER_ID if USER_ID else None,
-        ASR_SUBSCRIBE_MODE,
-    )
-    for warning in warnings:
-        logging.getLogger("main").warning("%s", warning)
+    if not USER_ID:
+        raise ValueError("USER_ID is required")
+    prefix = (NATS_ASR_SUBJECT or "").strip()
+    if not prefix:
+        raise ValueError("NATS_ASR_SUBJECT is required")
+    if "*" in prefix or ">" in prefix:
+        raise ValueError("NATS_ASR_SUBJECT must be a plain prefix (wildcards are not supported)")
+    if not prefix.endswith("."):
+        prefix += "."
 
     service = WhisperService(
         service_name=STACK_SERVICE_NAME,
         nats_url=NATS_URL,
-        asr_subjects=list(asr_subjects.subjects),
-        asr_prefix=asr_subjects.prefix,
-        allowed_suffixes=parse_allowed_suffixes(ASR_ALLOWED_SUFFIXES),
+        asr_subject=f"{prefix}{USER_ID}",
         logs_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         models_dir=ASR_MODELS,
         model_id=ASR_MODEL_ID,
