@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "ai_src_core")
 
@@ -23,26 +22,6 @@ CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")
 
 ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
-
-SERVICE_ROOT = Path(__file__).resolve().parent
-
-# Keep VAD model under the src_core service root (works both locally and in Docker).
-DEFAULT_VAD_DIR = SERVICE_ROOT / "models" / "vad"
-
-_raw_vad_model_path = os.getenv("VAD_MODEL_PATH")
-if _raw_vad_model_path:
-    _candidate = Path(_raw_vad_model_path).expanduser()
-    if not _candidate.is_absolute():
-        _candidate = (SERVICE_ROOT / _candidate).resolve()
-    elif _raw_vad_model_path.startswith("/app/") and not Path("/app").exists():
-        _candidate = DEFAULT_VAD_DIR
-    VAD_MODEL_PATH = str(_candidate)
-else:
-    VAD_MODEL_PATH = str(DEFAULT_VAD_DIR)
-VAD_MODEL_URL = os.getenv(
-    "VAD_MODEL_URL",
-    "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx",
-)
 
 OTEL_EXPORTER_OTLP_ENDPOINT=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otlp_collector:4318/")
 OTEL_EXPORTER_OTLP_ENDPOINT_FRONT=os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT_FRONT", "/v1/traces")

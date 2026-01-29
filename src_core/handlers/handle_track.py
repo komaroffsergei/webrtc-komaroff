@@ -14,7 +14,7 @@ from ..settings import STACK_SERVICE_NAME
 logger = logging.getLogger("track")
 
 
-async def handle_track(track, pc, audio_transceiver, app, echo_ref, *, session_id: str | None = None):
+async def handle_track(track, pc, audio_transceiver, app, *, session_id: str | None = None):
     if track.kind != "audio":
         return
 
@@ -29,7 +29,7 @@ async def handle_track(track, pc, audio_transceiver, app, echo_ref, *, session_i
     # AUDIO GRAPH
     #
     graph = AudioGraph()
-    attach_pc_lifecycle(pc, app, graph, audio_transceiver, echo_ref)
+    attach_pc_lifecycle(pc, app, graph, audio_transceiver)
 
     source = graph.add(
         TrackSourceNode(

@@ -138,13 +138,12 @@ async def _event_log_track_received(app, *, track_kind: str):
 
 
 @OTelBootstrap.span("webrtc.handle_track")
-async def _webrtc_handle_track(track, pc, audio_transceiver, app, echo_ref, *, session_id: str):
+async def _webrtc_handle_track(track, pc, audio_transceiver, app, *, session_id: str):
     await handle_track(
         track,
         pc,
         audio_transceiver,
         app,
-        echo_ref,
         session_id=session_id,
     )
 
@@ -280,8 +279,6 @@ async def handle_offer_connect(request, params, parent_span=None):
         _webrtc_pcs_maintain(request.app, pc)
         await _event_log_pc_created(request.app)
 
-        echo_ref = {"node": None}
-
         @pc.on("track")
         @OTelBootstrap.span(
             "webrtc.on_track",
@@ -297,7 +294,6 @@ async def handle_offer_connect(request, params, parent_span=None):
                 pc,
                 audio_transceiver,
                 request.app,
-                echo_ref,
                 session_id=session_id,
             )
 

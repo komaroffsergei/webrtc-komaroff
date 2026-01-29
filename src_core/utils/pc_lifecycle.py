@@ -10,13 +10,11 @@ def attach_pc_lifecycle(
     app: Dict[str, Any],
     graph,
     audio_transceiver,
-    echo_ref: Dict[str, Any],
 ) -> None:
     """Attach connectionstatechange handler to RTCPeerConnection.
 
     Responsibilities:
     - Stop audio graph on terminal states (failed/closed/disconnected)
-    - Stop echo node if present
     - Detach sender track
     - Remove pc from app set and close
     """
@@ -31,13 +29,6 @@ def attach_pc_lifecycle(
                 await graph.stop()
             except Exception:
                 logger.exception("Error while stopping audio graph")
-            # Stop echo node if present (synchronous stop)
-            try:
-                node = echo_ref.get("node")
-                if node is not None:
-                    node.stop()
-            except Exception:
-                logger.debug("Echo node stop failed", exc_info=True)
             # Detach sender track to free resources
             try:
                 await audio_transceiver.sender.replaceTrack(None)
