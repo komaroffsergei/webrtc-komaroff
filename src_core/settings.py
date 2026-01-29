@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_core")
+STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "komaroff_agent_src_core")
 
 USER_ID = os.getenv("USER_ID", "user123")
 
