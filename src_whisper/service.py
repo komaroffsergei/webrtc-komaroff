@@ -8,6 +8,7 @@ import signal
 import time
 import uuid
 from dataclasses import dataclass
+from dataclasses import field
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -37,6 +38,7 @@ class StreamState:
     buffer_samples: int
     check_in_progress: bool = False
     flush_requested: bool = False
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
 
 
 class WhisperService:
@@ -45,7 +47,10 @@ class WhisperService:
         *,
         service_name: str,
         nats_url: str,
-        asr_subject: str,
+        asr_subject: str | None = None,
+        asr_subjects: list[str] | None = None,
+        asr_prefix: str | None = None,
+        allowed_suffixes: set[str] | None = None,
         logs_subject: str,
         models_dir,
         model_id: str,
@@ -67,7 +72,17 @@ class WhisperService:
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
-        self._asr_subject = asr_subject
+        if asr_subjects:
+            self._asr_subjects = [s for s in asr_subjects if s]
+        elif asr_subject:
+            self._asr_subjects = [asr_subject]
+        else:
+            raise ValueError("asr_subject or asr_subjects is required")
+        if not self._asr_subjects:
+            raise ValueError("ASR subject list is empty")
+
+        self._asr_prefix = (asr_prefix or "").strip()
+        self._allowed_suffixes = set(allowed_suffixes) if allowed_suffixes else None
         self._events_subject = logs_subject
         self._models_dir = models_dir
         self._model_id = model_id
@@ -85,6 +100,7 @@ class WhisperService:
         self._stop_event = asyncio.Event()
         self._model_task: Optional[asyncio.Task] = None
         self._semaphore = asyncio.Semaphore(max(1, max_concurrency))
+        self._asr_subscriptions: list[Any] = []
 
         self._vad_models_dir = Path(vad_models_dir)
         self._vad_model_url = vad_model_url
@@ -134,8 +150,11 @@ class WhisperService:
         self._model_task = asyncio.create_task(self._warmup_model())
         self._model_task.add_done_callback(self._handle_model_task_done)
 
-        await self._nc.subscribe(self._asr_subject, cb=self._handle_message)
-        await self._nats_logger.info(f"Subscribed to {self._asr_subject}")
+        for subject in self._asr_subjects:
+            sub = await self._nc.subscribe(subject, cb=self._handle_message)
+            self._asr_subscriptions.append(sub)
+            logger.info("Subscribed to: %s", subject)
+            await self._nats_logger.info(f"Subscribed to: {subject}")
 
     async def _shutdown(self) -> None:
         if self._model_task:
@@ -145,6 +164,12 @@ class WhisperService:
             task.cancel()
 
         self._streams.clear()
+        for sub in list(self._asr_subscriptions):
+            try:
+                await sub.unsubscribe()
+            except Exception:
+                logger.exception("Failed to unsubscribe from ASR subject")
+        self._asr_subscriptions.clear()
         if self._nc:
             try:
                 await self._nc.drain()
@@ -171,6 +196,21 @@ class WhisperService:
         if not self._nats_logger:
             return
 
+        logger.info("Received msg on subject: %s, reply: %s", msg.subject, msg.reply)
+        await self._nats_logger.info(f"Received msg on subject: {msg.subject}, reply: {msg.reply}")
+
+        if self._allowed_suffixes is not None:
+            if not self._asr_prefix:
+                logger.warning("ASR_ALLOWED_SUFFIXES is set but prefix is empty; allowlist is ignored")
+            elif not msg.subject.startswith(self._asr_prefix):
+                logger.warning("Ignoring msg: subject is outside prefix (%s)", self._asr_prefix)
+                return
+            else:
+                suffix = msg.subject[len(self._asr_prefix) :]
+                if suffix not in self._allowed_suffixes:
+                    logger.info("Ignoring msg: subject suffix is not allowed (%s)", suffix)
+                    return
+
         try:
             meta, audio = parse_wire_packet(msg.data)
         except Exception as exc:
@@ -180,6 +220,11 @@ class WhisperService:
             return
 
         msg_type = str(meta.get("type") or "phrase")
+        stream_id = meta.get("stream_id") or meta.get("phrase_id") or "-"
+        session_id = meta.get("session_id") or "-"
+        await self._nats_logger.info(
+            f"Parsed stream_id={stream_id} session_id={session_id} type={msg_type}"
+        )
         if msg_type == "frame":
             await self._handle_stream_frame(msg, meta, audio)
             return
@@ -259,23 +304,27 @@ class WhisperService:
             )
             self._streams[stream_id] = state
             await self._nats_logger.info(f"Stream opened id={stream_id}")
-        else:
+
+        schedule_check = False
+        async with state.lock:
             state.reply_subject = msg.reply
             if session_id and not state.session_id:
                 state.session_id = str(session_id)
             if sr:
                 state.buffer_sample_rate = sr
 
-        if audio.size:
-            state.buffer.append(audio)
-            state.buffer_samples += int(audio.size)
+            if audio.size:
+                state.buffer.append(audio)
+                state.buffer_samples += int(audio.size)
 
-        buffer_duration = (
-            state.buffer_samples / max(1, state.buffer_sample_rate)
-            if state.buffer_samples
-            else 0.0
-        )
-        if buffer_duration >= self._buffer_check_interval_s and not state.check_in_progress:
+            buffer_duration = (
+                state.buffer_samples / max(1, state.buffer_sample_rate)
+                if state.buffer_samples
+                else 0.0
+            )
+            schedule_check = buffer_duration >= self._buffer_check_interval_s and not state.check_in_progress
+
+        if schedule_check:
             task = asyncio.create_task(self._check_stream_buffer(stream_id, flush=False))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
@@ -288,39 +337,52 @@ class WhisperService:
         if not state:
             return
 
-        state.flush_requested = True
-        if not state.check_in_progress:
+        schedule_check = False
+        async with state.lock:
+            state.flush_requested = True
+            schedule_check = not state.check_in_progress
+
+        if schedule_check:
             task = asyncio.create_task(self._check_stream_buffer(stream_id, flush=True))
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
     async def _check_stream_buffer(self, stream_id: str, *, flush: bool) -> None:
         state = self._streams.get(stream_id)
-        if not state or state.check_in_progress:
+        if not state:
             return
 
-        state.check_in_progress = True
+        async with state.lock:
+            if state.check_in_progress:
+                return
+            state.check_in_progress = True
+            effective_flush = bool(flush or state.flush_requested)
+            snapshot_chunks = list(state.buffer)
+            snapshot_samples = int(state.buffer_samples)
+            snapshot_sr = int(state.buffer_sample_rate or self._vad_sample_rate)
+
         try:
-            if not state.buffer:
+            if not snapshot_chunks:
                 return
 
-            audio = np.concatenate(state.buffer)
-            source_sr = int(state.buffer_sample_rate or self._vad_sample_rate)
+            audio = np.concatenate(snapshot_chunks)
+            source_sr = snapshot_sr
             target_sr = int(self._vad_sample_rate)
             if source_sr != target_sr:
                 audio = resample_audio(audio, source_sr, target_sr)
 
-            if not flush and (len(audio) / target_sr) < 1.0:
+            if not effective_flush and (len(audio) / target_sr) < 1.0:
                 return
 
             timestamps = await self._get_timestamps(audio)
             if not timestamps:
                 if (len(audio) / target_sr) > 5.0:
-                    state.buffer.clear()
-                    state.buffer_samples = 0
+                    async with state.lock:
+                        del state.buffer[: len(snapshot_chunks)]
+                        state.buffer_samples = max(0, int(state.buffer_samples) - snapshot_samples)
                 return
 
-            should_flush = flush
+            should_flush = effective_flush
             if not should_flush:
                 last_end_sample = int(timestamps[-1]["end"])
                 silence_after = (len(audio) - last_end_sample) / target_sr
@@ -328,8 +390,10 @@ class WhisperService:
             if not should_flush:
                 return
 
-            reply_subject = state.reply_subject
-            session_id = state.session_id
+            async with state.lock:
+                reply_subject = state.reply_subject
+                session_id = state.session_id
+
             for ts in timestamps:
                 start_sample = int(ts["start"])
                 end_sample = int(ts["end"])
@@ -349,12 +413,21 @@ class WhisperService:
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
 
-            state.buffer.clear()
-            state.buffer_samples = 0
+            async with state.lock:
+                del state.buffer[: len(snapshot_chunks)]
+                state.buffer_samples = max(0, int(state.buffer_samples) - snapshot_samples)
         finally:
-            state.check_in_progress = False
-            if flush or state.flush_requested:
+            needs_final_flush = False
+            async with state.lock:
+                state.check_in_progress = False
+                needs_final_flush = bool(state.flush_requested and not flush)
+
+            if effective_flush:
                 self._streams.pop(stream_id, None)
+            elif needs_final_flush:
+                task = asyncio.create_task(self._check_stream_buffer(stream_id, flush=True))
+                self._tasks.add(task)
+                task.add_done_callback(self._tasks.discard)
 
     async def _transcribe_and_publish(
         self,

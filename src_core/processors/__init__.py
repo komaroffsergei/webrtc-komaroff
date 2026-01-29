@@ -1,2 +1,2 @@
 from .track_source_node import TrackSourceNode
-from .phrase_segmenter_node import PhraseSegmenterNode
+from .whisper_stream_node import WhisperStreamNode

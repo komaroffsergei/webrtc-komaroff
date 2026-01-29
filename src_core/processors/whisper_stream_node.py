@@ -10,45 +10,34 @@ from nats.aio.msg import Msg
 
 from .base import ConsumerNode
 
-logger = logging.getLogger("audio.PhraseSegmenterNode")
+logger = logging.getLogger("audio.WhisperStreamNode")
 
 
-class PhraseSegmenterNode(ConsumerNode):
+class WhisperStreamNode(ConsumerNode):
     """
-    Streams audio frames to the Whisper service and forwards transcriptions.
+    Streams audio frames to the Whisper service over NATS and forwards JSON replies.
+
+    This node does not do VAD / silence segmentation. Segmentation is performed
+    inside the whisper service.
     """
 
     def __init__(
         self,
-        app,
         source_node,
         nats_client,
         whisper_subject: str,
         on_transcription: Callable[[dict], Awaitable[None]],
+        *,
         session_id: str | None = None,
         sample_rate: int = 16000,
-        min_speech_duration_ms: int = 250,
-        min_silence_duration_ms: int = 500,
-        max_speech_duration_s: float = 30.0,
-        speech_pad_ms: int = 30,
-        threshold: float = 0.8,
-        buffer_check_interval_s: float = 1.0,
-        request_timeout: float = 30.0,
         max_pending_tasks: int = 3,
     ):
         super().__init__(source_node)
-
-        self.app = app
-
         self.nc = nats_client
         self.whisper_subject = whisper_subject
         self.on_transcription = on_transcription
         self.session_id = session_id
-
-        # Keep the original parameters for compatibility with existing callers,
-        # but phrase segmentation now lives in the Whisper service.
-        self.target_sample_rate = sample_rate
-        self.request_timeout = request_timeout
+        self.target_sample_rate = int(sample_rate)
 
         self._stream_id = str(uuid.uuid4())
         self._seq = 0
@@ -56,7 +45,7 @@ class PhraseSegmenterNode(ConsumerNode):
         self._reply_subscription = None
 
         self._publish_tasks: set[asyncio.Task] = set()
-        self._publish_semaphore = asyncio.Semaphore(max(1, max_pending_tasks))
+        self._publish_semaphore = asyncio.Semaphore(max(1, int(max_pending_tasks)))
 
     async def start(self) -> None:
         if not getattr(self.nc, "nc", None):
@@ -94,8 +83,7 @@ class PhraseSegmenterNode(ConsumerNode):
                 pcm = pcm.reshape(-1)
 
             sr = int(frame.sample_rate or self.target_sample_rate)
-            int16_pcm = np.asarray(pcm, dtype="<i2")
-            raw_bytes = int16_pcm.tobytes()
+            raw_bytes = np.asarray(pcm, dtype="<i2").tobytes()
 
             self._seq += 1
             meta: dict[str, object] = {
@@ -162,3 +150,4 @@ class PhraseSegmenterNode(ConsumerNode):
             await self.on_transcription(data)
         except Exception:
             logger.exception("Transcription handler failed")
+

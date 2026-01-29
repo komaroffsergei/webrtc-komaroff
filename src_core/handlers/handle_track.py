@@ -3,8 +3,8 @@ import logging
 
 from .handle_transcription import handle_transcription
 from src_core.processors import (
-    PhraseSegmenterNode,
     TrackSourceNode,
+    WhisperStreamNode,
 )
 from src_core.processors.graph import AudioGraph
 from src_core.utils.pc_lifecycle import attach_pc_lifecycle
@@ -42,23 +42,16 @@ async def handle_track(track, pc, audio_transceiver, app, *, session_id: str | N
     )
 
     #
-    # SEGMENTER NODE
+    # WHISPER STREAM NODE (no segmentation in core)
     #
-    segmenter = graph.add(
-        PhraseSegmenterNode(
-            app,
+    graph.add(
+        WhisperStreamNode(
             source,
-            app['services']['nats_client'],  # publish frames
-            app['vars']['NATS_ASR_SUBJECT'],  # whisper input
-            on_transcription= lambda data: handle_transcription(app, data) ,  # whisper output
+            app["services"]["nats_client"],
+            app["vars"]["NATS_ASR_SUBJECT"],
+            on_transcription=lambda data: handle_transcription(app, data),
             session_id=session_id,
             sample_rate=16000,
-            min_speech_duration_ms=250,
-            min_silence_duration_ms=500,
-            max_speech_duration_s=30.0,
-            speech_pad_ms=30,
-            threshold=0.8,
-            buffer_check_interval_s=1.0,
         )
     )
 
