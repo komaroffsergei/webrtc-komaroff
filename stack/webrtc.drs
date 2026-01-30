@@ -4,8 +4,10 @@ NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
 USER_ID = ENV.fetch("USER_ID", "user123")
 NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
-NATS_ASR_SUBJECT = ENV.fetch("NATS_ASR_SUBJECT", "nats.asr.")
 NATS_LLM_SUBJECT = ENV.fetch("NATS_LLM_SUBJECT", "nats.llm.")
+ASR_IN_SUBSCRIBE = ENV.fetch("ASR_IN_SUBSCRIBE", "nats.asr.input.>")
+ASR_IN_PREFIX = ENV.fetch("ASR_IN_PREFIX", "nats.asr.input.")
+ASR_OUT_PREFIX = ENV.fetch("ASR_OUT_PREFIX", "nats.asr.output.")
 
 HOST = 'webrtc-komaroff.*'
 POSTGRES_HOST = ENV.fetch("POSTGRES_HOST", "web-rtc-komaroff_src_postgres")
@@ -27,7 +29,8 @@ Service :src_core, image: webrtc_registry['core']do
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
-      NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      ASR_IN_PREFIX: ASR_IN_PREFIX,
+      ASR_OUT_PREFIX: ASR_OUT_PREFIX,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       NATS_REQUEST_TIMEOUT: ENV.fetch("NATS_REQUEST_TIMEOUT", "600"),
       STACK_SERVICE_NAME: 'src_core',
@@ -96,9 +99,10 @@ end
 Service :src_whisper, image: webrtc_registry['whisper'] do
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-      NATS_ASR_SUBJECT: NATS_ASR_SUBJECT,
+      ASR_IN_SUBSCRIBE: ASR_IN_SUBSCRIBE,
+      ASR_IN_PREFIX: ASR_IN_PREFIX,
+      ASR_OUT_PREFIX: ASR_OUT_PREFIX,
       STACK_SERVICE_NAME: 'src_whisper',
-      USER_ID: USER_ID,
       ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small'
   volume name: 'ASR_MODELS', target: '/app/models/asr'

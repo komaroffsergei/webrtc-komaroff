@@ -7,7 +7,6 @@ import os
 import shutil
 import subprocess
 import time
-import uuid
 import wave
 from pathlib import Path
 from typing import Iterable
@@ -147,10 +146,8 @@ async def run_probe(args: argparse.Namespace) -> int:
         max_reconnect_attempts=0,
         connect_timeout=1.0,
     )
-    inbox = nc.new_inbox()
-    sub = await nc.subscribe(inbox)
+    sub = await nc.subscribe(args.out_subject)
 
-    stream_id = args.stream_id or str(uuid.uuid4())
     session_id = args.session_id
 
     pcm = convert_wav_to_pcm16le_mono(args.wav_path, sample_rate=args.sample_rate)
@@ -160,14 +157,13 @@ async def run_probe(args: argparse.Namespace) -> int:
     for frame in iter_pcm_frames(pcm, sample_rate=args.sample_rate, frame_ms=args.frame_ms):
         meta = {
             "type": "frame",
-            "stream_id": stream_id,
             "seq": seq,
             "sample_rate": args.sample_rate,
             "sample_width": 2,
             "channels": 1,
             "session_id": session_id,
         }
-        await nc.publish(args.subject, build_wire_packet(meta, frame), reply=inbox)
+        await nc.publish(args.in_subject, build_wire_packet(meta, frame))
         frames_sent += 1
         seq += 1
         if args.mode == "realtime":
@@ -175,7 +171,6 @@ async def run_probe(args: argparse.Namespace) -> int:
 
     meta_end = {
         "type": "end",
-        "stream_id": stream_id,
         "seq": seq,
         "sample_rate": args.sample_rate,
         "sample_width": 2,
@@ -184,7 +179,7 @@ async def run_probe(args: argparse.Namespace) -> int:
     }
     end_sent_at = time.monotonic()
     last_reply_time = end_sent_at
-    await nc.publish(args.subject, build_wire_packet(meta_end, None), reply=inbox)
+    await nc.publish(args.in_subject, build_wire_packet(meta_end, None))
 
     out_path = Path(args.out) if args.out else None
     if out_path is None:
@@ -193,8 +188,6 @@ async def run_probe(args: argparse.Namespace) -> int:
     out_path = out_path.resolve()
 
     replies_received = 0
-    status_msgs = 0
-    first_status: tuple[str, str] | None = None
     max_wait_deadline = end_sent_at + args.max_wait_s
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -212,16 +205,6 @@ async def run_probe(args: argparse.Namespace) -> int:
                 continue
 
             last_reply_time = time.monotonic()
-            if getattr(msg, "headers", None) and "Status" in msg.headers:
-                status = str(msg.headers.get("Status") or "")
-                description = str(msg.headers.get("Description") or "")
-                status_msgs += 1
-                first_status = first_status or (status, description)
-                # Common case: no subscribers for the requested subject.
-                if status == "503":
-                    break
-                continue
-
             raw = msg.data.decode("utf-8", errors="replace")
             if not raw:
                 # Ignore empty payloads (not JSON).
@@ -235,37 +218,29 @@ async def run_probe(args: argparse.Namespace) -> int:
     await sub.unsubscribe()
     await nc.drain()
 
-    print(f"subject: {args.subject}")
-    print(f"inbox: {inbox}")
-    print(f"stream_id: {stream_id}")
+    print(f"in_subject: {args.in_subject}")
+    print(f"out_subject: {args.out_subject}")
     print(f"session_id: {session_id}")
     print(f"sample_rate: {args.sample_rate}")
     print(f"frame_ms: {args.frame_ms}")
     print(f"mode: {args.mode}")
     print(f"frames_sent: {frames_sent}")
     print(f"replies_received: {replies_received}")
-    if status_msgs:
-        status, description = first_status or ("", "")
-        print(f"status_msgs: {status_msgs}")
-        if status:
-            print(f"first_status: {status} {description}".rstrip())
     print(f"out_file: {out_path}")
-    if first_status and first_status[0] == "503":
-        print(
-            "error: no responders (503). Ensure src_whisper is subscribed to this exact subject and connected to the same NATS "
-            "(the default is NATS_ASR_SUBJECT + USER_ID, e.g. nats.asr.user123)."
-        )
-        return 3
+    if replies_received == 0:
+        print("error: no replies received (timeout). Ensure src_whisper is running and subscribed to the matching token.")
+        return 2
     return 0
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="python -m src_whisper.tools.whisper_probe",
-        description="Send WAV as PCM frames to src_whisper over NATS and write JSONL replies from reply inbox.",
+        description="Send WAV as PCM frames to src_whisper over NATS and write JSONL replies from output subject.",
     )
     parser.add_argument("wav_path", help="Input WAV file")
-    parser.add_argument("--subject", required=True, help="Exact NATS subject to publish frames to")
+    parser.add_argument("--in-subject", required=True, help="NATS subject to publish audio packets to")
+    parser.add_argument("--out-subject", required=True, help="NATS subject to subscribe and collect replies from")
     parser.add_argument("--session-id", required=True, help="Session id to include into meta.session_id")
     parser.add_argument("--nats-url", default=os.getenv("NATS_URL", "nats://127.0.0.1:4222"))
     parser.add_argument("--sample-rate", type=int, default=16000)
@@ -274,7 +249,6 @@ def main() -> None:
     parser.add_argument("--timeout-s", type=float, default=10.0)
     parser.add_argument("--max-wait-s", type=float, default=120.0)
     parser.add_argument("--out", default="", help="Output JSONL path")
-    parser.add_argument("--stream-id", default="", help="Optional stream_id override (uuid4 by default)")
     args = parser.parse_args()
 
     if args.sample_rate <= 0:

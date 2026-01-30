@@ -22,7 +22,9 @@ class StreamSegmentationTests(unittest.IsolatedAsyncioTestCase):
         self.service = WhisperService(
             service_name="test",
             nats_url="nats://localhost:4222",
-            asr_subject="nats.asr.test",
+            asr_in_subscribe="nats.asr.input.>",
+            asr_in_prefix="nats.asr.input.",
+            asr_out_prefix="nats.asr.output.",
             logs_subject="nats.events.test",
             models_dir=Path("."),
             model_id="dummy",
@@ -32,7 +34,7 @@ class StreamSegmentationTests(unittest.IsolatedAsyncioTestCase):
         # Replace transcription with a lightweight collector.
         self.segments: list[str] = []
 
-        async def _fake_transcribe_and_publish(reply_subject, session_id, packet):
+        async def _fake_transcribe_and_publish(out_subject, session_id, packet):
             self.segments.append(packet.phrase_id)
 
         self.service._transcribe_and_publish = _fake_transcribe_and_publish  # type: ignore[assignment]
@@ -49,7 +51,7 @@ class StreamSegmentationTests(unittest.IsolatedAsyncioTestCase):
 
         stream_id = "s1"
         self.service._streams[stream_id] = StreamState(
-            reply_subject="inbox",
+            out_subject="nats.asr.output.test",
             session_id=None,
             buffer=[audio],
             buffer_sample_rate=sr,
@@ -76,7 +78,7 @@ class StreamSegmentationTests(unittest.IsolatedAsyncioTestCase):
 
         stream_id = "s2"
         self.service._streams[stream_id] = StreamState(
-            reply_subject="inbox",
+            out_subject="nats.asr.output.test",
             session_id=None,
             buffer=[audio],
             buffer_sample_rate=sr,
@@ -101,7 +103,7 @@ class StreamSegmentationTests(unittest.IsolatedAsyncioTestCase):
 
         stream_id = "s3"
         self.service._streams[stream_id] = StreamState(
-            reply_subject="inbox",
+            out_subject="nats.asr.output.test",
             session_id=None,
             buffer=[audio],
             buffer_sample_rate=sr,

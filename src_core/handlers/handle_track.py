@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from uuid import uuid4
 
 from .handle_transcription import handle_transcription
 from src_core.processors import (
@@ -44,11 +45,21 @@ async def handle_track(track, pc, audio_transceiver, app, *, session_id: str | N
     #
     # WHISPER STREAM NODE (no segmentation in core)
     #
+    token = session_id or str(uuid4())
+    in_prefix = str(app["vars"]["ASR_IN_PREFIX"] or "").strip()
+    out_prefix = str(app["vars"]["ASR_OUT_PREFIX"] or "").strip()
+    if in_prefix and not in_prefix.endswith("."):
+        in_prefix += "."
+    if out_prefix and not out_prefix.endswith("."):
+        out_prefix += "."
+    in_subject = f"{in_prefix}{token}"
+    out_subject = f"{out_prefix}{token}"
     graph.add(
         WhisperStreamNode(
             source,
             app["services"]["nats_client"],
-            app["vars"]["NATS_ASR_SUBJECT"],
+            in_subject,
+            out_subject,
             on_transcription=lambda data: handle_transcription(app, data),
             session_id=session_id,
             sample_rate=16000,

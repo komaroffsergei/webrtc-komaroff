@@ -36,21 +36,23 @@ def configure_logging() -> None:
 
 
 async def _run_service() -> None:
-    if not s.USER_ID:
-        raise ValueError("USER_ID is required")
-    prefix = (s.NATS_ASR_SUBJECT or "").strip()
-    if not prefix:
-        raise ValueError("NATS_ASR_SUBJECT is required")
-    if "*" in prefix or ">" in prefix:
-        raise ValueError("NATS_ASR_SUBJECT must be a plain prefix (wildcards are not supported)")
-    if not prefix.endswith("."):
-        prefix += "."
+    in_subscribe = (s.ASR_IN_SUBSCRIBE or "").strip()
+    in_prefix = (s.ASR_IN_PREFIX or "").strip()
+    out_prefix = (s.ASR_OUT_PREFIX or "").strip()
+    if not in_subscribe:
+        raise ValueError("ASR_IN_SUBSCRIBE is required")
+    if not in_prefix:
+        raise ValueError("ASR_IN_PREFIX is required")
+    if not out_prefix:
+        raise ValueError("ASR_OUT_PREFIX is required")
 
     service = WhisperService(
         service_name=s.STACK_SERVICE_NAME,
         nats_url=s.NATS_URL,
-        asr_subject=f"{prefix}{s.USER_ID}",
-        logs_subject=f"{s.NATS_EVENTS_SUBJECT}{s.USER_ID}",
+        asr_in_subscribe=in_subscribe,
+        asr_in_prefix=in_prefix,
+        asr_out_prefix=out_prefix,
+        logs_subject=f"{s.NATS_EVENTS_SUBJECT.rstrip('.')}.{s.STACK_SERVICE_NAME}",
         models_dir=ASR_MODELS_DIR,
         model_id=s.ASR_MODEL_ID,
         language=s.WHISPER_LANGUAGE,

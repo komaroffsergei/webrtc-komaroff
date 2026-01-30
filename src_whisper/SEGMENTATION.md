@@ -9,19 +9,34 @@ This document describes **stream segmentation**, which is performed **inside `sr
 
 ### Wire protocol (stream mode)
 
-The core service publishes to the whisper subject and sets `reply` to a NATS inbox.
-The whisper service replies to that inbox with JSON messages.
+Clients publish audio packets to an input subject derived from a token:
+
+- **Input**: `nats.asr.input.{token}`
+- **Output**: `nats.asr.output.{token}`
+
+The token may contain dots.
 
 ### NATS subject subscription
 
-The service subscribes to a single **exact** subject: `NATS_ASR_SUBJECT + USER_ID`.
+The service subscribes to a wildcard input subject and derives the output subject from the incoming subject.
 
-`NATS_ASR_SUBJECT` is treated as a prefix and normalized to end with `.` (e.g. `asr.whisper` -> `asr.whisper.`).
+Config (env vars):
+
+- `ASR_IN_SUBSCRIBE` (default `nats.asr.input.>`)
+- `ASR_IN_PREFIX` (default `nats.asr.input.`)
+- `ASR_OUT_PREFIX` (default `nats.asr.output.`)
+
+For every received NATS message:
+
+1) Ensure `msg.subject` starts with `ASR_IN_PREFIX`.
+2) `suffix = msg.subject[len(ASR_IN_PREFIX):]`
+3) `suffix` must be non-empty.
+4) `out_subject = ASR_OUT_PREFIX + suffix`
+5) Publish all replies to `out_subject` (no request/reply inbox routing).
 
 Incoming `meta` fields (required/used):
 
 - `type`: `"frame"` or `"end"`
-- `stream_id`: string (recommended); if missing, `msg.reply` is used as the stream key
 - `seq`: integer (optional; ignored by segmentation)
 - `sample_rate`: integer (optional; defaults to `VAD_SAMPLE_RATE`)
 - `session_id`: string (optional; forwarded back in replies)
@@ -50,7 +65,7 @@ Behavior is intentionally aligned with the original core-side segmenter (Silero 
 
 ### Replies
 
-For each flushed phrase, whisper publishes a JSON reply to the `reply` subject:
+For each flushed phrase, whisper publishes a JSON message to the derived output subject:
 
 - `phrase_id`: UUID
 - `text`: transcription text
@@ -67,11 +82,11 @@ All segmentation parameters are configurable via env vars (see `src_whisper/sett
 Use `src_whisper/tools/whisper_probe.py` to publish a WAV as frames and collect replies:
 
 ```bash
-python -m src_whisper.tools.whisper_probe ./test.wav --subject nats.asr.user123 --session-id test_session --timeout-s 10
+python -m src_whisper.tools.whisper_probe ./test.wav --in-subject nats.asr.input.test123 --out-subject nats.asr.output.test123 --session-id test_session --timeout-s 10
 ```
 
 If `nats://127.0.0.1:4222` is not reachable in your setup, you can use NATS WebSocket listener:
 
 ```bash
-python -m src_whisper.tools.whisper_probe ./test.wav --nats-url ws://127.0.0.1:9222 --subject nats.asr.user123 --session-id test_session --timeout-s 10
+python -m src_whisper.tools.whisper_probe ./test.wav --nats-url ws://127.0.0.1:9222 --in-subject nats.asr.input.test123 --out-subject nats.asr.output.test123 --session-id test_session --timeout-s 10
 ```

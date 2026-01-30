@@ -31,7 +31,7 @@ logger = logging.getLogger("whisper_service")
 
 @dataclass(slots=True)
 class StreamState:
-    reply_subject: str
+    out_subject: str
     session_id: str | None
     buffer: list[np.ndarray]
     buffer_sample_rate: int
@@ -47,7 +47,9 @@ class WhisperService:
         *,
         service_name: str,
         nats_url: str,
-        asr_subject: str,
+        asr_in_subscribe: str,
+        asr_in_prefix: str,
+        asr_out_prefix: str,
         logs_subject: str,
         models_dir,
         model_id: str,
@@ -69,7 +71,9 @@ class WhisperService:
     ) -> None:
         self._service_name = service_name
         self._nats_url = nats_url
-        self._asr_subject = asr_subject
+        self._asr_in_subscribe = str(asr_in_subscribe)
+        self._asr_in_prefix = str(asr_in_prefix)
+        self._asr_out_prefix = str(asr_out_prefix)
         self._events_subject = logs_subject
         self._models_dir = models_dir
         self._model_id = model_id
@@ -136,9 +140,9 @@ class WhisperService:
         self._model_task = asyncio.create_task(self._warmup_model())
         self._model_task.add_done_callback(self._handle_model_task_done)
 
-        await self._nc.subscribe(self._asr_subject, cb=self._handle_message)
-        logger.info("Subscribed to: %s", self._asr_subject)
-        await self._nats_logger.info(f"Subscribed to: {self._asr_subject}")
+        await self._nc.subscribe(self._asr_in_subscribe, cb=self._handle_message)
+        logger.info("Subscribed to: %s", self._asr_in_subscribe)
+        await self._nats_logger.info(f"Subscribed to: {self._asr_in_subscribe}")
 
     async def _shutdown(self) -> None:
         if self._model_task:
@@ -170,19 +174,34 @@ class WhisperService:
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
+    def _derive_out_subject(self, in_subject: str) -> str | None:
+        if not in_subject.startswith(self._asr_in_prefix):
+            logger.error(
+                "Dropping message: subject does not match ASR_IN_PREFIX (subject=%s prefix=%s)",
+                in_subject,
+                self._asr_in_prefix,
+            )
+            return None
+        suffix = in_subject[len(self._asr_in_prefix) :]
+        if not suffix:
+            logger.error("Dropping message: empty token suffix in subject=%s", in_subject)
+            return None
+        return f"{self._asr_out_prefix}{suffix}"
+
     async def _process_message(self, msg: Msg) -> None:
         if not self._nats_logger:
             return
 
-        # logger.info("Received msg on subject: %s, reply: %s", msg.subject, msg.reply)
-        # await self._nats_logger.info(f"Received msg on subject: {msg.subject}, reply: {msg.reply}")
+        out_subject = self._derive_out_subject(str(msg.subject or ""))
+        if not out_subject:
+            return
 
         try:
             meta, audio = parse_wire_packet(msg.data)
         except Exception as exc:
             logger.warning("Invalid packet: %s", exc)
             await self._nats_logger.error(f"Invalid packet: {exc}")
-            await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
+            await self._publish_reply(out_subject, {"error": "invalid_packet", "details": str(exc)})
             return
 
         msg_type = str(meta.get("type") or "phrase")
@@ -192,10 +211,10 @@ class WhisperService:
         #     f"Parsed stream_id={stream_id} session_id={session_id} type={msg_type}"
         # )
         if msg_type == "frame":
-            await self._handle_stream_frame(msg, meta, audio)
+            await self._handle_stream_frame(out_subject, meta, audio)
             return
         if msg_type == "end":
-            await self._handle_stream_end(msg, meta)
+            await self._handle_stream_end(out_subject, meta)
             return
 
         try:
@@ -203,14 +222,14 @@ class WhisperService:
         except Exception as exc:
             logger.warning("Invalid phrase packet: %s", exc)
             await self._nats_logger.error(f"Invalid packet: {exc}")
-            await self._reply(msg, {"error": "invalid_packet", "details": str(exc)})
+            await self._publish_reply(out_subject, {"error": "invalid_packet", "details": str(exc)})
             return
 
         try:
             model = await self._ensure_model_loaded()
         except Exception as exc:
             await self._nats_logger.error(f"Model not ready: {exc}")
-            await self._reply(msg, {"phrase_id": packet.phrase_id, "error": "model_error"})
+            await self._publish_reply(out_subject, {"phrase_id": packet.phrase_id, "error": "model_error"})
             return
 
         await self._nats_logger.info(f"Phrase received id={packet.phrase_id} dur={packet.duration:.2f}")
@@ -218,14 +237,15 @@ class WhisperService:
         started = time.perf_counter()
         await self._nats_logger.info(f"Transcription started phrase_id={packet.phrase_id}")
 
+        session_id = meta.get("session_id")
         async with self._semaphore:
             try:
                 text = await asyncio.to_thread(self._transcribe, model, packet)
             except Exception as exc:
                 logger.exception("Transcription error: %s", exc)
                 await self._nats_logger.error(f"Transcription error: {exc}")
-                await self._reply(
-                    msg,
+                await self._publish_reply(
+                    out_subject,
                     {"phrase_id": packet.phrase_id, "error": "transcription_failed", "details": str(exc)},
                 )
                 return
@@ -237,6 +257,8 @@ class WhisperService:
             "duration": packet.duration,
             "transcribe_time": transcribe_time,
         }
+        if session_id:
+            message["session_id"] = str(session_id)
 
         await self._nats_logger.log(
             "log",
@@ -249,31 +271,31 @@ class WhisperService:
             {"text": text},
             name="transcription_result",
         )
-        await self._reply(msg, message)
+        await self._publish_reply(out_subject, message)
 
-    async def _handle_stream_frame(self, msg: Msg, meta: dict[str, Any], audio: np.ndarray) -> None:
-        if not msg.reply or not self._nats_logger:
+    async def _handle_stream_frame(self, out_subject: str, meta: dict[str, Any], audio: np.ndarray) -> None:
+        if not self._nats_logger:
             return
 
-        stream_id = str(meta.get("stream_id") or msg.reply)
+        stream_id = out_subject
         session_id = meta.get("session_id")
         sr = int(meta.get("sample_rate") or self._vad_sample_rate)
 
         state = self._streams.get(stream_id)
         if not state:
             state = StreamState(
-                reply_subject=msg.reply,
+                out_subject=out_subject,
                 session_id=str(session_id) if session_id else None,
                 buffer=[],
                 buffer_sample_rate=sr,
                 buffer_samples=0,
             )
             self._streams[stream_id] = state
-            await self._nats_logger.info(f"Stream opened id={stream_id}")
+            await self._nats_logger.info(f"Stream opened out_subject={out_subject}")
 
         schedule_check = False
         async with state.lock:
-            state.reply_subject = msg.reply
+            state.out_subject = out_subject
             if session_id and not state.session_id:
                 state.session_id = str(session_id)
             if sr:
@@ -295,10 +317,8 @@ class WhisperService:
             self._tasks.add(task)
             task.add_done_callback(self._tasks.discard)
 
-    async def _handle_stream_end(self, msg: Msg, meta: dict[str, Any]) -> None:
-        if not msg.reply:
-            return
-        stream_id = str(meta.get("stream_id") or msg.reply)
+    async def _handle_stream_end(self, out_subject: str, meta: dict[str, Any]) -> None:
+        stream_id = out_subject
         state = self._streams.get(stream_id)
         if not state:
             return
@@ -357,7 +377,7 @@ class WhisperService:
                 return
 
             async with state.lock:
-                reply_subject = state.reply_subject
+                out_subject = state.out_subject
                 session_id = state.session_id
 
             for ts in timestamps:
@@ -374,7 +394,7 @@ class WhisperService:
                     audio=segment_audio,
                 )
                 task = asyncio.create_task(
-                    self._transcribe_and_publish(reply_subject, session_id, packet)
+                    self._transcribe_and_publish(out_subject, session_id, packet)
                 )
                 self._tasks.add(task)
                 task.add_done_callback(self._tasks.discard)
@@ -515,12 +535,6 @@ class WhisperService:
 
             await self._nats_logger.info("Model ready", name="model_status")
             return self._whisper_model
-
-    async def _reply(self, msg: Msg, payload: dict[str, Any]) -> None:
-        if not msg.reply or not self._nc:
-            return
-        await self._nc.publish(msg.reply, json.dumps(payload, ensure_ascii=False).encode("utf-8"))
-
 
     async def _warmup_model(self) -> None:
         try:

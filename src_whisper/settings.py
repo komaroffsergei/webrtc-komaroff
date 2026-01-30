@@ -6,11 +6,12 @@ import os
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_whisper_python")
 
-USER_ID = os.getenv("USER_ID", "user123")
-
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
-NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
+
+ASR_IN_SUBSCRIBE = os.getenv("ASR_IN_SUBSCRIBE", "nats.asr.input.>")
+ASR_IN_PREFIX = os.getenv("ASR_IN_PREFIX", "nats.asr.input.")
+ASR_OUT_PREFIX = os.getenv("ASR_OUT_PREFIX", "nats.asr.output.")
 
 ASR_MODELS = os.getenv("ASR_MODELS", "models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
