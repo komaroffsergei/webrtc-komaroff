@@ -64,14 +64,14 @@ All segmentation parameters are configurable via env vars (see `src_whisper/sett
 
 ### Manual test
 
-Use `src_whisper/tools/test_whisper_service.py` to publish a short stream and collect replies:
+Use `src_whisper/tools/whisper_probe.py` to publish a WAV as frames and collect replies:
 
 ```bash
-python -m src_whisper.tools.test_whisper_service --subject asr.whisper.test1 --timeout-s 10
+python -m src_whisper.tools.whisper_probe ./test.wav --subject nats.asr.user123 --session-id test_session --timeout-s 10
 ```
 
 If `nats://127.0.0.1:4222` is not reachable in your setup, you can use NATS WebSocket listener:
 
 ```bash
-python -m src_whisper.tools.test_whisper_service --nats-url ws://127.0.0.1:9222 --subject asr.whisper.test1 --timeout-s 10
+python -m src_whisper.tools.whisper_probe ./test.wav --nats-url ws://127.0.0.1:9222 --subject nats.asr.user123 --session-id test_session --timeout-s 10
 ```

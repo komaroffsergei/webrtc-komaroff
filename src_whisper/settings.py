@@ -12,10 +12,10 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_ASR_SUBJECT = os.getenv("NATS_ASR_SUBJECT", "nats.asr.")
 
-ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
+ASR_MODELS = os.getenv("ASR_MODELS", "models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 
-VAD_MODELS = os.getenv("VAD_MODELS", "/app/models/vad")
+VAD_MODELS = os.getenv("VAD_MODELS", "models/vad")
 VAD_MODEL_URL = os.getenv(
     "VAD_MODEL_URL",
     "https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx",

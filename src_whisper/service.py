@@ -174,8 +174,8 @@ class WhisperService:
         if not self._nats_logger:
             return
 
-        logger.info("Received msg on subject: %s, reply: %s", msg.subject, msg.reply)
-        await self._nats_logger.info(f"Received msg on subject: {msg.subject}, reply: {msg.reply}")
+        # logger.info("Received msg on subject: %s, reply: %s", msg.subject, msg.reply)
+        # await self._nats_logger.info(f"Received msg on subject: {msg.subject}, reply: {msg.reply}")
 
         try:
             meta, audio = parse_wire_packet(msg.data)
@@ -186,11 +186,11 @@ class WhisperService:
             return
 
         msg_type = str(meta.get("type") or "phrase")
-        stream_id = meta.get("stream_id") or meta.get("phrase_id") or "-"
-        session_id = meta.get("session_id") or "-"
-        await self._nats_logger.info(
-            f"Parsed stream_id={stream_id} session_id={session_id} type={msg_type}"
-        )
+        # stream_id = meta.get("stream_id") or meta.get("phrase_id") or "-"
+        # session_id = meta.get("session_id") or "-"
+        # await self._nats_logger.info(
+        #     f"Parsed stream_id={stream_id} session_id={session_id} type={msg_type}"
+        # )
         if msg_type == "frame":
             await self._handle_stream_frame(msg, meta, audio)
             return
