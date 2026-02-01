@@ -13,6 +13,7 @@ from typing import Iterable
 from urllib.parse import urlparse
 
 import nats
+from nats import errors as nats_errors
 
 
 def build_wire_packet(meta: dict, pcm_bytes: bytes | None) -> bytes:
@@ -131,7 +132,27 @@ def iter_pcm_frames(
         yield chunk
 
 
+def _validate_exact_subject(value: str, *, arg_name: str) -> str:
+    """
+    Validate an exact NATS subject (no wildcards, no empty tokens).
+
+    This prevents server-side protocol errors like "-ERR Invalid Subject" which
+    close the connection and surface as ConnectionClosedError in the client.
+    """
+    s = (value or "").strip()
+    if not s:
+        raise SystemExit(f"{arg_name} is required")
+    if "*" in s or ">" in s:
+        raise SystemExit(f"{arg_name} must be an exact subject (wildcards are not allowed): {s}")
+    if s.startswith(".") or s.endswith(".") or ".." in s:
+        raise SystemExit(f"{arg_name} is not a valid subject (empty token): {s}")
+    return s
+
+
 async def run_probe(args: argparse.Namespace) -> int:
+    args.in_subject = _validate_exact_subject(args.in_subject, arg_name="--in-subject")
+    args.out_subject = _validate_exact_subject(args.out_subject, arg_name="--out-subject")
+
     url = urlparse(args.nats_url)
     fallback_ws = "ws://127.0.0.1:9222"
     if args.nats_url in {"nats://127.0.0.1:4222", "nats://localhost:4222"}:
@@ -192,28 +213,32 @@ async def run_probe(args: argparse.Namespace) -> int:
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as f:
-        while True:
-            now = time.monotonic()
-            if now - last_reply_time > args.timeout_s:
-                break
-            if now > max_wait_deadline:
-                break
+        try:
+            while True:
+                now = time.monotonic()
+                if now - last_reply_time > args.timeout_s:
+                    break
+                if now > max_wait_deadline:
+                    break
 
-            try:
-                msg = await sub.next_msg(timeout=0.2)
-            except asyncio.TimeoutError:
-                continue
+                try:
+                    msg = await sub.next_msg(timeout=0.2)
+                except asyncio.TimeoutError:
+                    continue
 
-            last_reply_time = time.monotonic()
-            raw = msg.data.decode("utf-8", errors="replace")
-            if not raw:
-                # Ignore empty payloads (not JSON).
-                continue
+                last_reply_time = time.monotonic()
+                raw = msg.data.decode("utf-8", errors="replace")
+                if not raw:
+                    # Ignore empty payloads (not JSON).
+                    continue
 
-            # Validate it's JSON (keep the original formatting in output).
-            json.loads(raw)
-            f.write(raw.rstrip("\n") + "\n")
-            replies_received += 1
+                # Validate it's JSON (keep the original formatting in output).
+                json.loads(raw)
+                f.write(raw.rstrip("\n") + "\n")
+                replies_received += 1
+        except nats_errors.ConnectionClosedError:
+            print("error: NATS connection closed. Check that subjects are valid and NATS is reachable.")
+            return 2
 
     await sub.unsubscribe()
     await nc.drain()
