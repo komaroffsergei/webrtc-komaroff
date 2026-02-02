@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 import uuid
 from dataclasses import dataclass
@@ -72,7 +73,11 @@ class _ProbeRun:
 def _load_index_html(*, base_path: str) -> str:
     html_path = _static_dir() / "index.html"
     html = html_path.read_text(encoding="utf-8")
-    return html.replace("__WEBUI_BASE_PATH__", base_path)
+    default_nats_url = (os.getenv("WEBUI_NATS_DEFAULT_URL") or os.getenv("NATS_URL") or "nats://localhost:4222").strip()
+    return (
+        html.replace("__WEBUI_BASE_PATH__", base_path)
+        .replace("__WEBUI_NATS_DEFAULT_URL__", default_nats_url)
+    )
 
 
 async def _ws_handler(request: web.Request) -> web.WebSocketResponse:
@@ -335,4 +340,3 @@ async def run_webui(*, host: str, port: int, base_path: str) -> None:
         await asyncio.Event().wait()
     finally:
         await runner.cleanup()
-
