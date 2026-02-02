@@ -99,6 +99,13 @@ Whisper:
 - `WHISPER_BEAM_SIZE` (default: `1`)
 - `WHISPER_MAX_CONCURRENCY` (default: `1`)
 
+WebUI:
+
+- `WEBUI_ENABLED` (default: `1`)
+- `WEBUI_HOST` (default: `0.0.0.0`)
+- `WEBUI_PORT` (default: `8090`)
+- `WEBUI_BASE_PATH` (default: empty; set to `/whisper` when behind an ingress path prefix)
+
 ## Running locally
 
 From repo root:
@@ -106,6 +113,13 @@ From repo root:
 ```bash
 python -m src_whisper.main
 ```
+
+## WebUI
+
+When enabled, the service exposes a small Web UI which publishes audio frames to NATS and streams replies back in real time.
+
+- Local URL (default): `http://127.0.0.1:8090/`
+- Ingress URL (stack default): `/whisper`
 
 ## Tooling: whisper_probe
 
@@ -128,3 +142,4 @@ Notes:
 
 - `--in-subject` and `--out-subject` must be exact subjects (no wildcards, no trailing `.`).
 - Use different tokens to run probes concurrently without mixing replies.
+- By default, JSONL output is written to `src_whisper/out/` inside the service.

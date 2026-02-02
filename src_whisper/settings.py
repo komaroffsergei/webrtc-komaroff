@@ -13,6 +13,11 @@ ASR_IN_SUBSCRIBE = os.getenv("ASR_IN_SUBSCRIBE", "nats.asr.input.>")
 ASR_IN_PREFIX = os.getenv("ASR_IN_PREFIX", "nats.asr.input.")
 ASR_OUT_PREFIX = os.getenv("ASR_OUT_PREFIX", "nats.asr.output.")
 
+WEBUI_ENABLED = os.getenv("WEBUI_ENABLED", "1").strip().lower() in {"1", "true", "yes", "on"}
+WEBUI_HOST = os.getenv("WEBUI_HOST", "0.0.0.0")
+WEBUI_PORT = int(os.getenv("WEBUI_PORT", "8090"))
+WEBUI_BASE_PATH = os.getenv("WEBUI_BASE_PATH", "")
+
 ASR_MODELS = os.getenv("ASR_MODELS", "models/asr")
 ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 

@@ -97,11 +97,17 @@ Service :src_llm, image: webrtc_registry['llm'] do
 end
 
 Service :src_whisper, image: webrtc_registry['whisper'] do
+  ingress host: HOST, path: '/whisper', port: 8090
+
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       ASR_IN_SUBSCRIBE: ASR_IN_SUBSCRIBE,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+      WEBUI_ENABLED: ENV.fetch("WEBUI_ENABLED", "1"),
+      WEBUI_HOST: ENV.fetch("WEBUI_HOST", "0.0.0.0"),
+      WEBUI_PORT: ENV.fetch("WEBUI_PORT", "8090"),
+      WEBUI_BASE_PATH: ENV.fetch("WEBUI_BASE_PATH", "/whisper"),
       STACK_SERVICE_NAME: 'src_whisper',
       ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small'

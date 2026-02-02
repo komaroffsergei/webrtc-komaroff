@@ -149,6 +149,10 @@ def _validate_exact_subject(value: str, *, arg_name: str) -> str:
     return s
 
 
+def _default_out_dir() -> Path:
+    return (Path(__file__).resolve().parents[1] / "out").resolve()
+
+
 async def run_probe(args: argparse.Namespace) -> int:
     args.in_subject = _validate_exact_subject(args.in_subject, arg_name="--in-subject")
     args.out_subject = _validate_exact_subject(args.out_subject, arg_name="--out-subject")
@@ -205,7 +209,7 @@ async def run_probe(args: argparse.Namespace) -> int:
     out_path = Path(args.out) if args.out else None
     if out_path is None:
         wav_base = Path(args.wav_path).name
-        out_path = Path(f"{wav_base}.{session_id}.whisper_replies.jsonl")
+        out_path = _default_out_dir() / f"{wav_base}.{session_id}.whisper_replies.jsonl"
     out_path = out_path.resolve()
 
     replies_received = 0

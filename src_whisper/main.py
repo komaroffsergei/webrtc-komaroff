@@ -69,7 +69,21 @@ async def _run_service() -> None:
         buffer_check_interval_s=s.BUFFER_CHECK_INTERVAL_S,
         compute_type="float32",
     )
-    await service.run()
+
+    webui_task: asyncio.Task | None = None
+    if s.WEBUI_ENABLED:
+        from src_whisper.webui import run_webui
+
+        webui_task = asyncio.create_task(
+            run_webui(host=s.WEBUI_HOST, port=s.WEBUI_PORT, base_path=s.WEBUI_BASE_PATH)
+        )
+
+    try:
+        await service.run()
+    finally:
+        if webui_task:
+            webui_task.cancel()
+            await asyncio.gather(webui_task, return_exceptions=True)
 
 
 def main() -> None:

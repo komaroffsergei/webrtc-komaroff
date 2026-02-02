@@ -37,3 +37,4 @@ coverage
 /src_llm/models/
 /otel/
 /vendor/
+/src_whisper/out/

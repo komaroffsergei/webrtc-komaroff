@@ -50,7 +50,7 @@ src_whisper_c
 src_whisper_ruby
 test1.wav
 EOF
-)
+)/
 : "${EXCLUDE_DIRS_FILES:=$DEFAULT_EXCLUDE_DIRS_FILES}"
 unset DEFAULT_EXCLUDE_DIRS_FILES
 
