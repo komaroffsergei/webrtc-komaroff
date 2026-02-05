@@ -62,21 +62,21 @@ services:
       POSTGRES_HOST: src_postgres
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
 
-  src_whisper:
-    profiles: ["legacy_whisper"]
-    build:
-      context: ../src_whisper
-      dockerfile: ../docker/whisper/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/whisper/${CI_COMMIT_BRANCH}
-    ports:
-      - "8090:8090"
-    depends_on:
-      - nats
-    environment:
-      WEBUI_ENABLED: 1
-      WEBUI_HOST: 0.0.0.0
-      WEBUI_PORT: 8090
-      WEBUI_BASE_PATH: ""
+#  src_whisper:
+#    profiles: ["legacy_whisper"]
+#    build:
+#      context: ../src_whisper
+#      dockerfile: ../docker/whisper/Dockerfile
+#    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/whisper/${CI_COMMIT_BRANCH}
+#    ports:
+#      - "8090:8090"
+#    depends_on:
+#      - nats
+#    environment:
+#      WEBUI_ENABLED: 1
+#      WEBUI_HOST: 0.0.0.0
+#      WEBUI_PORT: 8090
+#      WEBUI_BASE_PATH: ""
 
   src_llm:
     build:
@@ -105,21 +105,11 @@ services:
     image: nats:2.11
     command: ["-c", "/etc/nats/nats.conf"]
     ports:
-      # Bind explicitly to loopback so host-run dev services can use localhost/127.0.0.1.
-      - "127.0.0.1:4222:4222"  # NATS TCP
-      - "127.0.0.1:9222:9222"  # NATS WebSocket
+      - "4222:4222"  # NATS TCP
+      - "9222:9222"  # NATS WebSocket
     volumes:
       - ./nats/nats.conf:/etc/nats/nats.conf:ro
-    networks:
-      - default
-      - nats_shared
 
 volumes:
   src_postgres_data:
-    # Keep this volume scoped to this repo to avoid cross-project compose collisions.
-    name: webrtc-komaroff-dev_src_postgres_data
-
-networks:
-  nats_shared:
-    name: monitorsoft_nats
-    external: true
+    name: src_postgres_data

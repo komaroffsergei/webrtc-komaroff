@@ -137,7 +137,7 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
   CONF
 end
 
-Service :src_whisper, image: webrtc_registry['whisper'] do
+Service :src_whisper, image: webrtc_registry['py_faster_whisper'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
   env NATS_URL: NATS_URL,
