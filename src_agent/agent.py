@@ -111,9 +111,12 @@ def _safe_llm_payload(payload: dict, preview_limit: int = 200) -> dict:
 def _now_iso() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
-def _thought_summary(thought: str, limit: int = 160) -> str:
-    s = " ".join((thought or "").split()).strip()
-    return s[:limit]
+def _truncate_text(text: str, limit: int = 160) -> str:
+    """Trims and truncates text to a given limit, adding ellipsis if needed."""
+    s = " ".join((text or "").split()).strip()
+    if len(s) > limit:
+        return s[: limit - 3] + "..."
+    return s
 
 
 def _sanitize_user_visible_container(container: object) -> tuple[object, str]:
@@ -195,6 +198,7 @@ class MCPAgent:
         *,
         summary: str,
         content: str,
+        title: Optional[str] = None,
         scenario_id: str | None = None,
         scenario_reason: str | None = None,
         tools: list[str] | None = None,
@@ -202,6 +206,8 @@ class MCPAgent:
         if not self._events:
             return
         data: dict[str, object] = {"summary": summary, "content": content}
+        if title is not None:
+            data["title"] = title
         if scenario_id:
             scenario: dict[str, object] = {"id": scenario_id}
             if scenario_reason:
@@ -706,8 +712,9 @@ class MCPAgent:
 
                 if extracted_think and self._events:
                     await self._emit_thought(
-                        summary=_thought_summary(extracted_think),
-                        content=extracted_think,
+                        summary="...Thinking",
+                        content=_truncate_text(extracted_think, 200),
+                        title=extracted_think,
                         scenario_id=selected_scenario_id,
                         scenario_reason=selected_reason,
                     )
