@@ -11,5 +11,3 @@ ADD . .
 CMD ["sh", "-c", "\
     cat webrtc.drs  | dry-stack swarm_deploy --tls-domain=gis-master.ru -x ssh://gis-master.ru -- --prune \n\
 "]
-
-
