@@ -12,6 +12,21 @@ def _now_iso() -> str:
 
 
 class Scenario:
+    """
+    Базовый класс сценария.
+
+    Сценарий — это “мини-обработчик” внутри агента, который управляет одной задачей:
+    - получает `state` (состояние сессии) и текст пользователя;
+    - при необходимости запрашивает уточнение у пользователя (через `display_request`);
+    - вызывает инструменты (tools) и сохраняет результаты как артефакты сценария;
+    - возвращает ответ + команду для UI (`client_handler`) и опциональные дополнительные события.
+
+    Важные части `state`:
+    - `state["scenario"]`: {"id": str|None, "status": "RUNNING"|"NEEDS_INPUT"|..., "input": dict|None}
+    - `state["pending"]`: описание того, что мы ждём от пользователя (field/meta/validation)
+    - `state["scenario_artifacts"]`: артефакты, изолированные по `scenario_id`
+    - `state["scenario_log"]`: внутренний лог шагов сценария (для отладки/аудита)
+    """
     id = "base"
     title = "Base"
     description = "Base scenario."
@@ -20,9 +35,12 @@ class Scenario:
     llm_prompt: str
 
     def on_user_turn(self, state: Dict[str, Any], prompt: str, turn_id: str) -> None:
+        # Единая точка логирования пользовательского сообщения внутри сценария.
         self._log(state, status="RUNNING", kind="USER_TURN", data={"text": prompt}, turn_id=turn_id)
 
     def maybe_switch(self, state: Dict[str, Any], prompt: str) -> str | None:
+        # Хук “переключения” на другой сценарий без LLM-routing.
+        # По умолчанию сценарии его не используют.
         return None
 
     def display_request(
@@ -36,6 +54,13 @@ class Scenario:
         meta: Dict[str, Any] | None = None,
         turn_id: str,
     ) -> AgentClientHandler:
+        """
+        Поставить сценарий в режим ожидания ввода и вернуть команду UI `ASK_USER_INPUT`.
+
+        Здесь формируется объект `state["pending"]`, который заставляет `MCPAgent`:
+        - на следующем сообщении пользователя продолжить этот же сценарий;
+        - пропустить routing через select_scenario (чтобы не “потерять” контекст ожидания).
+        """
         artifact_name = f"{self.id}.request.{field}.{turn_id}"
         artifact = {
             "field": field,
@@ -78,6 +103,15 @@ class Scenario:
         user_text: str,
         meta: Dict[str, Any],
     ) -> str:
+        """
+        Сгенерировать один уточняющий вопрос для пользователя через LLM.
+
+        `meta` — машинное описание того, что нам не хватает.
+        Обычно сценарии кладут туда:
+        - `missing`: список полей
+        - `constraints`: короткие подсказки/примеры для полей
+        - `reason`: “почему спрашиваем” (для модели, не для пользователя)
+        """
         wants_russian = any("\u0400" <= ch <= "\u04FF" for ch in (user_text or ""))
         lang_hint = (
             "The user writes in Russian. Output must be in Russian."
@@ -128,6 +162,13 @@ class Scenario:
         turn_id: str,
         command: str = "SHOW_MESSAGE",
     ) -> AgentClientHandler:
+        """
+        Завершить сценарий и вернуть результат в UI.
+
+        - сохраняет артефакт результата (summary + data)
+        - помечает статус сценария как DONE
+        - очищает pending (если он относится к текущему сценарию)
+        """
         artifact_name = (
             result_artifact_name
             if result_artifact_name.startswith(f"{self.id}.")
@@ -164,6 +205,8 @@ class Scenario:
         name: str,
         data: Dict[str, Any],
     ) -> None:
+        # Артефакты сценария хранятся в `state["scenario_artifacts"][scenario_id]`,
+        # чтобы разные сценарии не перетирали ключи друг друга.
         scenarios = state.setdefault("scenario_artifacts", {})
         scenario_store = scenarios.get(self.id)
         if scenario_store is None:
@@ -184,6 +227,7 @@ class Scenario:
         data: Dict[str, Any],
         turn_id: str | None,
     ) -> None:
+        # Внутренний журнал сценария: однотипные записи с timestamp и привязкой к turn_id.
         state.setdefault("scenario_log", []).append({
             "ts": _now_iso(),
             "scenario_id": self.id,

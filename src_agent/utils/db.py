@@ -14,6 +14,13 @@ logger = logging.getLogger("src_agent.db")
 
 @dataclass
 class Database:
+    """
+    Минимальная обёртка над пулом asyncpg.
+
+    В `src_agent` Postgres используется для:
+    - таблицы sessions (создание/обновление статуса сессии)
+    - таблиц intents/events (аудит сообщений, LLM-запросов и действий сценариев)
+    """
     db_url: str
     _pool: Optional[asyncpg.Pool] = None
 
@@ -61,6 +68,8 @@ def _to_jsonb(value: Any) -> Optional[str]:
 
 async def create_session(db: Database, *, user_id: str, session_id: Optional[str] = None) -> str:
     sid = session_id or str(uuid4())
+    # Внешние сервисы могут присылать выбранный session_id — делаем upsert,
+    # чтобы последующие записи в events не падали на FK.
     await db.execute(
         """
         insert into sessions (session_id, user_id, status)
@@ -117,6 +126,9 @@ async def log_event(
     input: Optional[Dict[str, Any]] = None,
     output: Optional[Dict[str, Any]] = None,
 ) -> None:
+    # События пишем “best effort”:
+    # - если не удалось upsert'нуть trace в intents (например, в БД другая схема),
+    #   всё равно пытаемся записать event, приклеив request_id внутрь JSONB.
     intent_id = request_id
     db_input = input
     db_output = output
@@ -182,6 +194,9 @@ DB_STORE: Dict[str, list] = {
     "conversations": [],
 }
 
+# Conversation state хранится в памяти процесса (для локального dev):
+# turns/pending/scenario_artifacts/scenario_log.
+# Это отдельно от Postgres: Postgres нужен для аудита и статусов sessions.
 
 def get_conversation(session_id: str) -> Optional[Dict[str, Any]]:
     for conv in DB_STORE["conversations"]:

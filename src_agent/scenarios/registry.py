@@ -25,6 +25,9 @@ _SCENARIO_BY_ID: Dict[str, Scenario] = {}
 
 
 def register_scenario(scenario: Scenario) -> None:
+    # Реестр используется в двух местах:
+    # 1) routing: инструмент select_scenario с enum доступных сценариев
+    # 2) выполнение: получение экземпляра сценария по id для вызова handle(...)
     _SCENARIOS.append(scenario)
     _SCENARIO_BY_ID[scenario.id] = scenario
 
@@ -35,10 +38,14 @@ def get_scenario(scenario_id: str | None) -> Optional[Scenario]:
     return _SCENARIO_BY_ID.get(scenario_id)
 
 def list_selectable_scenarios() -> List[Scenario]:
+    # `chitchat` — fallback, его выбираем только как “если ничего не подошло”,
+    # поэтому исключаем из списка, который предлагаем routing-модели.
     return [s for s in _SCENARIOS if s.id != "chitchat"]
 
 
 def build_select_scenario_tool_schema() -> dict:
+    # Описание инструмента select_scenario — это “контракт” для routing-модели:
+    # можно выбрать только один scenario_id из enum, а если ничего не подходит — не вызывать tool.
     scenarios = list_selectable_scenarios()
     scenario_ids = [s.id for s in scenarios]
     scenario_desc = "; ".join(
@@ -71,6 +78,8 @@ def build_select_scenario_tool_schema() -> dict:
 
 
 def build_extract_params_tool_schema(scenario: Scenario) -> dict:
+    # Схема extract_params строится из input_hints/input_types сценария.
+    # Результат tool-call попадает в state["scenario"]["input"] перед handle(...).
     properties: Dict[str, dict] = {}
     for name, hint in (scenario.input_hints or {}).items():
         ptype = (scenario.input_types or {}).get(name, "string")

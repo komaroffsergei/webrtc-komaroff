@@ -1,3 +1,18 @@
+"""
+Основной оркестратор `src_agent`.
+
+Этот модуль отвечает за “мозг” агента на уровне одной сессии:
+- ведёт историю диалога (turns) и машинное состояние сценария (state["scenario"]/state["pending"]);
+- выбирает сценарий через routing-модель (tool `select_scenario`), если мы не ждём пользовательский ввод;
+- (опционально) извлекает параметры для сценария через tool `extract_params`;
+- вызывает `scenario.handle(...)` и возвращает `AgentResponse`;
+- логирует события в Postgres (events/intents) и публикует “thought” в NATS events (если настроено).
+
+Важно:
+- Conversation state хранится в памяти процесса (см. `src_agent/utils/db.py`), а Postgres используется для аудита.
+- Сценарии и tools работают через общий `state` и артефакты (scenario_artifacts).
+"""
+
 import json
 import logging
 from datetime import datetime, timezone
@@ -120,6 +135,8 @@ def _truncate_text(text: str, limit: int = 160) -> str:
 
 
 def _sanitize_user_visible_container(container: object) -> tuple[object, str]:
+    # Перед тем как отдавать ответ пользователю, вырезаем из строк блоки <think>...</think>.
+    # Содержимое think собираем отдельно (для telemetry/наблюдения), но пользователю не показываем.
     think_parts: list[str] = []
 
     def walk(obj: object, key: str | None = None) -> object:
@@ -268,6 +285,7 @@ class MCPAgent:
 
     async def run(self, *, prompt: str, session_id: str, edit: dict | None = None) -> AgentResponse:
         logger.info("[USER] %s", prompt)
+        # request_id используется как “трассировка” для связки событий (intents/events) внутри одного запроса.
         request_id = str(uuid4())
 
         await log_event(
@@ -279,6 +297,7 @@ class MCPAgent:
             input={"text": prompt},
         )
 
+        # Достаём conversation state (in-memory). Если это первая реплика — инициализируем структуру.
         state = get_conversation(session_id)
         if state is None:
             state = init_conversation(session_id)
@@ -286,6 +305,8 @@ class MCPAgent:
         turn_id: str | None = None
         edit_turn_id = edit.get("turn_id") if isinstance(edit, dict) else None
         if edit_turn_id:
+            # Режим редактирования: обрезаем историю “после turn_id” и перезаписываем текст.
+            # Используется, когда внешний клиент поддерживает редактирование реплик.
             applied = truncate_conversation_after_turn(state, edit_turn_id)
             if applied:
                 for t in state.get("turns", []):
@@ -307,6 +328,7 @@ class MCPAgent:
         else:
             turn_id = add_turn(state, role="user", text=prompt)
 
+        # messages — это представление turns в формате “чат для LLM”.
         state["messages"] = _build_messages_from_turns(state.get("turns", []))
 
         scenario_state = state.get("scenario")
@@ -315,6 +337,8 @@ class MCPAgent:
             state["scenario"] = scenario_state
         current_scenario_id = scenario_state.get("id")
         pending = state.get("pending")
+        # has_pending = мы ждём пользовательский ввод (по state["pending"] или по статусу сценария NEEDS_INPUT).
+        # В этом режиме routing пропускается: продолжение должно попасть в тот же сценарий.
         has_pending = (
             isinstance(pending, dict)
             and isinstance(pending.get("scenario_id"), str)
@@ -338,6 +362,7 @@ class MCPAgent:
         routing_model: str | None = None
 
         if has_pending:
+            # Продолжаем тот же сценарий: он ранее вызвал display_request() и ожидает ввод.
             selected_scenario_id = scenario_state.get("id") if isinstance(scenario_state.get("id"), str) else None
             if not selected_scenario_id and isinstance(pending, dict) and isinstance(pending.get("scenario_id"), str):
                 selected_scenario_id = pending.get("scenario_id")
@@ -347,6 +372,10 @@ class MCPAgent:
         else:
             turns = state.get("turns") if isinstance(state.get("turns"), list) else []
             recent = turns[-8:] if len(turns) > 8 else turns
+            # Routing-запрос строим из:
+            # - системного промпта ROUTING_SYSTEM_PROMPT (правила выбора сценариев)
+            # - компактного JSON-контекста (текущий сценарий/pending)
+            # - последних реплик пользователя/ассистента
             routing_messages = [{"role": "system", "content": ROUTING_SYSTEM_PROMPT}]
             routing_messages.append({
                 "role": "system",
@@ -428,6 +457,10 @@ class MCPAgent:
             routing_resp: dict = {}
             tool_calls: list[dict] = []
             for attempt in attempts:
+                # Пытаемся “дожать” модель до корректного tool-call:
+                # - base: обычные правила
+                # - strict: жёстко запрещаем любые tool calls кроме select_scenario
+                # - example: добавляем пример правильного ответа
                 attempt_messages = list(routing_messages)
                 attempt_messages[0] = {
                     "role": "system",
@@ -549,6 +582,8 @@ class MCPAgent:
             scenario_state["id"] = selected_scenario_id
             scenario_state["status"] = "RUNNING"
             if not has_pending:
+                # При новом выборе сценария очищаем артефакты этого сценария,
+                # чтобы не “подмешивать” результаты старых запросов.
                 state.setdefault("scenario_artifacts", {}).pop(selected_scenario_id, None)
             _log_scenario_event(
                 state,
@@ -559,6 +594,7 @@ class MCPAgent:
                 turn_id=turn_id,
             )
         else:
+            # Если routing-модель не выбрала сценарий — используем общий чат (без инструментов).
             selected_scenario_id = "chitchat"
             if current_scenario_id != selected_scenario_id:
                 scenario_state["input"] = None
@@ -592,6 +628,8 @@ class MCPAgent:
         )
         if scenario and selected_scenario_id != "chitchat":
             if scenario.input_hints:
+                # Для сценариев с input_hints сначала пытаемся извлечь структурированные параметры из текста.
+                # Сценарий сам решит, какие из параметров обязательны и что делать, если их нет.
                 llm_prompt = getattr(scenario, "llm_prompt", None)
                 if not isinstance(llm_prompt, str) or not llm_prompt.strip():
                     raise RuntimeError(f"Scenario is missing llm_prompt: {scenario.id}")
@@ -667,6 +705,7 @@ class MCPAgent:
                     break
 
         if scenario:
+            # Вызов handler'а сценария — основная “бизнес-логика” ответа.
             scenario_response = await scenario.handle(
                 state,
                 prompt=prompt,
@@ -677,6 +716,7 @@ class MCPAgent:
                 request_id=request_id,
             )
             if scenario_response:
+                # Санитизация: <think> не должен попасть пользователю ни в content, ни в артефакты.
                 extracted_think = ""
                 updated_response, extracted_think = _sanitize_user_visible_container(scenario_response)
                 scenario_response = updated_response if isinstance(updated_response, dict) else scenario_response
@@ -690,6 +730,7 @@ class MCPAgent:
                             extracted_think = f"{extracted_think}\n\n{thought_turn}".strip() if extracted_think else thought_turn
 
                 if selected_scenario_id == "chitchat":
+                    # На случай, если LLM вернул пустую строку, всегда возвращаем fallback-сообщение.
                     result = scenario_response.get("result")
                     if isinstance(result, str) and not result.strip():
                         scenario_response["result"] = CHITCHAT_FALLBACK_MESSAGE
@@ -720,10 +761,12 @@ class MCPAgent:
                     )
 
                 if scenario_state.get("status") != "NEEDS_INPUT":
+                    # Если сценарий не запросил ввод — считаем шаг завершённым и очищаем контекст сценария.
                     state["pending"] = None
                     scenario_state["input"] = None
                     state["scenario"] = {"id": None, "status": "RUNNING", "input": None}
                 else:
+                    # Если сценарий запросил ввод — закрепляем pending, чтобы продолжить его на следующем сообщении.
                     if not isinstance(state.get("pending"), dict):
                         state["pending"] = {"scenario_id": selected_scenario_id}
                 scenario_response["session_id"] = session_id

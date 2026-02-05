@@ -17,6 +17,16 @@ from src_agent.utils.db import add_turn
 
 
 class RouteBuilderScenario(Scenario):
+    """
+    Сценарий построения маршрута на карте.
+
+    Поддерживает два режима:
+    - TO: от текущей позиции до аэропорта
+    - BETWEEN: между двумя аэропортами
+
+    Особенность: аэропорты могут быть “неоднозначными” (resolve_airport -> ambiguous),
+    тогда сценарий ставит pending и просит уточнение у пользователя.
+    """
     id = "route_builder"
     title = "Route builder"
     description = "Builds a great-circle route between airports or from current position to an airport."
@@ -38,6 +48,8 @@ class RouteBuilderScenario(Scenario):
     ):
         self.on_user_turn(state, prompt, turn_id)
 
+        # Сценарий хранит промежуточные решения (mode/from_airport/to_airport)
+        # в state["scenario"]["input"], чтобы можно было продолжить после pending-ввода.
         scenario_input = (state.get("scenario") or {}).get("input")
         if not isinstance(scenario_input, dict):
             scenario_input = {}
@@ -46,6 +58,7 @@ class RouteBuilderScenario(Scenario):
 
         mode = self._detect_mode(prompt) or scenario_input.get("mode")
         if mode not in ("TO", "BETWEEN"):
+            # Не удалось уверенно определить режим из текста — спрашиваем пользователя.
             meta = {"reason": "missing_mode", "candidates": ["TO", "BETWEEN"]}
             return await self._ask(state, turn_id, llm_request=llm_request, user_text=prompt, field="mode", meta=meta)
         scenario_input["mode"] = mode
@@ -73,6 +86,7 @@ class RouteBuilderScenario(Scenario):
         to_airport = scenario_input.get("to_airport") if isinstance(scenario_input.get("to_airport"), dict) else None
 
         if mode == "BETWEEN":
+            # BETWEEN: нужны оба конца маршрута. По возможности извлекаем их из текста и резолвим в аэропорты.
             if from_airport is None and from_text:
                 from_airport = await self._resolve_or_ask(
                     state, turn_id, llm_request=llm_request, field="from_airport", user_text=from_text
@@ -112,6 +126,7 @@ class RouteBuilderScenario(Scenario):
             )
 
         if to_airport is None and to_text:
+            # TO: резолвим аэропорт назначения.
             to_airport = await self._resolve_or_ask(
                 state, turn_id, llm_request=llm_request, field="to_airport", user_text=to_text
             )

@@ -19,12 +19,24 @@ from src_agent.settings import (
 API = os.getenv("API_URL", "http://127.0.0.1:8100/api")
 FLIGHTS_API_URL = os.getenv("FLIGHTS_API_URL", "http://127.0.0.1:8100/api/flights/status")
 
+# Контекст выполнения tools:
+# - `_TOOL_STATE` хранит текущий conversation state (state) для записи/чтения артефактов
+# - `_TOOL_SCENARIO_ID` хранит id сценария, чтобы изолировать артефакты по сценариям
+#
+# Это реализовано через ContextVar, потому что сценарии асинхронные и tool-вызовы могут
+# происходить глубоко внутри call stack (включая вложенные функции).
 _TOOL_STATE: ContextVar[Dict[str, Any] | None] = ContextVar("_TOOL_STATE", default=None)
 _TOOL_SCENARIO_ID: ContextVar[str | None] = ContextVar("_TOOL_SCENARIO_ID", default=None)
 
 
 @contextmanager
 def tool_context(state: Dict[str, Any], scenario_id: str):
+    """
+    Установить контекст выполнения tools для конкретного сценария.
+
+    Почти все tools складывают результаты в `state["scenario_artifacts"][scenario_id]` и возвращают `artifact_key`.
+    Этот контекст обязателен, иначе put/get артефактов не знают, куда писать.
+    """
     token_state = _TOOL_STATE.set(state)
     token_scenario = _TOOL_SCENARIO_ID.set(scenario_id)
     try:
@@ -35,6 +47,7 @@ def tool_context(state: Dict[str, Any], scenario_id: str):
 
 
 def _require_context() -> tuple[Dict[str, Any], str]:
+    # Защита от случайных вызовов tool без `tool_context(...)`.
     state = _TOOL_STATE.get()
     scenario_id = _TOOL_SCENARIO_ID.get()
     if state is None or not scenario_id:
@@ -43,6 +56,7 @@ def _require_context() -> tuple[Dict[str, Any], str]:
 
 
 def _scenario_artifacts(state: Dict[str, Any], scenario_id: str) -> Dict[str, Any]:
+    # Артефакты изолированы по scenario_id, чтобы сценарии не “делились” промежуточными результатами.
     scenarios = state.setdefault("scenario_artifacts", {})
     scenario_store = scenarios.get(scenario_id)
     if scenario_store is None:
@@ -54,11 +68,13 @@ def _scenario_artifacts(state: Dict[str, Any], scenario_id: str) -> Dict[str, An
 
 
 def _artifact_key(label: str) -> str:
+    # Нормализуем ключ артефакта: "{scenario_id}.tool.{label}".
     _, scenario_id = _require_context()
     return f"{scenario_id}.tool.{label}"
 
 
 def put_artifact(label: str, value: Any) -> str:
+    # Записать артефакт в storage текущего сценария и вернуть его ключ.
     state, scenario_id = _require_context()
     key = _artifact_key(label)
     store = _scenario_artifacts(state, scenario_id)
@@ -67,6 +83,7 @@ def put_artifact(label: str, value: Any) -> str:
 
 
 def get_artifact(label: str) -> Any:
+    # Получить артефакт по label (в рамках текущего сценария).
     state, scenario_id = _require_context()
     key = _artifact_key(label)
     store = _scenario_artifacts(state, scenario_id)
@@ -76,6 +93,8 @@ def get_artifact(label: str) -> Any:
 
 
 def get_artifact_by_key(key: str) -> Any:
+    # Получить артефакт по “абсолютному” ключу, но всё ещё в рамках текущего scenario_id.
+    # Это сознательное ограничение: сценарии не должны читать артефакты друг друга неявно.
     state, scenario_id = _require_context()
     store = _scenario_artifacts(state, scenario_id)
     if key not in store:

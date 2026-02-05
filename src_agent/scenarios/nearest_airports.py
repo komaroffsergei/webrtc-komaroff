@@ -20,6 +20,14 @@ from src_agent.utils.db import add_turn
 
 
 class NearestAirportsScenario(Scenario):
+    """
+    Сценарий поиска аэропортов “рядом со мной”.
+
+    Параметры приходят из LLM params-extraction (state["scenario"]["input"]):
+    - radius_km: радиус поиска (км) — обязателен для списка “в радиусе”
+    - mode: "nearest"|"farthest" — режим выбора одного аэропорта по расстоянию
+    - build_route: если true, дополнительно строим маршрут и отдаём UI события для карты
+    """
     id = "nearest_airports"
     title = SCENARIO_NEAREST_AIRPORTS_TITLE
     description = SCENARIO_NEAREST_AIRPORTS_DESC
@@ -56,6 +64,8 @@ class NearestAirportsScenario(Scenario):
     ):
         self.on_user_turn(state, prompt, turn_id)
 
+        # `scenario_input` заполняется агентом перед вызовом handle(),
+        # когда LLM вернул tool-call extract_params.
         scenario_input = (state.get("scenario") or {}).get("input")
         if not isinstance(scenario_input, dict):
             scenario_input = {}
@@ -72,6 +82,8 @@ class NearestAirportsScenario(Scenario):
         build_route_flag = build_route_requested is True
 
         if mode is not None:
+            # Специальный режим: выбираем один аэропорт (ближайший/самый дальний),
+            # радиус в этом случае не нужен.
             return await self._fetch_and_respond_by_distance(state, turn_id=turn_id, mode=mode, build_route=build_route_flag)
 
         pending = state.get("pending")
@@ -83,6 +95,7 @@ class NearestAirportsScenario(Scenario):
                     build_route_flag = True
 
         if radius_km is None:
+            # Если радиус не указан явно — спрашиваем у пользователя уточнение и ставим pending.
             return await self._ask_radius(
                 state,
                 turn_id,

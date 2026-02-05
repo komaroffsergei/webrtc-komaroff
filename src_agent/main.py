@@ -1,3 +1,16 @@
+"""
+Точка входа сервиса `src_agent`.
+
+Сервис поднимает `AgentServer`, который:
+- подключается к NATS и PostgreSQL;
+- подписывается на subject агента (request/reply стиль);
+- для каждого входящего сообщения запускает `MCPAgent.run()` и отвечает в reply.
+
+Смотрите также:
+- `src_agent/service.py` — NATS/DB обвязка и обработчик входящих сообщений.
+- `src_agent/agent.py` — основной оркестратор (routing сценариев, извлечение параметров, вызов сценария).
+"""
+
 import asyncio
 import logging
 import os
@@ -27,6 +40,7 @@ def main():
 
     server = AgentServer(
         nats_url=NATS_URL,
+        # Subject'ы строятся как префикс + USER_ID, чтобы разделять пользователей/сессии на одном NATS.
         agent_subject=f"{NATS_AGENT_SUBJECT}{USER_ID}",
         llm_subject=f"{NATS_LLM_SUBJECT}{USER_ID}",
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",

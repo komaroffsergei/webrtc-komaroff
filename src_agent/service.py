@@ -18,6 +18,19 @@ logger = logging.getLogger(STACK_SERVICE_NAME)
 
 
 class AgentServer:
+    """
+    NATS/DB обвязка вокруг `MCPAgent`.
+
+    Отвечает за:
+    - подключение к NATS и подписку на subject агента (request/reply);
+    - подключение к PostgreSQL (sessions/events/intents);
+    - публикацию “человеко-ориентированных” событий в NATS (events_subject) для UI/наблюдения.
+
+    Протокол входа (JSON):
+      {"text": "...", "session_id": "...", "edit": {...}}
+    Ответ: dict (AgentResponse), который отправляется в reply.
+    """
+
     def __init__(
         self,
         *,
@@ -59,6 +72,7 @@ class AgentServer:
         if not self.db_url:
             raise RuntimeError("db_url is not set for src_agent")
 
+        # Postgres используется для статусов sessions и аудита событий (events/intents).
         self.db = Database(db_url=self.db_url)
         await self.db.connect()
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected to Database")
@@ -93,10 +107,12 @@ class AgentServer:
                 raise RuntimeError("Database is not connected")
 
             if not session_id:
+                # Если внешний клиент не управляет сессией — создаём новую.
                 session_id = await create_session(self.db, user_id=self.user_id)
             else:
                 # session_id can come from external services (e.g. WebRTC signaling);
                 # ensure the DB session row exists to satisfy FK constraints.
+                # Важно: внешний сервис может прислать session_id, которого ещё нет в БД.
                 await create_session(self.db, user_id=self.user_id, session_id=session_id)
 
             result = await self.agent.run(prompt=prompt, session_id=session_id, edit=edit)
@@ -171,6 +187,9 @@ class AgentServer:
             await self.shutdown()
 
     async def _publish_result_event(self, result: object) -> None:
+        # Преобразуем “сырой” ответ агента в события NATS для UI:
+        # - message: пользовательский текст (если он есть)
+        # - client: команды клиенту (SHOW_AIRPORTS/BUILD_ROUTE/...)
         if not self.nats_logger or not isinstance(result, dict):
             return
 
@@ -190,6 +209,7 @@ class AgentServer:
 
         extra_events = result.get("client_events")
         if isinstance(extra_events, list):
+            # Сценарий может вернуть цепочку UI-команд (например, SET_POSITION + BUILD_ROUTE).
             for e in extra_events:
                 if not isinstance(e, dict):
                     continue
@@ -210,6 +230,9 @@ class AgentServer:
             await self.nats_logger.log("command", "client", data)
 
     def _normalize_artifacts(self, raw: object) -> dict[str, object] | None:
+        # Приводим artifacts к стабильному формату, чтобы фронт мог читать:
+        # - last: ключ “главного” артефакта
+        # - payload: сами данные артефактов
         if not isinstance(raw, dict):
             return None
         all_keys_raw = raw.get("all")
@@ -222,6 +245,7 @@ class AgentServer:
         return {"all": all_keys, "last": last, "payload": payload}
 
     def _extract_message_text(self, result: dict, artifacts: dict[str, object] | None) -> str | None:
+        # Пытаемся извлечь человеко-читаемый текст для события `command/message`.
         if isinstance(result.get("result"), str) and result["result"].strip():
             return result["result"].strip()
 

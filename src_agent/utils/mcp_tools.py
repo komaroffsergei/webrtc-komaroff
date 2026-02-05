@@ -1,5 +1,16 @@
+"""
+Реестр tools и генерация JSON-schema.
+
+В `src_agent` tools в основном вызываются напрямую из сценариев как python-функции,
+но схема и описания остаются полезными:
+- для единообразия параметров (и потенциальной валидации типов),
+- для расширения в сторону LLM tool-calls,
+- для построения словаря терминов (build_tool_vocabulary) и простого pre-validation.
+"""
+
 import inspect
 from typing import get_origin, get_args, List, Dict, Any, get_type_hints, Literal, TypedDict
+
 class AgentRegistry(TypedDict, total=False):
     fn: Any
     schema: Dict[str, Any]
@@ -107,6 +118,10 @@ def build_schema(
     description: str | None = None,
     param_desc: dict[str, str] | None = None,
 ):
+    # JSON-schema строится из:
+    # - python type hints (get_type_hints)
+    # - сигнатуры функции (inspect.signature)
+    # - опциональных описаний параметров (param_desc)
     sig = inspect.signature(fn)
     hints = get_type_hints(fn)
 
@@ -145,6 +160,8 @@ def build_schema(
 
 
 def python_type_to_schema(py_type):
+    # Маппинг базовых python-типов на JSON Schema.
+    # Здесь intentionally минимальный набор: он покрывает текущие tools.
     if py_type is None:
         return {"type": "string"}
 
