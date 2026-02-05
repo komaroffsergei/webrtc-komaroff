@@ -23,3 +23,5 @@ WORKDIR /app/src_whisper
 RUN mkdir -p "/models/asr" "/models/vad"
 
 CMD ["python", "-m", "src_whisper.main"]
+
+
