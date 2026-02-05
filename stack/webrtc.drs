@@ -87,13 +87,13 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      OLLAMA_URL: ENV.fetch('OLLAMA_URL', 'http://ollama.h100.local'),
-      LLM_MODE: ENV.fetch('LLM_MODE', 'remote'),
-      LLM_LOCAL_MODEL: ENV.fetch('LLM_LOCAL_MODEL', 'Qwen/Qwen3-1.7B-GGUF'),
-      LLM_REMOTE_MODEL: ENV.fetch('LLM_REMOTE_MODEL', 'qwen3:30b'),
-      LLM_MODELS: ENV.fetch('LLM_MODELS', '/app/models/llm'),
-      OLLAMA_MODEL_FILE: ENV.fetch('OLLAMA_MODEL_FILE', ''),
-      LLM_CONTEXT_SIZE: ENV.fetch('LLM_CONTEXT_SIZE', '8192')
+      OLLAMA_URL: 'http://ollama.h100.local',
+      LLM_MODE: 'remote',
+      LLM_LOCAL_MODEL: 'Qwen/Qwen3-1.7B-GGUF',
+      LLM_REMOTE_MODEL: 'qwen3:30b',
+      LLM_MODELS: '/app/models/llm',
+      OLLAMA_MODEL_FILE: '',
+      LLM_CONTEXT_SIZE: '8192'
   volume name: 'LLM_MODELS', target: '/app/models/llm'
 end
 
