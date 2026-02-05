@@ -156,6 +156,7 @@ Service :py_faster_whisper, image: builder-registry.builder.giscloud.ru/gis/voic
 end
 
 
+
 Service :nats_box, image: 'natsio/nats-box' do
   env NATS_URL: NATS_URL
   entrypoint 'sh -c "sleep infinity"'
