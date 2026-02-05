@@ -137,7 +137,7 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
   CONF
 end
 
-Service :src_whisper, image: webrtc_registry['py_faster_whisper'] do
+Service :py_faster_whisper, image: webrtc_registry['py_faster_whisper'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
   env NATS_URL: NATS_URL,
@@ -149,7 +149,7 @@ Service :src_whisper, image: webrtc_registry['py_faster_whisper'] do
       WEBUI_HOST: ENV.fetch("WEBUI_HOST", "0.0.0.0"),
       WEBUI_PORT: ENV.fetch("WEBUI_PORT", "8090"),
       WEBUI_BASE_PATH: ENV.fetch("WEBUI_BASE_PATH", "/whisper"),
-      STACK_SERVICE_NAME: 'src_whisper',
+      STACK_SERVICE_NAME: 'py_faster_whisper',
       ASR_MODELS: '/app/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small'
   volume name: 'ASR_MODELS', target: '/app/models/asr'
