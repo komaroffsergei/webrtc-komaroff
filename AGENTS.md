@@ -41,6 +41,18 @@ This file contains coding guidelines and architectural principles for microservi
 - **Critical Changes**: Changes affecting database migrations, authentication/authorization, external service integrations, and secret storage require human review. Agents should not automatically merge such changes without approval.
 - **Documentation**: For non-obvious changes, include a brief description of motivation and link to tests.
 
+## Documentation Standards (Required)
+
+- **Service Docs Are Mandatory**: Keep `DOCS/<SERVICE>.md` up to date for every service you touch (e.g. `DOCS/CORE.md`, `DOCS/FRONT.md`, `DOCS/AGENT.md`, `DOCS/N8N_BRIDGE.md`).
+- **What Every Service Doc Must Contain**:
+  - What the service does (responsibility + what it does *not* do)
+  - How to start/stop it (Docker and, if applicable, local/IDE)
+  - How it communicates with other services (HTTP endpoints and/or NATS subjects + message contracts)
+  - Required env vars / configuration (with defaults, if any)
+  - Common recurring errors and exact fixes (copy/paste commands where helpful)
+  - Code pointers: entrypoint(s), key handlers, settings files (paths in the repo)
+- **No “Docs Drift”**: Any change to subjects/contracts/ports/flows must include a docs update in the same PR.
+
 ## Agent Instructions
 
 - **Minimal Changes**: When making corrections, minimize the scope of code changes (small diffs).

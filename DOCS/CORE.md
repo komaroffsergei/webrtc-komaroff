@@ -30,8 +30,27 @@
 
 Решение:
 
-- остановить Docker контейнер `webrtc-komaroff-dev-src_core-1`, или
+- остановить Docker контейнер `src_core`: `docker compose -f docker/docker-compose.yml stop src_core`, или
 - запустить локально на другом порту: `CORE_PORT=8002` (или любой свободный).
+
+## Частые ошибки
+
+### `ConnectionRefusedError ... ('127.0.0.1', 4222)`
+
+Причина: NATS не запущен на хосте.
+
+Решение:
+
+- `docker compose -f docker/docker-compose.yml up -d nats`
+
+### `3 validation errors for AgentInboundRequest ... Field required`
+
+Причина: в запрос, который `src_core` отправляет в `src_agent`, не попали trace-поля (`trace_id`, `request_id`, `ts_ms`).
+
+Где смотреть в коде:
+
+- формирование payload: `src_core/handlers/handle_transcription.py`
+- отправка NATS req-reply: `src_core/nats_client.py` (или аналогичный клиент)
 
 ## Конфигурация
 

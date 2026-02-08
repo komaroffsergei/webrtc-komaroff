@@ -69,6 +69,30 @@ webhook endpoint и через основной `n8n` (он проброшен �
 Бейдж `Published` означает, что текущая версия workflow опубликована и именно она будет использоваться при выполнении
 (в том числе в multi-process/queue режиме, где `n8n_webhook` и `n8n_worker` исполняют workflows).
 
+## Частые ошибки
+
+### В UI много одинаковых workflow (дубликаты)
+
+Причина: в `docker/docker-compose.yml` есть bootstrap-импорт (`n8n_import`), который может добавлять workflows повторно.
+
+Что делать сейчас (быстро):
+
+- удалить “мертвые” workflows в UI (меню `...` -> `Delete`), оставив один актуальный
+
+Что делать системно:
+
+- поменять стратегию bootstrap (например, seed только на пустой базе) и перестать импортировать каждый `up`
+
+### `Failed to call n8n webhook` / `500 Internal Server Error` при дергании webhook
+
+Чаще всего это “внутренняя” ошибка workflow (не смог вызвать tool proxy / LLM / tools).
+
+Что проверить:
+
+- в контейнерах корректен `TOOL_PROXY_URL` (см. `DOCS/N8N_BRIDGE.md`)
+- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (иначе `{{$env.*}}` не работает)
+- workflow действительно `Published` (иначе может исполняться старая/неактивная версия)
+
 ## Контракт входа/выхода workflow
 
 Все workflows в этом репо запускаются через Webhook node (HTTP POST). Вход — JSON body:

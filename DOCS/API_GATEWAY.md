@@ -28,3 +28,22 @@ Subjects:
 - `GET /api/pilot/location`
 
 Это mock endpoints для разработки и демо.
+
+## Код (куда смотреть)
+
+- HTTP API: `src_api_gateway/main.py`
+- NATS tools: `src_api_gateway/tools/*` (или см. роутинг subjects в `main.py`)
+- Контракты: `src_shared/contracts/*`
+
+## Частые ошибки
+
+### Tool не найден (`tool_not_found`) или таймаут по NATS
+
+Причины:
+
+- неправильный subject (ожидается `nats.tools.<name>`)
+- не запущен `src_api_gateway` или NATS
+
+Проверка:
+
+- `docker compose -f docker/docker-compose.yml ps src_api_gateway nats`

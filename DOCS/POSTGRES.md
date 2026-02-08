@@ -36,3 +36,14 @@ Postgres используется для:
 - `request_id` (PK)
 - `session_id`, `trace_id`
 - `status`, `response` (закэшированный `N8nRunResponse`)
+
+## Частые ошибки
+
+### Миграции не применились / нет таблиц `runtime_state` или schema `n8n`
+
+Причина: контейнер Postgres поднят на старом volume без новых миграций или миграционный шаг не выполнялся.
+
+Что проверить:
+
+- какие миграции есть в репо: `src_postgres/data/migrations/`
+- логи контейнера Postgres: `docker compose -f docker/docker-compose.yml logs src_postgres`

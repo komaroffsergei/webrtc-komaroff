@@ -38,11 +38,56 @@ UI подписывается на `nats.events.<user_id>` и отрисовыв
 
 Router workflow выбирает один из демо-workflows:
 
-- `echo@1.0.0`: попробуйте `hello`
-- `collect_name@1.0.0`: попробуйте `name`, затем `my name is Alice`
-- `airports_and_weather@1.0.0`: попробуйте `airport weather moscow`, затем `250`
+- `echo@1.0.0`: попробуйте `привет` или `повтори: тест`
+- `collect_name@1.0.0`: попробуйте `как меня зовут?` (попросит имя), затем `меня зовут Алексей`
+- `airports_and_weather@1.0.0`: попробуйте `найди аэропорты рядом с Москвой` (попросит город/радиус), затем ответьте:
+  - `Москва`
+  - `50`
 
 ## 4) Где теперь живут сценарии
 
 Вся логика сценариев находится в workflows n8n (визуальный редактор + хранение в Postgres schema `n8n`).
 В `src_agent` больше нет выбора сценария, извлечения параметров или registry сценариев.
+
+## 5) Частые ошибки и быстрые решения
+
+### 5.1 `Cannot bind to 0.0.0.0:8000` / `address already in use`
+
+Причина: порт `8000` на хосте уже занят (обычно запущен контейнер `src_core`).
+
+Решения:
+
+- остановить контейнер: `docker compose -f docker/docker-compose.yml stop src_core`
+- или запустить локальный `src_core` на другом порту: `CORE_PORT=8002 python -m src_core.main`
+
+### 5.2 `ConnectionRefusedError ... ('127.0.0.1', 4222)`
+
+Причина: NATS не запущен на хосте.
+
+Решение:
+
+- `docker compose -f docker/docker-compose.yml up -d nats`
+
+### 5.3 `Failed to call n8n webhook` / `n8n returned 500`
+
+Чаще всего причина — n8n workflow не может вызвать tool proxy (URL/резолвинг/переменные окружения).
+
+Что проверить:
+
+1) `n8n` доступен: `http://127.0.0.1:5679/`
+2) В контейнерах n8n корректен `TOOL_PROXY_URL`:
+   - `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $TOOL_PROXY_URL'`
+3) Если `src_n8n` запущен локально (IDE), примените override и пересоздайте `n8n*` контейнеры:
+   - `docker compose -f docker/docker-compose.yml stop src_n8n`
+   - `docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker`
+
+Подробности: `DOCS/N8N_BRIDGE.md`.
+
+### 5.4 Дубли сообщений/команд в UI
+
+Причины:
+
+- одновременно запущены два экземпляра одного сервиса (контейнер + локально), или
+- UI подписался на один subject несколько раз (обычно после реконнекта).
+
+Решение: убедитесь, что запущен только один инстанс каждого сервиса; для `src_n8n` см. `DOCS/N8N_BRIDGE.md`.

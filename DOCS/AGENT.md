@@ -35,3 +35,35 @@ Payload: `N8nRunRequest`:
 
 Fallback "чатикам" отсутствует. Если router не выбрал workflow или workflow упал, UI получает явную ошибку
 (`SHOW_ERROR_MESSAGE`), а ответ на req-reply будет `status=FAILED`.
+
+## Код (куда смотреть)
+
+- Основная логика раннера: `src_agent/service.py`
+- Точка входа сервиса: `src_agent/main.py`
+- Контракты сообщений (Pydantic): `src_shared/contracts/*`
+
+## Частые ошибки
+
+### `validation errors for AgentInboundRequest ... Field required`
+
+Причина: upstream сервис (`src_core`) отправил неполный payload без trace-полей.
+
+Что делать:
+
+- проверьте `src_core/handlers/handle_transcription.py` (должны добавляться `trace_id`, `request_id`, `ts_ms`)
+
+### Дубли команд в UI
+
+Чаще всего причина — запущены два экземпляра одного сервиса (контейнер + локальный процесс).
+
+Что делать:
+
+- оставьте только один инстанс сервиса (и для `src_n8n` тоже): `docker compose -f docker/docker-compose.yml stop <service>`
+
+### `runtime_state version changed` / конфликт optimistic lock
+
+Причина: параллельные сообщения в одну и ту же сессию.
+
+Ожидаемое поведение:
+
+- агент перезагружает runtime и делает ограниченное число ретраев; если не получилось — возвращает ошибку пользователю

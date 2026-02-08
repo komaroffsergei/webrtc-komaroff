@@ -29,3 +29,22 @@ HTTP разрешён только внутри docker-сети между `src_
 - `request_id` (uuid; ключ идемпотентности)
 - `session_id` (uuid)
 - `ts_ms` (unix timestamp в миллисекундах)
+
+## Частые ошибки
+
+### `ConnectionRefusedError ... :4222`
+
+Причина: NATS не запущен или недоступен на `127.0.0.1:4222`.
+
+Что делать:
+
+- `docker compose -f docker/docker-compose.yml up -d nats`
+
+### UI не подключается к NATS WebSocket
+
+Причина: не проброшен порт `9222` или выбран неправильный URL.
+
+Проверка:
+
+- `docker compose -f docker/docker-compose.yml ps nats`
+- UI должен подключаться к `ws://127.0.0.1:9222` (dev) или через прокси (docker/nginx)
