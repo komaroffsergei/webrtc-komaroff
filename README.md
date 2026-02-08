@@ -5,11 +5,13 @@ Local development guide for the WebRTC + NATS microservices stack.
 ## Components
 
 - `src_core` - WebRTC signaling + audio pipeline (publishes ASR requests to NATS).
-- `src_agent` - agent backend (uses NATS + PostgreSQL).
-- `src_llm` - LLM service (uses NATS).
-- `src_api_gateway` - mock HTTP API used by the agent.
+- `src_agent` - thin runner (NATS + PostgreSQL): stores `runtime_state`, calls n8n over NATS, publishes UI events.
+- `src_n8n` - NATS bridge: `nats.n8n.run` -> n8n webhook, plus an internal HTTP tool proxy for workflows.
+- `n8n` - workflow orchestration (stores workflows in Postgres schema `n8n`).
+- `src_llm` - LLM gateway over NATS (strict JSON schemas; can run in mock mode).
+- `src_api_gateway` - mock APIs + NATS tools (`nats.tools.*`) used by workflows via `src_n8n` tool proxy.
 - `src_front` - web UI (connects to NATS over WebSocket).
-- Infrastructure (Docker): NATS and PostgreSQL.
+- Infrastructure (Docker): NATS, PostgreSQL, Redis (for n8n queue mode).
 
 ASR/Whisper is expected to run as an external service (see "Whisper / ASR service").
 
@@ -42,6 +44,12 @@ Start the full stack (builds and starts all services defined in compose):
 docker compose -f docker/docker-compose.yml up -d
 ```
 
+### How to use (quick start)
+
+1) Open the frontend at `http://127.0.0.1:8080/` and send a message.
+2) The UI sends text to `src_agent` via NATS. `src_agent` persists runtime in Postgres and calls `src_n8n` over NATS.
+3) `src_n8n` triggers the selected n8n workflow and returns a structured response that is rendered by the UI.
+
 Useful endpoints (host machine):
 
 - NATS TCP: `nats://127.0.0.1:4222`
@@ -49,13 +57,32 @@ Useful endpoints (host machine):
 - NATS WebSocket (via Front reverse-proxy): `ws://127.0.0.1:8080/ws`
 - PostgreSQL: `127.0.0.1:5432` (user: `mcp`, password: `mcp_pass`, db: `mcp`)
 - Core: `http://127.0.0.1:8000/core`
-- API Gateway: `http://127.0.0.1:8100/api`
+- API Gateway: `http://127.0.0.1:8101/api`
 - Front: `http://127.0.0.1:8080/`
+- n8n UI/API: `http://127.0.0.1:5679/`
+- n8n Webhooks (для локального `src_n8n`): `http://127.0.0.1:5679/webhook`
 
 Notes:
 
 - NATS and PostgreSQL are bound to `127.0.0.1` on purpose (local-only).
 - Compose project name is pinned, so running other repos from their own `docker/` folders does not collide.
+  - NATS TCP is bound to `127.0.0.1:4222`.
+
+## Documentation
+
+Service-level docs live under `DOCS/`:
+
+- `DOCS/START_HERE.md`
+- `DOCS/FRONT.md`
+- `DOCS/CORE.md`
+- `DOCS/AGENT.md`
+- `DOCS/N8N.md`
+- `DOCS/N8N_BRIDGE.md`
+- `DOCS/LLM.md`
+- `DOCS/API_GATEWAY.md`
+- `DOCS/POSTGRES.md`
+- `DOCS/NATS.md`
+- `DOCS/E2E.md`
 
 ## Run services directly (no Docker for apps)
 
@@ -64,7 +91,7 @@ You can keep infra in Docker, but run Python services from your IDE/terminal.
 ### 1) Start infra
 
 ```bash
-docker compose -f docker/docker-compose.yml -d nats src_postgres
+docker compose -f docker/docker-compose.yml up -d nats src_postgres
 ```
 
 Sanity checks:
@@ -82,7 +109,7 @@ From `webrtc-komaroff-dev/`:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install -r src_core/requirements.txt -r src_agent/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
+pip install -r src_core/requirements.txt -r src_agent/requirements.txt -r src_n8n/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
 ```
 
 ### 3) Configure `.env` files (optional)
@@ -116,6 +143,11 @@ python -m src_agent.main
 python -m src_llm.main
 ```
 
+If docker-compose is running, `src_core` inside Docker already binds `0.0.0.0:8000`. To run `src_core` locally:
+
+- stop the container `webrtc-komaroff-dev-src_core-1`, or
+- set `CORE_PORT` to a free port (example: `CORE_PORT=8002`).
+
 ### Frontend (dev mode)
 
 From `webrtc-komaroff-dev/src_front/`:
@@ -126,6 +158,28 @@ npm run dev
 ```
 
 By default, dev mode expects NATS WebSocket on `ws://localhost:9222`.
+
+### Run `src_n8n` locally (IDE) while n8n stays in Docker
+
+If you want to debug `src_n8n` locally, do not run the `src_n8n` container at the same time.
+
+1) Stop the container bridge:
+
+```bash
+docker compose -f docker/docker-compose.yml stop src_n8n
+```
+
+2) Recreate n8n services with tool proxy pointed to the host (so n8n can reach your local `src_n8n` on port 9000):
+
+```bash
+docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker
+```
+
+3) Run `src_n8n` locally with:
+
+- `NATS_URL=nats://127.0.0.1:4222`
+- `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
+- `N8N_WEBHOOK_BASE_URL=http://127.0.0.1:5679/webhook`
 
 ## Whisper / ASR service (external)
 
@@ -158,6 +212,94 @@ Defaults:
 
 - ASR container uses `NATS_URL=ws://nats:9222` (service DNS `nats` is provided by the shared network).
 - WebUI: `http://127.0.0.1:8090/`
+
+## n8n Orchestration Over NATS
+
+### n8n Web UI
+
+Open n8n in the browser:
+
+- Web UI: `http://127.0.0.1:5679/`
+
+On first start n8n may ask you to create an owner account.
+
+The demo workflows are named and versioned as:
+
+- `router@1.0.0`
+- `echo@1.0.0`
+- `collect_name@1.0.0`
+- `airports_and_weather@1.0.0`
+
+Important: this repo bootstraps workflows from `docker/n8n/workflows/*.json`. If you change workflows in the UI,
+export them back to JSON (and commit) or disable the bootstrap import, otherwise your local changes can be overwritten
+on the next stack recreate.
+
+### NATS subjects
+
+Canonical subjects are defined in `src_shared/contracts/subjects.py`.
+
+- `nats.agent.<user_id>`: inbound user text to `src_agent` (req-reply).
+- `nats.events.<user_id>`: UI events/commands to `src_front` (pub-sub).
+- `nats.n8n.run`: `src_agent` -> `src_n8n` (req-reply).
+- `nats.n8n.health`: health check for `src_n8n` (req-reply).
+- `nats.llm.<user_id>`: LLM gateway (`src_llm`) (req-reply).
+- `nats.tools.<name>`: tool calls via NATS (`src_api_gateway` provides demo tools).
+
+### Message contracts
+
+Pydantic v2 models live under `src_shared/contracts/` and are validated on every service boundary.
+
+Cross-service envelopes always include:
+
+- `trace_id` (uuid)
+- `correlation_id` (uuid, optional; defaults to `trace_id`)
+- `request_id` (uuid; used for idempotency)
+- `session_id` (uuid; required for stateful runs)
+- `ts_ms` (unix timestamp in milliseconds)
+
+Key models:
+
+- `AgentInboundRequest` / `AgentInboundResponse`
+- `N8nRunRequest` / `N8nRunResponse`
+- `ToolCallRequest` / `ToolCallResponse`
+- `LlmRequest` / `LlmResponse`
+
+### Runtime state (user-in-the-loop)
+
+`src_agent` persists per-session runtime under the Postgres `runtime_state` table:
+
+- `active_workflow_id`: when set, the next user message continues that workflow.
+- `pending`: when set, UI prompts the user for a missing field (e.g. radius).
+- `version`: optimistic locking. If concurrent updates happen, `src_agent` reloads runtime and retries the n8n run.
+
+### Idempotency
+
+`src_n8n` stores `nats.n8n.run` results in Postgres table `runtime_requests` and returns the cached response for
+duplicate `request_id` values.
+
+### Workflows
+
+Workflows are stored and visually managed in n8n, but this repo bootstraps demo workflows from JSON files:
+
+- `docker/n8n/workflows/router_1_0_0.json`
+- `docker/n8n/workflows/echo_1_0_0.json`
+- `docker/n8n/workflows/collect_name_1_0_0.json`
+- `docker/n8n/workflows/airports_and_weather_1_0_0.json`
+
+To add a new workflow:
+
+1) Create/export the workflow JSON into `docker/n8n/workflows/`.
+2) Give it a stable runtime id in the workflow name (example: `my_flow@1.0.0`).
+3) Add it to `src_n8n/settings.py` mappings so `src_n8n` can call the correct n8n webhook path.
+4) Ensure the workflow returns a JSON object compatible with `N8nRunResponse`.
+
+### Run E2E tests
+
+E2E tests are a small dockerized runner that talks to the stack over NATS and validates the 3 demo workflows:
+
+```bash
+docker compose -f docker/docker-compose.yml --profile test run --rm --build src_e2e
+```
 
 ### Run ASR directly (no Docker)
 

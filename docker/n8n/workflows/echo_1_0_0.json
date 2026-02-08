@@ -1,0 +1,38 @@
+{
+  "id": "Echo1o0o0o0Abcde",
+  "name": "echo@1.0.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "echo_1_0_0",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "4a9f6c32-737e-4d6f-9b15-4d7c705d6c22",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = items[0].json.body || items[0].json;\nconst text = String(input.text || '');\nreturn [{ json: {\n  trace_id: input.trace_id,\n  correlation_id: input.correlation_id || input.trace_id,\n  request_id: input.request_id,\n  session_id: input.session_id,\n  ts_ms: Date.now(),\n  status: 'DONE',\n  result: '',\n  client_handler: { command: 'SHOW_MESSAGE', payload: { message: `You said: ${text}` } },\n  client_events: [],\n  next_runtime: { active_workflow_id: null, pending: null, context: input.runtime?.context || null, version: input.runtime?.version || 1 },\n  errors: []\n}}];"
+      },
+      "id": "bfe78a8f-2b3e-4dcf-8c83-919d139c55ff",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Build Response", "type": "main", "index": 0}]]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "b2a7f22e-1a41-4c16-9c39-1a60b2f739df"
+}

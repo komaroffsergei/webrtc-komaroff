@@ -53,7 +53,8 @@ class BaseService:
         self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)
         await self._nats_logger.info(f"{STACK_SERVICE_NAME} service connected")
 
-        await self._nc.subscribe(self._llm_subject, cb=self._handle_message)
+        # Queue group prevents duplicate processing if multiple llm instances are running.
+        await self._nc.subscribe(self._llm_subject, queue=f"{self._service_name}.q", cb=self._handle_message)
         await self._nats_logger.info(f"Subscribed to {self._llm_subject}")
 
     async def run(self) -> None:

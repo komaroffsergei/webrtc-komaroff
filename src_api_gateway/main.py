@@ -7,6 +7,12 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 import json
 import os
+from uuid import uuid4
+
+from nats.aio.client import Client as NATS
+from nats.aio.msg import Msg
+
+from src_shared.contracts import ErrorInfo, ToolCallRequest, ToolCallResponse, now_ts_ms
 
 app = FastAPI(title="Mock Aviation API")
 
@@ -15,9 +21,18 @@ DATA_FILE = os.path.join(BASE_DIR, "data", "airports.json")
 
 API_PORT = int(os.getenv("API_PORT", "8100"))
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
+NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
+NATS_TOOLS_PREFIX = os.getenv("NATS_TOOLS_PREFIX", "nats.tools.")
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
     AIRPORTS = json.load(f)
+
+CITY_COORDS: dict[str, tuple[float, float]] = {
+    "moscow": (55.7558, 37.6173),
+    "saint petersburg": (59.9343, 30.3351),
+    "st petersburg": (59.9343, 30.3351),
+    "amsterdam": (52.3676, 4.9041),
+}
 
 
 # -------------------------
@@ -111,13 +126,139 @@ def _airport_matches_query(airport: dict, query: str) -> bool:
                 return True
     return False
 
+
+def _normalize_city(value: str) -> str:
+    v = (value or "").strip().lower()
+    if not v:
+        return ""
+    # Minimal transliteration support for demo UI prompts.
+    if "моск" in v:
+        return "moscow"
+    if "петер" in v or "питер" in v:
+        return "saint petersburg"
+    return v
+
+
+def _tool_search_airports_nearby(*, city: str, radius_km: float) -> dict:
+    key = _normalize_city(city)
+    coords = CITY_COORDS.get(key)
+    if not coords:
+        return {"error": {"code": "unknown_city", "message": f"Unknown city: {city}"}}
+    lat, lon = coords
+    res = []
+    for a in AIRPORTS:
+        dist = haversine(lat, lon, a["lat"], a["lon"])
+        if dist <= float(radius_km):
+            res.append({**a, "distance_km": round(dist, 1)})
+    res.sort(key=lambda x: float(x.get("distance_km", 0.0)))
+    return {"data": {"airports": res}}
+
+
+def _tool_get_weather(*, city: str) -> dict:
+    key = _normalize_city(city)
+    if not key:
+        return {"error": {"code": "invalid_args", "message": "city is required"}}
+    # Deterministic mock.
+    temp = (sum(ord(c) for c in key) % 25) - 5
+    return {"data": {"weather": {"city": city, "temperature_c": temp, "condition": "CLEAR"}}}
+
+
+async def _handle_tool_request(msg: Msg) -> None:
+    try:
+        req = ToolCallRequest.model_validate(json.loads(msg.data.decode("utf-8")))
+        tool = req.tool_name.strip()
+        args = req.args or {}
+
+        if tool == "search_airports_nearby":
+            city = str(args.get("city") or "")
+            radius_km = args.get("radius_km")
+            if radius_km is None:
+                raise ValueError("radius_km is required")
+            out = _tool_search_airports_nearby(city=city, radius_km=float(radius_km))
+        elif tool == "get_weather":
+            city = str(args.get("city") or "")
+            out = _tool_get_weather(city=city)
+        else:
+            out = {"error": {"code": "unknown_tool", "message": f"Unknown tool: {tool}"}}
+
+        if "error" in out:
+            err = out["error"]
+            resp = ToolCallResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                artifact_key=f"{tool}:{req.request_id}",
+                data=None,
+                error=ErrorInfo(code=str(err.get("code")), message=str(err.get("message"))),
+            )
+        else:
+            resp = ToolCallResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=True,
+                artifact_key=f"{tool}:{req.request_id}",
+                data=out,
+                error=None,
+            )
+
+        await msg.respond(resp.model_dump_json().encode("utf-8"))
+
+    except Exception as exc:
+        resp = ToolCallResponse(
+            trace_id=uuid4(),
+            correlation_id=None,
+            request_id=uuid4(),
+            session_id=None,
+            ts_ms=now_ts_ms(),
+            ok=False,
+            artifact_key=None,
+            data=None,
+            error=ErrorInfo(code="tool_exception", message=str(exc)),
+        )
+        try:
+            await msg.respond(resp.model_dump_json().encode("utf-8"))
+        except Exception:
+            pass
+
+
+@app.on_event("startup")
+async def _startup_nats_tools() -> None:
+    app.state.nats = NATS()
+    await app.state.nats.connect(
+        servers=[NATS_URL],
+        name="src_api_gateway",
+        max_reconnect_attempts=-1,
+        reconnect_time_wait=2,
+        ping_interval=10,
+    )
+    # Queue group prevents duplicate tool executions if multiple api_gateway instances are running.
+    await app.state.nats.subscribe(
+        f"{NATS_TOOLS_PREFIX}*",
+        queue="src_api_gateway.tools.q",
+        cb=_handle_tool_request,
+    )
+
+
+@app.on_event("shutdown")
+async def _shutdown_nats_tools() -> None:
+    nc = getattr(app.state, "nats", None)
+    if nc:
+        await nc.drain()
+        await nc.close()
+
 # -------------------------
 # endpoints
 # -------------------------
 
 @app.get("/api/pilot/location")
 def get_current_position():
-    # Москва
+    # Moscow
     return {"lat": 55.7558, "lon": 37.6173}
 
 

@@ -1,14 +1,9 @@
 """
-Точка входа сервиса `src_agent`.
+Entry point for `src_agent`.
 
-Сервис поднимает `AgentServer`, который:
-- подключается к NATS и PostgreSQL;
-- подписывается на subject агента (request/reply стиль);
-- для каждого входящего сообщения запускает `MCPAgent.run()` и отвечает в reply.
-
-Смотрите также:
-- `src_agent/service.py` — NATS/DB обвязка и обработчик входящих сообщений.
-- `src_agent/agent.py` — основной оркестратор (routing сценариев, извлечение параметров, вызов сценария).
+`src_agent` is a thin runner: it accepts user text over NATS, loads runtime state from Postgres,
+delegates scenario orchestration to n8n via `src_n8n` over NATS, persists updated runtime state,
+and publishes UI commands/events over NATS.
 """
 
 import asyncio
@@ -17,12 +12,21 @@ import os
 import sys
 
 from src_agent.service import AgentServer
-from src_agent.settings import STACK_SERVICE_NAME, USER_ID, NATS_EVENTS_SUBJECT, AGENT_MAX_STEPS, NATS_AGENT_SUBJECT, \
-    NATS_URL, NATS_LLM_SUBJECT, DATABASE_URL
+from src_agent.settings import (
+    DATABASE_URL,
+    N8N_TIMEOUT_SECONDS,
+    NATS_AGENT_SUBJECT,
+    NATS_EVENTS_SUBJECT,
+    NATS_N8N_RUN_SUBJECT,
+    NATS_URL,
+    RUNTIME_CONFLICT_RETRIES,
+    STACK_SERVICE_NAME,
+    USER_ID,
+)
 
 
 def configure_logging():
-    """Настройка логирования"""
+    """Configure service logging."""
     log_level = os.getenv("LOG_LEVEL", "INFO").upper()
     logging.basicConfig(
         format="%(asctime)s | %(name)s | %(levelname)s | %(message)s",
@@ -32,7 +36,7 @@ def configure_logging():
 
 
 def main():
-    """Основная функция запуска сервиса"""
+    """Service entrypoint."""
     configure_logging()
     logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -40,14 +44,13 @@ def main():
 
     server = AgentServer(
         nats_url=NATS_URL,
-        # Subject'ы строятся как префикс + USER_ID, чтобы разделять пользователей/сессии на одном NATS.
         agent_subject=f"{NATS_AGENT_SUBJECT}{USER_ID}",
-        llm_subject=f"{NATS_LLM_SUBJECT}{USER_ID}",
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
-        max_steps=AGENT_MAX_STEPS,
+        n8n_subject=NATS_N8N_RUN_SUBJECT,
+        n8n_timeout_s=N8N_TIMEOUT_SECONDS,
         db_url=DATABASE_URL,
         user_id=USER_ID,
-
+        runtime_conflict_retries=RUNTIME_CONFLICT_RETRIES,
     )
 
     try:

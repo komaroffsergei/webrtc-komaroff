@@ -11,8 +11,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/src_agent
+COPY --from=shared . /app/src_shared
 
 WORKDIR /app/src_agent
 
 CMD ["python", "-m", "src_agent.main"]
-

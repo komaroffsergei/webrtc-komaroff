@@ -2,3 +2,5 @@ fastapi
 uvicorn
 python-dotenv
 pyyaml
+nats-py
+pydantic>=2.0

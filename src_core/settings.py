@@ -16,8 +16,8 @@ NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "600"))
 ASR_IN_PREFIX = os.getenv("ASR_IN_PREFIX", "nats.asr.input.")
 ASR_OUT_PREFIX = os.getenv("ASR_OUT_PREFIX", "nats.asr.output.")
 
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8100/api")
-
+# When running src_core on the host while api-gateway is in Docker, use published port 8101.
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8101/api")
 
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))
 CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")

@@ -1,8 +1,10 @@
 import json
 import logging
+from uuid import uuid4
 
 from src_core.settings import STACK_SERVICE_NAME, NATS_REQUEST_TIMEOUT
 from src_core.utils.event_bus import event_log
+from src_shared.contracts.common import now_ts_ms
 
 logger = logging.getLogger("handle_transcription")
 
@@ -37,12 +39,18 @@ async def handle_transcription(app, payload: dict):
     try:
         nc = app['services']['nats_client']
         edit = payload.get("edit")
+        trace_id = uuid4()
         msg = await nc.request(
             app['vars']['NATS_AGENT_SUBJECT'],
             json.dumps({
+                "trace_id": str(trace_id),
+                "request_id": str(uuid4()),
+                "correlation_id": str(trace_id),
+                "ts_ms": now_ts_ms(),
                 "text": text,
                 "session_id": session_id,
                 "edit": edit,
+                "user_id": app["vars"].get("USER_ID"),
             }, ensure_ascii=False).encode("utf-8"),
             timeout=NATS_REQUEST_TIMEOUT,
         )

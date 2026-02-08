@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import socket
 from pathlib import Path
 
 from aiohttp import web
@@ -48,6 +49,24 @@ def setup_routes(app: web.Application) -> None:
     app.on_startup.append(handle_startup)
     app.on_shutdown.append(handle_shutdown)
 
+def _ensure_bindable(host: str, port: int) -> None:
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind((host, port))
+    except OSError as exc:
+        if exc.errno == 98:
+            raise RuntimeError(
+                f"Cannot bind to {host}:{port} (address already in use). "
+                "If docker-compose is running, stop the src_core container or set CORE_PORT to a free port."
+            ) from None
+        raise
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
 
 if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
@@ -81,4 +100,9 @@ if __name__ == "__main__":
 
     setup_routes(app)
 
-    web.run_app(app, host=CORE_HOST, port=CORE_PORT)
+    try:
+        _ensure_bindable(CORE_HOST, CORE_PORT)
+        web.run_app(app, host=CORE_HOST, port=CORE_PORT)
+    except Exception as exc:
+        logger.error("%s", str(exc))
+        raise SystemExit(1)

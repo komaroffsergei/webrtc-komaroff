@@ -1,0 +1,154 @@
+{
+  "id": "Router1o0o0o0Abc",
+  "name": "router@1.0.0",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "router_1_0_0",
+        "responseMode": "lastNode",
+        "responseData": "firstEntryJson",
+        "options": {}
+      },
+      "id": "a2a9c6ad-6a5c-4c3e-8f13-7e9a9c0c1ef2",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = items[0].json.body || items[0].json;\nreturn [{ json: { input } }];"
+      },
+      "id": "e0b1e70b-72bb-4b12-a8a3-7a7b0ad2b5b3",
+      "name": "Pack Input",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [480, 200]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = items[0].json.body || items[0].json;\nreturn [{ json: {\n  trace_id: input.trace_id,\n  correlation_id: input.correlation_id || input.trace_id,\n  request_id: input.request_id,\n  session_id: input.session_id,\n  ts_ms: input.ts_ms || Date.now(),\n  tool_name: 'llm.routing_decision',\n  args: {\n    input: {\n      text: String(input.text || ''),\n      context_tail: input.runtime?.context || {},\n      allowlist_workflows: ['echo@1.0.0', 'collect_name@1.0.0', 'airports_and_weather@1.0.0']\n    },\n    constraints: { temperature: 0.0 }\n  }\n}}];"
+      },
+      "id": "0d8b6df5-5a78-469a-9c8b-59b5f85de9de",
+      "name": "Build LLM Request",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [480, 420]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.TOOL_PROXY_URL}}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "09a71803-8c39-41ab-bb1d-930e2c3cb48d",
+      "name": "Call LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [720, 420]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition"
+      },
+      "id": "d807b7f0-2d0d-4eaf-93ac-3a0c1df1f1c9",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const merged = items[0].json;\nconst input = merged.input || {};\nconst ok = merged.ok === true;\nconst workflowId = ok ? merged.data?.workflow_id : null;\nconst allow = new Set(['echo@1.0.0', 'collect_name@1.0.0', 'airports_and_weather@1.0.0']);\nconst selected = allow.has(String(workflowId || '')) ? String(workflowId) : null;\nlet selectedPath = null;\nif (selected === 'echo@1.0.0') selectedPath = 'Echo1o0o0o0Abcde/webhook/echo_1_0_0';\nif (selected === 'collect_name@1.0.0') selectedPath = 'Collect1o0o0o0AbX/webhook/collect_name_1_0_0';\nif (selected === 'airports_and_weather@1.0.0') selectedPath = 'AirWx1o0o0o0Abcd/webhook/airports_and_weather_1_0_0';\nreturn [{ json: { ...input, selected_workflow_id: selected, selected_path: selectedPath, llm_ok: ok, llm_error: merged.error || null } }];"
+      },
+      "id": "e05b161d-41e7-4e7a-8d2f-7475d7e4c9bd",
+      "name": "Select Workflow",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1200, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"selected_path\"]}}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "2aaf4baf-2d8f-4b63-8a4a-b4b8f8d1c882",
+      "name": "No Scenario?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1420, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "const input = items[0].json;\nconst message = 'No scenario was selected. Please rephrase your request.';\nreturn [{ json: {\n  trace_id: input.trace_id,\n  correlation_id: input.correlation_id || input.trace_id,\n  request_id: input.request_id,\n  session_id: input.session_id,\n  ts_ms: Date.now(),\n  status: 'FAILED',\n  result: message,\n  client_handler: { command: 'SHOW_ERROR_MESSAGE', payload: { message } },\n  client_events: [],\n  next_runtime: { active_workflow_id: null, pending: null, context: input.runtime?.context || null, version: input.runtime?.version || 1 },\n  errors: [ { code: 'no_scenario_selected', message: 'No scenario selected by router workflow.' } ]\n}}];"
+      },
+      "id": "1df4b9c8-d8e3-41ae-a936-d5b8fd6da6e4",
+      "name": "Build No Scenario Response",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [1660, 160]
+    },
+    {
+      "parameters": {
+        "url": "={{`http://n8n_webhook:5678/webhook/${$json[\"selected_path\"]}`}}",
+        "method": "POST",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{$json}}",
+        "options": {}
+      },
+      "id": "2ad7b5d3-1d90-4a07-92bb-1c8522dbd953",
+      "name": "Call Selected Scenario",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1660, 420]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {"node": "Pack Input", "type": "main", "index": 0},
+          {"node": "Build LLM Request", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Pack Input": {
+      "main": [[{"node": "Merge", "type": "main", "index": 0}]]
+    },
+    "Build LLM Request": {
+      "main": [[{"node": "Call LLM", "type": "main", "index": 0}]]
+    },
+    "Call LLM": {
+      "main": [[{"node": "Merge", "type": "main", "index": 1}]]
+    },
+    "Merge": {
+      "main": [[{"node": "Select Workflow", "type": "main", "index": 0}]]
+    },
+    "Select Workflow": {
+      "main": [[{"node": "No Scenario?", "type": "main", "index": 0}]]
+    },
+    "No Scenario?": {
+      "main": [
+        [{"node": "Build No Scenario Response", "type": "main", "index": 0}],
+        [{"node": "Call Selected Scenario", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {},
+  "versionId": "1b5d2b72-4b2f-4c0e-97b0-e7204f97b74f"
+}

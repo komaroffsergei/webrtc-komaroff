@@ -4,3 +4,4 @@ python-dotenv
 nats-py
 ollama
 huggingface_hub
+pydantic>=2.0

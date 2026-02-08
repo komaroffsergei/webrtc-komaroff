@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
+COPY --from=shared . /app/src_shared
 
 ENV API_HOST=0.0.0.0 \
     API_PORT=8100
@@ -19,6 +20,5 @@ ENV API_HOST=0.0.0.0 \
 EXPOSE 8100
 
 CMD ["python", "main.py"]
-
 
 

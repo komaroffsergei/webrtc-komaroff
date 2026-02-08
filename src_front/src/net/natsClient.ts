@@ -15,6 +15,7 @@ type StatusHandler = (status: NatsStatus) => void;
 export class FrontendNatsClient {
   private connection: Connection | null = null;
   private statusHandlers = new Set<StatusHandler>();
+  private subscribedSubjects = new Set<string>();
 
   async connect(options: NatsClientOptions): Promise<boolean> {
     if (this.connection) {
@@ -25,6 +26,7 @@ export class FrontendNatsClient {
       name: options.name,
       payload: "string" as any,
     });
+    this.subscribedSubjects.clear();
     this.emitStatus({ type: "connected" });
 
     this.connection.addEventListener(
@@ -39,6 +41,7 @@ export class FrontendNatsClient {
       (() => {
         this.emitStatus({ type: "closed" });
         this.connection = null;
+        this.subscribedSubjects.clear();
       }) as any,
     );
     return true;
@@ -55,10 +58,14 @@ export class FrontendNatsClient {
     if (!this.connection) {
       throw new Error("NATS connection is not ready");
     }
+    if (this.subscribedSubjects.has(subject)) {
+      return;
+    }
     await this.connection.subscribe(subject, (msg: any) => {
       const payload = this.decodePayload(msg);
       handler(payload);
     });
+    this.subscribedSubjects.add(subject);
   }
 
   private decodePayload(msg: any): string {

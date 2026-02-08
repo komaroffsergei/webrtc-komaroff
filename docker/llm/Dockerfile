@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/src_llm
+COPY --from=shared . /app/src_shared
 
 WORKDIR /app/src_llm
 
