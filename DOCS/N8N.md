@@ -90,7 +90,6 @@ webhook endpoint и через основной `n8n` (он проброшен �
 Что проверить:
 
 - в контейнерах корректен `TOOL_PROXY_URL` (см. `DOCS/N8N_BRIDGE.md`)
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (иначе `{{$env.*}}` не работает)
 - workflow действительно `Published` (иначе может исполняться старая/неактивная версия)
 
 ## Контракт входа/выхода workflow
@@ -112,11 +111,7 @@ webhook endpoint и через основной `n8n` (он проброшен �
 
 n8n напрямую с NATS не работает. Workflows вызывают tools через HTTP:
 
-- `POST {{$env.TOOL_PROXY_URL}}` (по умолчанию `http://src_n8n:9000/tool`)
-
-Важно: в этом проекте URL прокси берётся из env (`$env.TOOL_PROXY_URL`). Для этого в docker-compose включено:
-
-- `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`
+- `POST http://src_n8n:9000/tool` (адрес внутри docker-сети)
 
 Body (ToolCallRequest):
 

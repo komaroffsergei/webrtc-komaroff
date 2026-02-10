@@ -183,8 +183,6 @@ services:
     image: n8nio/n8n:2.6.3
     ports:
       - "127.0.0.1:5679:5678"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       src_postgres:
         condition: service_healthy
@@ -213,20 +211,20 @@ services:
       N8N_DIAGNOSTICS_ENABLED: "false"
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
       N8N_TEMPLATES_ENABLED: "false"
-      # Needed to allow using `{{$env.*}}` inside workflow expressions (used for TOOL_PROXY_URL).
+      # Keep env expressions enabled for workflows that may use `{{$env.*}}` in dev.
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: ${TOOL_PROXY_URL:-http://src_n8n:9000/tool}
+      TOOL_PROXY_URL: http://src_n8n:9000/tool
     volumes:
       - ./n8n/workflows:/workflows:ro
     command: ["start"]
 
   n8n_webhook:
     image: n8nio/n8n:2.6.3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       src_postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
       n8n_activate_router:
         condition: service_completed_successfully
       n8n_activate_echo:
@@ -235,8 +233,6 @@ services:
         condition: service_completed_successfully
       n8n_activate_airports_weather:
         condition: service_completed_successfully
-      redis:
-        condition: service_started
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
       DB_TYPE: postgresdb
@@ -253,18 +249,24 @@ services:
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
       N8N_TEMPLATES_ENABLED: "false"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: ${TOOL_PROXY_URL:-http://src_n8n:9000/tool}
+      TOOL_PROXY_URL: http://src_n8n:9000/tool
     command: ["webhook"]
 
   n8n_worker:
     image: n8nio/n8n:2.6.3
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       src_postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      n8n_activate_router:
+        condition: service_completed_successfully
+      n8n_activate_echo:
+        condition: service_completed_successfully
+      n8n_activate_collect_name:
+        condition: service_completed_successfully
+      n8n_activate_airports_weather:
+        condition: service_completed_successfully
     environment:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
       DB_TYPE: postgresdb
@@ -281,7 +283,7 @@ services:
       N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
       N8N_TEMPLATES_ENABLED: "false"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: ${TOOL_PROXY_URL:-http://src_n8n:9000/tool}
+      TOOL_PROXY_URL: http://src_n8n:9000/tool
     command: ["worker"]
 
   n8n_import:

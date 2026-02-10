@@ -42,7 +42,7 @@
 Важно: **не запускайте одновременно два экземпляра `src_n8n`** (контейнер + локальный процесс).
 Иначе запросы будут “делиться” между ними (NATS queue group), и поведение будет непредсказуемым.
 
-### Вариант 1 (рекомендуемый): всё в Docker
+### Вариант (поддерживаемый): всё в Docker
 
 - Запуск: `docker compose -f docker/docker-compose.yml up -d --build`
 - Остановка только моста: `docker compose -f docker/docker-compose.yml stop src_n8n`
@@ -50,54 +50,7 @@
 В контейнере `src_n8n` использует:
 
 - `N8N_WEBHOOK_BASE_URL=http://n8n_webhook:5678/webhook`
-- tool proxy вызывается из n8n по `TOOL_PROXY_URL` (по умолчанию `http://src_n8n:9000/tool`)
-
-### Вариант 2: `src_n8n` локально (для отладки), остальное в Docker
-
-1) Остановите контейнер моста:
-
-- `docker compose -f docker/docker-compose.yml stop src_n8n`
-
-Проверка (должен быть `Exited` или отсутствовать в списке):
-
-- `docker compose -f docker/docker-compose.yml ps src_n8n`
-
-2) Поднимите нужную инфраструктуру (если ещё не поднята):
-
-- `docker compose -f docker/docker-compose.yml up -d nats src_postgres redis n8n n8n_webhook n8n_worker src_llm src_api_gateway src_agent src_front`
-
-3) Запустите `src_n8n` локально с корректными env:
-
-- `NATS_URL=nats://127.0.0.1:4222`
-- `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
-- `N8N_WEBHOOK_BASE_URL=http://127.0.0.1:5679/webhook`
-
-Запуск:
-
-- `python -m src_n8n.main`
-
-4) Чтобы n8n (в контейнере) мог вызвать tool proxy на хосте, используется переменная `TOOL_PROXY_URL`.
-В `docker/docker-compose.yml` по умолчанию стоит `http://src_n8n:9000/tool`, но для локального `src_n8n` переключите на:
-
-- `TOOL_PROXY_URL=http://host.docker.internal:9000/tool`
-
-`host.docker.internal` уже добавлен в `extra_hosts` для n8n-сервисов.
-Также в compose включено `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, чтобы разрешить `$env.TOOL_PROXY_URL` в expressions.
-
-Важно: **переменные окружения читаются при старте контейнера**. Если `n8n` уже запущен, одного `docker compose exec ...` недостаточно — нужно пересоздать `n8n*` контейнеры.
-
-Пример команды (пересоздаёт n8n процессы с новой переменной окружения):
-
-- `TOOL_PROXY_URL=http://host.docker.internal:9000/tool docker compose -f docker/docker-compose.yml up -d --force-recreate n8n n8n_webhook n8n_worker`
-
-Альтернатива (удобнее): используйте готовый compose override:
-
-- `docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker`
-
-Проверка, что переменная применилась (должно быть `http://host.docker.internal:9000/tool`):
-
-- `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $TOOL_PROXY_URL'`
-- `docker compose -f docker/docker-compose.yml exec -T n8n_worker sh -lc 'echo $TOOL_PROXY_URL'`
+- tool proxy вызывается из n8n по `http://src_n8n:9000/tool` (адрес внутри docker-сети)
 
 ## Код (куда смотреть)
 
@@ -111,7 +64,7 @@
 
 Причины:
 
-- неверный `N8N_WEBHOOK_BASE_URL` (для Docker и для локального запуска он разный)
+- неверный `N8N_WEBHOOK_BASE_URL`
 - `n8n_webhook` не запущен
 
 Проверка:
@@ -123,17 +76,13 @@
 
 Причина: workflow в n8n пытается вызвать tool proxy по URL, который не достижим из контейнера.
 
-Самый частый случай:
-
-- `src_n8n` запущен локально, а в n8n осталось `TOOL_PROXY_URL=http://src_n8n:9000/tool`
-
 Решение:
 
-- применить override `docker/docker-compose.local-src_n8n.yml` и пересоздать `n8n*` контейнеры (см. выше)
+- убедиться, что `src_n8n` запущен в Docker и `TOOL_PROXY_URL=http://src_n8n:9000/tool`
 
 ### `ExpressionError: Access to env vars denied` (в n8n)
 
-Причина: в workflow используется `{{$env.TOOL_PROXY_URL}}`, но n8n запрещает доступ к env в expressions.
+Причина: в workflow используются выражения `{{$env.*}}`, но n8n запрещает доступ к env в expressions.
 
 Решение (уже включено в compose этого репо):
 
@@ -149,4 +98,4 @@
 
 Решение:
 
-- оставить только один инстанс (для локального режима — `docker compose ... stop src_n8n`)
+- оставить только один инстанс (не запускайте контейнер и локальный процесс одновременно)

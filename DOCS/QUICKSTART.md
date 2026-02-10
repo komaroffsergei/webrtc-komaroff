@@ -16,9 +16,9 @@
 ## 1) Вариант A (рекомендуемый): все сервисы в Docker
 
 ```bash
-cd docker
+docker compose -f docker/docker-compose.yml down -v --remove-orphans
 docker network create monitorsoft_nats || true
-docker compose -f docker-compose.yml up -d --build
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Проверка:
@@ -31,14 +31,14 @@ docker compose -f docker-compose.yml up -d --build
 
 В этом режиме ничего менять не нужно. По умолчанию n8n вызывает tool proxy так:
 
-- `TOOL_PROXY_URL=http://src_n8n:9000/tool` (это адрес внутри docker-сети)
+- `TOOL_PROXY_URL=http://src_n8n:9000/tool` (это адрес внутри docker-сети, фиксирован в compose)
 
 ## 2) Вариант B: инфраструктура в Docker, сервисы запускать напрямую (IDE)
 
 ### 2.1 Поднять инфраструктуру
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d nats src_postgres redis n8n n8n_webhook n8n_worker
+docker compose -f docker/docker-compose.yml up -d nats src_postgres redis n8n n8n_webhook n8n_worker src_n8n
 ```
 
 Если вам нужны демо-tools:
@@ -66,50 +66,19 @@ pip install -r src_agent/requirements.txt -r src_n8n/requirements.txt -r src_llm
 - `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
 - `USER_ID=user123` (должен совпадать с UI/stack)
 
-Дополнительно для `src_n8n`, если вы запускаете его локально:
-
-- `N8N_WEBHOOK_BASE_URL=http://127.0.0.1:5679/webhook`
-- `TOOL_PROXY_HOST=0.0.0.0`
-- `TOOL_PROXY_PORT=9000`
-
 ### 2.4 Как запускать сервисы напрямую
 
 ```bash
 python src_api_gateway/main.py
 python -m src_llm.main
-python -m src_n8n.main
 python -m src_agent.main
 ```
 
 Если используете UI (`src_front`), обычно также нужен `src_core` в Docker или локально (см. `DOCS/CORE.md`).
 
-## 3) Отладка: `src_n8n` локально, n8n в Docker (частый кейс)
-
-Симптом: `n8n returned 500 ... Hint: n8n must be able to reach the tool proxy URL`.
-
-Причина: workflow в n8n дергает `{{$env.TOOL_PROXY_URL}}`, но этот URL недоступен из контейнера.
-
-Решение:
-
-1) Остановите контейнер `src_n8n`, чтобы не было двух инстансов:
-
-```bash
-docker compose -f docker/docker-compose.yml stop src_n8n
-```
-
-2) Запустите `src_n8n` локально с `TOOL_PROXY_HOST=0.0.0.0` и портом `9000`.
-
-3) Пересоздайте n8n контейнеры, чтобы они получили новый `TOOL_PROXY_URL`:
-
-```bash
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker
-```
-
-Почему нужен `--force-recreate`: переменные окружения читаются при старте контейнера.
-
 ## 4) Когда нужно перезапускать контейнеры
 
-- Поменяли `TOOL_PROXY_URL` / `N8N_BLOCK_ENV_ACCESS_IN_NODE` -> пересоздавайте `n8n`, `n8n_webhook`, `n8n_worker`.
+- Поменяли `N8N_BLOCK_ENV_ACCESS_IN_NODE` -> пересоздавайте `n8n`, `n8n_webhook`, `n8n_worker`.
 - Поменяли `N8N_WEBHOOK_BASE_URL` в `src_n8n` (локальный режим) -> перезапустите `src_n8n`.
 - Поменяли `NATS_URL`/`DATABASE_URL` -> перезапустите соответствующий сервис.
 

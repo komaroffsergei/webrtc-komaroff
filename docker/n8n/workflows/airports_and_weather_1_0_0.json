@@ -82,7 +82,7 @@
     },
     {
       "parameters": {
-        "url": "={{$env.TOOL_PROXY_URL}}",
+        "url": "http://src_n8n:9000/tool",
         "method": "POST",
         "sendBody": true,
         "contentType": "json",
@@ -108,7 +108,7 @@
     },
     {
       "parameters": {
-        "url": "={{$env.TOOL_PROXY_URL}}",
+        "url": "http://src_n8n:9000/tool",
         "method": "POST",
         "sendBody": true,
         "contentType": "json",

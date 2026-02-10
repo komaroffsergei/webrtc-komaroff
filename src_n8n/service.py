@@ -411,8 +411,7 @@ class N8nBridgeService:
                 )
             msg = (
                 f"{msg} Hint: n8n must be able to reach the tool proxy URL. "
-                "If you run src_n8n locally, set TOOL_PROXY_URL=http://host.docker.internal:9000/tool "
-                "and recreate n8n containers; if you run src_n8n in Docker, ensure the src_n8n container is running."
+                "Ensure TOOL_PROXY_URL points to http://src_n8n:9000/tool and that the src_n8n container is running."
             )
             raise RuntimeError(msg)
         r.raise_for_status()

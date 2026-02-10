@@ -79,9 +79,7 @@ Router workflow выбирает один из демо-workflows:
 1) `n8n` доступен: `http://127.0.0.1:5679/`
 2) В контейнерах n8n корректен `TOOL_PROXY_URL`:
    - `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $TOOL_PROXY_URL'`
-3) Если `src_n8n` запущен локально (IDE), примените override и пересоздайте `n8n*` контейнеры:
-   - `docker compose -f docker/docker-compose.yml stop src_n8n`
-   - `docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker`
+3) Убедитесь, что `src_n8n` запущен в Docker (tool proxy доступен как `http://src_n8n:9000/tool` внутри сети).
 
 Подробности: `DOCS/N8N_BRIDGE.md`.
 

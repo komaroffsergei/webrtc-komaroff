@@ -161,25 +161,8 @@ By default, dev mode expects NATS WebSocket on `ws://localhost:9222`.
 
 ### Run `src_n8n` locally (IDE) while n8n stays in Docker
 
-If you want to debug `src_n8n` locally, do not run the `src_n8n` container at the same time.
-
-1) Stop the container bridge:
-
-```bash
-docker compose -f docker/docker-compose.yml stop src_n8n
-```
-
-2) Recreate n8n services with tool proxy pointed to the host (so n8n can reach your local `src_n8n` on port 9000):
-
-```bash
-docker compose -f docker/docker-compose.yml -f docker/docker-compose.local-src_n8n.yml up -d --force-recreate n8n n8n_webhook n8n_worker
-```
-
-3) Run `src_n8n` locally with:
-
-- `NATS_URL=nats://127.0.0.1:4222`
-- `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
-- `N8N_WEBHOOK_BASE_URL=http://127.0.0.1:5679/webhook`
+This repo assumes `n8n`, `n8n_webhook`, `n8n_worker`, and `src_n8n` are all started via Docker Compose.
+`TOOL_PROXY_URL` is fixed inside the Docker network as `http://src_n8n:9000/tool` to avoid host-specific routing.
 
 ## Whisper / ASR service (external)
 
