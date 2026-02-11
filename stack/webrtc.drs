@@ -124,16 +124,60 @@ end
 
 
 
+# GisMaster client
+# to.inference.ollama.requests.?? <- json (Ollama Rest API) reply: inference.ollama.responses.INBOX.12312312321
+# from.inference.ollama.responses.<id> ?? -> json (Ollama Rest API)
+
+# to.inference.whisper.stream.<sid> <- chunks
+# from.inference.whisper.text.<sid> -> text
+
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
   ingress host: HOST, path: '/ws', path_sub: ['^/ws(.*)', '$1'], port: 9222
 
   command ['-c', '/nats.conf']
   config target: '/nats.conf', file_content: <<~CONF
     jetstream: false
-    websocket: {
-      listen: 0.0.0.0:9222
-      no_tls: true
-      compression: true
+    websocket: { listen: 0.0.0.0:9222, no_tls: true, compression: true }
+
+    debug: true
+    trace: true
+
+    accounts: {
+      local: {
+        users: [
+          { user: #{NATS_USER}, password: #{NATS_PASS}, allowed_connection_types: [ STANDARD ] }
+        ]
+        exports: [
+          { stream: "to.inference.>" }
+        ]
+        imports: [
+          { stream: { account: inference, subject: "inference.>" }, to: "from.inference.>" }
+          { service: { account: inference, subject: "$JS.dinf.API.>" }, to: "JS.INF.API.>" }
+        ]
+      }
+    
+      inference: {
+        exports: [
+          { stream: "inference.>" }
+          { service: "$JS.dinf.API.>" }
+        ]
+        imports: [
+          { stream: { account: local, subject: "to.inference.>" }, to: "inference.>" }
+        ]
+        jetstream: enabled
+      }
+    }
+    
+    leafnodes: {
+        remotes: [
+            # Inference
+            {
+                # url: nats://h100.local:37422,
+                url: nats://192.168.28.134:37422,
+                account: inference,
+                nkey: SUAI355NRU346GCGPBOIMVUHYPJWEWS3OI6F4NMJHWS4R6APIZ52PL4YJM
+            }
+        ]
     }
   CONF
 end
