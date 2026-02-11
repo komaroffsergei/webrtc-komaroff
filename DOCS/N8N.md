@@ -1,5 +1,15 @@
 # n8n (оркестрация сценариев)
 
+## Где находится n8n-стек сейчас
+
+Source of truth для n8n вынесен в отдельный репозиторий:
+
+- `~/dev/monitorsoft/voice-chat/n8n`
+
+Этот репозиторий (`webrtc-komaroff-dev`) подключает bridge образом в `stack/webrtc.drs`:
+
+- `voice-chat/n8n` (service `src_n8n`)
+
 ## Web UI
 
 - Откройте `http://127.0.0.1:5679/`
@@ -17,7 +27,7 @@ webhook endpoint и через основной `n8n` (он проброшен �
 
 ## Демо-workflows
 
-Стек импортирует демо-workflows из `docker/n8n/workflows/*.json` и активирует их при старте:
+Стек импортирует демо-workflows из `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json` и активирует их при старте:
 
 - `router@1.0.0`
 - `echo@1.0.0`
@@ -25,15 +35,15 @@ webhook endpoint и через основной `n8n` (он проброшен �
 - `airports_and_weather@1.0.0`
 
 Важно: `n8n_import` по умолчанию деактивирует импортированные workflows; activation jobs включают их обратно.
-Если добавляете новый workflow-файл, добавьте и шаг активации (см. `docker/docker-compose.yml`).
+Если добавляете новый workflow-файл, добавьте и шаг активации в n8n-репозитории (см. `~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml`).
 
 Пример end-to-end (пошагово, с payloads и указателями на код):
 
-- `DOCS/exampample.md`
+- `DOCS/example.md`
 
 ## Как “подтягиваются” новые сценарии при импорте только на пустой базе (Вариант A)
 
-Вариант A означает: **источник истины — n8n UI + Postgres (volume)**. Репозиторий (`docker/n8n/workflows/*.json`) — это
+Вариант A означает: **источник истины — n8n UI + Postgres (volume)**. Репозиторий (`~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json`) — это
 **бэкап/шаблоны/начальный bootstrap**, а не “живое” хранилище.
 
 Отсюда следует:
@@ -42,7 +52,7 @@ webhook endpoint и через основной `n8n` (он проброшен �
   каждом старте не нужен.
 - Если вы хотите, чтобы **новый сценарий появился на другой машине/окружении**, делайте перенос как артефакт:
   1) В n8n UI откройте workflow -> `...` -> `Download` / `Export` (экспорт JSON).
-  2) Положите файл в `docker/n8n/workflows/` и закоммитьте (по желанию).
+  2) Положите файл в `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/` и закоммитьте (по желанию).
   3) На целевом окружении выполните импорт в **пустую базу n8n** (или удалите старый workflow и импортируйте заново).
 
 Практический совет для обновлений без боли:
@@ -54,7 +64,7 @@ webhook endpoint и через основной `n8n` (он проброшен �
 
 Причина — механизм bootstrap импорта.
 
-В `docker/docker-compose.yml` есть сервис `n8n_import`, который при каждом поднятии стека выполняет `n8n import:workflow`.
+В `~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml` есть сервис `n8n_import`, который при каждом поднятии стека выполняет `n8n import:workflow`.
 Этот CLI импорт:
 
 - не делает “умный upsert” по имени/ID,
@@ -77,7 +87,7 @@ webhook endpoint и через основной `n8n` (он проброшен �
 
 ### В UI много одинаковых workflow (дубликаты)
 
-Причина: в `docker/docker-compose.yml` есть bootstrap-импорт (`n8n_import`), который может добавлять workflows повторно.
+Причина: в `~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml` есть bootstrap-импорт (`n8n_import`), который может добавлять workflows повторно.
 
 Что делать сейчас (быстро):
 
@@ -207,7 +217,7 @@ return [{ json: {
 
 В UI n8n экспортируйте workflow в JSON и положите файл:
 
-- `docker/n8n/workflows/my_scenario_1_0_0.json`
+- `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/my_scenario_1_0_0.json`
 
 Этот репо ожидает, что workflows будут импортироваться из этой директории при старте стека.
 
@@ -216,17 +226,17 @@ return [{ json: {
 Почему это важно:
 
 - URL webhook, который вызывает `src_n8n`, зависит от `workflowId`.
-- Для предсказуемости мы фиксируем `"id"` в JSON и используем его в `src_n8n/settings.py`.
+- Для предсказуемости мы фиксируем `"id"` в JSON и используем его в `~/dev/monitorsoft/voice-chat/n8n/src/settings.py`.
 
 Сделайте:
 
-1) Откройте `docker/n8n/workflows/my_scenario_1_0_0.json`.
+1) Откройте `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/my_scenario_1_0_0.json`.
 2) Установите поле `"id"` в стабильное значение, например `"MyScenario1o0o0o0Abcd"`.
 3) Дальше при повторных экспортах держите `"id"` таким же.
 
 ### Шаг 4: подключите workflow в `src_n8n`
 
-Откройте `src_n8n/settings.py` и добавьте:
+Откройте `~/dev/monitorsoft/voice-chat/n8n/src/settings.py` и добавьте:
 
 1) Константу runtime id, например:
 
@@ -243,7 +253,7 @@ return [{ json: {
 
 ### Шаг 5: добавьте сценарий в router allowlist
 
-Откройте `docker/n8n/workflows/router_1_0_0.json` и найдите Function node `Build LLM Request`.
+Откройте `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/router_1_0_0.json` и найдите Function node `Build LLM Request`.
 В массив `allowlist_workflows` добавьте `my_scenario@1.0.0`.
 
 Если вы используете `LLM_MODE=mock`, то для стабильного роутинга в демо-режиме добавьте эвристику в `src_llm/service.py`
@@ -251,7 +261,7 @@ return [{ json: {
 
 ### Шаг 6: обеспечьте активацию после импорта
 
-`n8n_import` деактивирует workflows при импорте. Добавьте в `docker/docker-compose.yml` новый activation job по аналогии:
+`n8n_import` деактивирует workflows при импорте. Добавьте в `~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml` новый activation job по аналогии:
 
 - `n8n_activate_<name>` -> `update:workflow --id=<YourStableWorkflowId> --active=true`
 

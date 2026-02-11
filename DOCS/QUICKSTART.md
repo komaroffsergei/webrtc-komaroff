@@ -13,6 +13,9 @@
 - Front: `http://127.0.0.1:8080/`
 - n8n UI: `http://127.0.0.1:5679/`
 
+Важно: n8n-стек и bridge вынесены в отдельный репозиторий `~/dev/monitorsoft/voice-chat/n8n`.
+В этом репо (`webrtc-komaroff-dev`) n8n bridge подключается как образ в `stack/webrtc.drs`.
+
 ## 1) Вариант A (рекомендуемый): все сервисы в Docker
 
 ```bash
@@ -38,7 +41,8 @@ docker compose -f docker/docker-compose.yml up -d --build
 ### 2.1 Поднять инфраструктуру
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d nats src_postgres redis n8n n8n_webhook n8n_worker src_n8n
+docker compose -f docker/docker-compose.yml up -d nats src_postgres
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --build
 ```
 
 Если вам нужны демо-tools:
@@ -55,7 +59,7 @@ docker compose -f docker/docker-compose.yml up -d src_api_gateway
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install -r src_agent/requirements.txt -r src_n8n/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
+pip install -r src_agent/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
 ```
 
 ### 2.3 Какие env выставить
@@ -84,21 +88,21 @@ python -m src_agent.main
 
 ## 5) Импорт/обновление workflows
 
-Workflows лежат в `docker/n8n/workflows/*.json`.
+Workflows лежат в `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json`.
 
 Импорт:
 
 ```bash
-docker compose -f docker/docker-compose.yml run --rm n8n_import
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm n8n_import
 ```
 
 Важно: CLI импорт деактивирует workflows. Чтобы включить обратно, запустите activation jobs:
 
 ```bash
-docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_router
-docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_echo
-docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_collect_name
-docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_airports_weather
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_router
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_echo
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_collect_name
+docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_airports_weather
 ```
 
 ## 6) Быстрый smoke / E2E
@@ -113,4 +117,4 @@ docker compose -f docker/docker-compose.yml --profile test run --rm --build src_
 
 Подробный разбор сценария "найди ближайший аэропорт" (LLM routing + tools + user-in-the-loop):
 
-- `DOCS/exampample.md`
+- `DOCS/example.md`

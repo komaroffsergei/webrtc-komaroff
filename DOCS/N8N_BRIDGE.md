@@ -1,5 +1,13 @@
 # src_n8n (мост NATS <-> n8n)
 
+## Где находится код bridge
+
+Код и сборка `src_n8n` вынесены в отдельный репозиторий:
+
+- `~/dev/monitorsoft/voice-chat/n8n`
+
+Текущий стек подключает образ через `stack/webrtc.drs` (`voice-chat/n8n`).
+
 ## Что это
 
 `src_n8n` — единственный сервис, который ходит в n8n по HTTP.
@@ -27,7 +35,7 @@
 
 ## Маппинг workflows
 
-`src_n8n/settings.py` мапит runtime workflow ids (например, `echo@1.0.0`) к стабильным n8n workflow ids и webhook paths.
+`~/dev/monitorsoft/voice-chat/n8n/src/settings.py` мапит runtime workflow ids (например, `echo@1.0.0`) к стабильным n8n workflow ids и webhook paths.
 
 Формат webhook URL в этом репо:
 
@@ -44,13 +52,13 @@
 
 ### Вариант (поддерживаемый): всё в Docker
 
-- Запуск: `docker compose -f docker/docker-compose.yml up -d --build`
-- Остановка только моста: `docker compose -f docker/docker-compose.yml stop src_n8n`
+- Запуск: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --build`
+- Остановка только моста: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml stop src_n8n`
 
 Если часть сервисов вы запускаете локально (например, `src_api_gateway`), запускайте `src_n8n` в Docker с `--no-deps`,
 чтобы Compose не поднял второй (docker) инстанс tools-сервиса:
 
-- `docker compose -f docker/docker-compose.yml up -d --no-deps src_n8n`
+- `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --no-deps src_n8n`
 
 В контейнере `src_n8n` использует:
 
@@ -59,9 +67,9 @@
 
 ## Код (куда смотреть)
 
-- NATS bridge + tool proxy: `src_n8n/service.py`
-- Конфигурация: `src_n8n/settings.py`
-- Контракты запросов/ответов: `src_shared/contracts/*`
+- NATS bridge + tool proxy: `~/dev/monitorsoft/voice-chat/n8n/src/service.py`
+- Конфигурация: `~/dev/monitorsoft/voice-chat/n8n/src/settings.py`
+- Контракты запросов/ответов: `~/dev/monitorsoft/voice-chat/n8n/src/contracts/*`
 
 ## Частые ошибки
 
@@ -75,7 +83,7 @@
 Проверка:
 
 - UI: `http://127.0.0.1:5679/`
-- контейнеры: `docker compose -f docker/docker-compose.yml ps n8n n8n_webhook n8n_worker`
+- контейнеры: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml ps n8n n8n_webhook n8n_worker`
 
 ### `n8n returned 500 ... Hint: n8n must be able to reach the tool proxy URL`
 
@@ -95,7 +103,7 @@
 
 Если меняли compose/окружение — проверьте env в контейнере:
 
-- `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $N8N_BLOCK_ENV_ACCESS_IN_NODE'`
+- `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml exec -T n8n sh -lc 'echo $N8N_BLOCK_ENV_ACCESS_IN_NODE'`
 
 ### Дубли/нестабильность при отладке
 

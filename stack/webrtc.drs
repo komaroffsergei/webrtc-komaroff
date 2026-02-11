@@ -184,6 +184,26 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
   CONF
 end
 
+Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
+  env USER_ID: USER_ID,
+      STACK_SERVICE_NAME: 'src_n8n',
+      NATS_URL: NATS_URL,
+      NATS_N8N_RUN_SUBJECT: ENV.fetch('NATS_N8N_RUN_SUBJECT', 'nats.n8n.run'),
+      NATS_N8N_HEALTH_SUBJECT: ENV.fetch('NATS_N8N_HEALTH_SUBJECT', 'nats.n8n.health'),
+      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+      NATS_TOOLS_PREFIX: ENV.fetch('NATS_TOOLS_PREFIX', 'nats.tools.'),
+      POSTGRES_HOST: POSTGRES_HOST,
+      POSTGRES_PORT: POSTGRES_PORT,
+      POSTGRES_DB: POSTGRES_DB,
+      POSTGRES_USER: POSTGRES_USER,
+      POSTGRES_PASSWORD: POSTGRES_PASSWORD,
+      DATABASE_URL: DATABASE_URL,
+      N8N_WEBHOOK_BASE_URL: ENV.fetch('N8N_WEBHOOK_BASE_URL', 'http://voice-chat-n8n_n8n_webhook:5678/webhook'),
+      N8N_HTTP_TIMEOUT_SECONDS: ENV.fetch('N8N_HTTP_TIMEOUT_SECONDS', '120'),
+      TOOL_PROXY_HOST: '0.0.0.0',
+      TOOL_PROXY_PORT: ENV.fetch('TOOL_PROXY_PORT', '9000')
+end
+
 
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
   ingress host: HOST, path: '/whisper', port: 8090

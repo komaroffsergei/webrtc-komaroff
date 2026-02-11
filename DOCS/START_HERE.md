@@ -1,6 +1,7 @@
 # С чего начать (пользовательский сценарий)
 
 Этот проект — стек микросервисов WebRTC + NATS, где n8n выступает оркестратором сценариев (workflows).
+Код n8n-стека и bridge находится в отдельном репозитории: `~/dev/monitorsoft/voice-chat/n8n`.
 
 Быстрый старт (как поднять стек/что менять в env): `DOCS/QUICKSTART.md`.
 
@@ -78,14 +79,14 @@ Router workflow выбирает один из демо-workflows:
 
 1) `n8n` доступен: `http://127.0.0.1:5679/`
 2) В контейнерах n8n корректен `TOOL_PROXY_URL`:
-   - `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $TOOL_PROXY_URL'`
+   - `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml exec -T n8n sh -lc 'echo $TOOL_PROXY_URL'`
 3) Убедитесь, что `src_n8n` запущен в Docker (tool proxy доступен как `http://src_n8n:9000/tool` внутри сети).
 
 Подробности: `DOCS/N8N_BRIDGE.md`.
 
 Дополнительно: подробный end-to-end пример "найди ближайший аэропорт" (где LLM, где tools, какие subjects):
 
-- `DOCS/exampample.md`
+- `DOCS/example.md`
 
 ### 5.4 Дубли сообщений/команд в UI
 
