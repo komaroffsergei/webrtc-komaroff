@@ -71,22 +71,6 @@ services:
       POSTGRES_HOST: src_postgres
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
 
-#  src_whisper:
-#    profiles: ["legacy_whisper"]
-#    build:
-#      context: ../src_whisper
-#      dockerfile: ../docker/whisper/Dockerfile
-#    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/whisper/${CI_COMMIT_BRANCH}
-#    ports:
-#      - "8090:8090"
-#    depends_on:
-#      - nats
-#    environment:
-#      WEBUI_ENABLED: 1
-#      WEBUI_HOST: 0.0.0.0
-#      WEBUI_PORT: 8090
-#      WEBUI_BASE_PATH: ""
-
   src_llm:
     build:
       context: ../src_llm

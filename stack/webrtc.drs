@@ -1,13 +1,15 @@
 Options name: 'web-rtc-komaroff'
 
-NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
-USER_ID = ENV.fetch("USER_ID", "user123")
-NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
-NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
-NATS_LLM_SUBJECT = ENV.fetch("NATS_LLM_SUBJECT", "nats.llm.")
-ASR_IN_SUBSCRIBE = ENV.fetch("ASR_IN_SUBSCRIBE", "nats.asr.input.>")
-ASR_IN_PREFIX = ENV.fetch("ASR_IN_PREFIX", "nats.asr.input.")
-ASR_OUT_PREFIX = ENV.fetch("ASR_OUT_PREFIX", "nats.asr.output.")
+NATS_USER = 'nats'
+NATS_PASS = 'T0pS3cr3tMaster'
+NATS_URL  = "nats://#{NATS_USER}:#{NATS_PASS}@web-rtc-komaroff_audio_nats:4222"
+
+USER_ID = "user123"
+NATS_EVENTS_SUBJECT = "nats.events."
+NATS_AGENT_SUBJECT = "nats.agent."
+NATS_LLM_SUBJECT = "nats.llm."
+ASR_IN_PREFIX = "inference.whisper.stream.",
+ASR_OUT_PREFIX = "inference.whisper.text.",
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -124,31 +126,72 @@ end
 
 
 
+# GisMaster client
+# to.inference.ollama.requests.?? <- json (Ollama Rest API) reply: inference.ollama.responses.INBOX.12312312321
+# from.inference.ollama.responses.<id> ?? -> json (Ollama Rest API)
+
+# to.inference.whisper.stream.<sid> <- chunks
+# from.inference.whisper.text.<sid> -> text
+
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
   ingress host: HOST, path: '/ws', path_sub: ['^/ws(.*)', '$1'], port: 9222
 
   command ['-c', '/nats.conf']
   config target: '/nats.conf', file_content: <<~CONF
     jetstream: false
-    websocket: {
-      listen: 0.0.0.0:9222
-      no_tls: true
-      compression: true
+    websocket: { listen: 0.0.0.0:9222, no_tls: true, compression: true }
+
+    debug: true
+    trace: true
+
+    accounts: {
+      local: {
+        users: [
+          { user: #{NATS_USER}, password: #{NATS_PASS}, allowed_connection_types: [ STANDARD ] }
+        ]
+        exports: [
+          { stream: "to.inference.>" }
+        ]
+        imports: [
+          { stream: { account: inference, subject: "inference.>" }, to: "from.inference.>" }
+          { service: { account: inference, subject: "$JS.dinf.API.>" }, to: "JS.INF.API.>" }
+        ]
+      }
+
+      inference: {
+        exports: [
+          { stream: "inference.>" }
+          { service: "$JS.dinf.API.>" }
+        ]
+        imports: [
+          { stream: { account: local, subject: "to.inference.>" }, to: "inference.>" }
+        ]
+        jetstream: enabled
+      }
+    }
+
+    leafnodes: {
+        remotes: [
+            # Inference
+            {
+                # url: nats://h100.local:37422,
+                url: nats://192.168.28.134:37422,
+                account: inference,
+                nkey: SUAI355NRU346GCGPBOIMVUHYPJWEWS3OI6F4NMJHWS4R6APIZ52PL4YJM
+            }
+        ]
     }
   CONF
 end
+
 
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-      ASR_IN_SUBSCRIBE: ASR_IN_SUBSCRIBE,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
-      WEBUI_ENABLED: "1",
-      WEBUI_HOST: "0.0.0.0",
-      WEBUI_PORT: "8090",
       WEBUI_BASE_PATH: "/whisper",
       STACK_SERVICE_NAME: 'py_faster_whisper',
       ASR_MODELS: '/app/models/asr',
