@@ -1,6 +1,9 @@
 Options name: 'web-rtc-komaroff'
 
-NATS_URL = "nats://web-rtc-komaroff_audio_nats:4222"
+NATS_USER = 'nats'
+NATS_PASS = 'T0pS3cr3tMaster'
+NATS_URL  = "nats://#{NATS_USER}:#{NATS_PASS}@rag-stack_inference_nats:4222"
+
 USER_ID = ENV.fetch("USER_ID", "user123")
 NATS_EVENTS_SUBJECT = ENV.fetch("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = ENV.fetch("NATS_AGENT_SUBJECT", "nats.agent.")
