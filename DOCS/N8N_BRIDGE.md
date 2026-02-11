@@ -47,6 +47,11 @@
 - Запуск: `docker compose -f docker/docker-compose.yml up -d --build`
 - Остановка только моста: `docker compose -f docker/docker-compose.yml stop src_n8n`
 
+Если часть сервисов вы запускаете локально (например, `src_api_gateway`), запускайте `src_n8n` в Docker с `--no-deps`,
+чтобы Compose не поднял второй (docker) инстанс tools-сервиса:
+
+- `docker compose -f docker/docker-compose.yml up -d --no-deps src_n8n`
+
 В контейнере `src_n8n` использует:
 
 - `N8N_WEBHOOK_BASE_URL=http://n8n_webhook:5678/webhook`

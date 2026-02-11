@@ -83,6 +83,10 @@ Router workflow выбирает один из демо-workflows:
 
 Подробности: `DOCS/N8N_BRIDGE.md`.
 
+Дополнительно: подробный end-to-end пример "найди ближайший аэропорт" (где LLM, где tools, какие subjects):
+
+- `DOCS/exampample.md`
+
 ### 5.4 Дубли сообщений/команд в UI
 
 Причины:

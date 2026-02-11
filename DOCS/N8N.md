@@ -27,6 +27,10 @@ webhook endpoint и через основной `n8n` (он проброшен �
 Важно: `n8n_import` по умолчанию деактивирует импортированные workflows; activation jobs включают их обратно.
 Если добавляете новый workflow-файл, добавьте и шаг активации (см. `docker/docker-compose.yml`).
 
+Пример end-to-end (пошагово, с payloads и указателями на код):
+
+- `DOCS/exampample.md`
+
 ## Как “подтягиваются” новые сценарии при импорте только на пустой базе (Вариант A)
 
 Вариант A означает: **источник истины — n8n UI + Postgres (volume)**. Репозиторий (`docker/n8n/workflows/*.json`) — это

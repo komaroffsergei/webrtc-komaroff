@@ -108,3 +108,9 @@ Dockerized E2E runner:
 ```bash
 docker compose -f docker/docker-compose.yml --profile test run --rm --build src_e2e
 ```
+
+## 7) Пример end-to-end (как устроено под капотом)
+
+Подробный разбор сценария "найди ближайший аэропорт" (LLM routing + tools + user-in-the-loop):
+
+- `DOCS/exampample.md`
