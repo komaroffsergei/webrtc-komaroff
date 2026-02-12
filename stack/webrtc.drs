@@ -233,3 +233,4 @@ end
 
 Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL },
         ingress: { host: "pgweb.#{HOST}", port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
+
