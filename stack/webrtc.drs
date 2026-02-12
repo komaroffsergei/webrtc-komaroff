@@ -19,6 +19,7 @@ POSTGRES_DB = ENV.fetch("POSTGRES_DB", "mcp")
 POSTGRES_USER = ENV.fetch("POSTGRES_USER", "mcp")
 POSTGRES_PASSWORD = ENV.fetch("POSTGRES_PASSWORD", "mcp_pass")
 DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}?sslmode=disable"
+N8N_WEBHOOK_BASE_URL = ENV.fetch('N8N_WEBHOOK_BASE_URL', 'https://webrtc-komaroff.gis-master.ru/n8n/webhook')
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
@@ -52,7 +53,9 @@ Service :src_api_gateway, image: webrtc_registry['api-gateway']do
   ingress host: HOST, path: '/api', port: 8100
 
   env API_HOST: '0.0.0.0',
-      API_PORT: 8100
+      API_PORT: 8100,
+      NATS_URL: NATS_URL,
+      NATS_TOOLS_PREFIX: ENV.fetch('NATS_TOOLS_PREFIX', 'nats.tools.')
 end
 
 Service :src_agent, image: webrtc_registry['agent'] do
@@ -188,8 +191,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
 end
 
 Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
-  ingress host: HOST, path: '/n8n', port: 8090
-
   env USER_ID: USER_ID,
       STACK_SERVICE_NAME: 'src_n8n',
       NATS_URL: NATS_URL,
@@ -203,7 +204,7 @@ Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
       POSTGRES_USER: POSTGRES_USER,
       POSTGRES_PASSWORD: POSTGRES_PASSWORD,
       DATABASE_URL: DATABASE_URL,
-      N8N_WEBHOOK_BASE_URL: ENV.fetch('N8N_WEBHOOK_BASE_URL', 'http://voice-chat-n8n_n8n_webhook:5678/webhook'),
+      N8N_WEBHOOK_BASE_URL: N8N_WEBHOOK_BASE_URL,
       N8N_HTTP_TIMEOUT_SECONDS: ENV.fetch('N8N_HTTP_TIMEOUT_SECONDS', '120'),
       TOOL_PROXY_HOST: '0.0.0.0',
       TOOL_PROXY_PORT: ENV.fetch('TOOL_PROXY_PORT', '9000')

@@ -65,6 +65,9 @@
 - `N8N_WEBHOOK_BASE_URL=http://n8n_webhook:5678/webhook`
 - tool proxy вызывается из n8n по `http://src_n8n:9000/tool` (адрес внутри docker-сети)
 
+Для dry/swarm деплоя `src_n8n` и `n8n_webhook` живут в разных стэках, поэтому `N8N_WEBHOOK_BASE_URL`
+должен быть внешним ingress URL (по умолчанию `https://webrtc-komaroff.gis-master.ru/n8n/webhook`).
+
 ## Код (куда смотреть)
 
 - NATS bridge + tool proxy: `~/dev/monitorsoft/voice-chat/n8n/src/service.py`
