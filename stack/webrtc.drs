@@ -187,8 +187,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
 end
 
 Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
-  ingress host: HOST, path: '/n8n', port: 8090
-
   env USER_ID: USER_ID,
       STACK_SERVICE_NAME: 'src_n8n',
       NATS_URL: NATS_URL,
