@@ -7,7 +7,7 @@ services:
       additional_contexts:
         postgres: ../docker/postgres
       dockerfile: ../docker/postgres/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/postgres
     ports:
       # Publish on host so external project stacks (for example voice-chat/n8n) can reuse this DB.
       - "5432:5432"
@@ -29,7 +29,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/api/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/api-gateway/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/api-gateway
     ports:
       - "127.0.0.1:8101:8100"
     environment:
@@ -46,7 +46,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/core/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/core/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/core
     ports:
       - "8000:8000"
     depends_on:
@@ -62,7 +62,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/agent/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/agent/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/agent
     depends_on:
       nats:
         condition: service_started
@@ -81,7 +81,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/llm/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/llm/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/llm
     depends_on:
       - nats
     environment:
@@ -95,7 +95,7 @@ services:
       additional_contexts:
         nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/front
     ports:
       - "8080:8000"
     depends_on:
@@ -109,7 +109,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/e2e/Dockerfile
-    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/e2e/${CI_COMMIT_BRANCH:-dev}
+    image: builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/e2e
     depends_on:
       - nats
       - src_postgres
