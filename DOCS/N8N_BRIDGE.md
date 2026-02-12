@@ -65,8 +65,9 @@
 - `N8N_WEBHOOK_BASE_URL=http://n8n_webhook:5678/webhook`
 - tool proxy вызывается из n8n по `http://src_n8n:9000/tool` (адрес внутри docker-сети)
 
-Для dry/swarm деплоя `src_n8n` и `n8n_webhook` живут в разных стэках, поэтому `N8N_WEBHOOK_BASE_URL`
-должен быть внешним ingress URL (по умолчанию `https://webrtc-komaroff.gis-master.ru/n8n/webhook`).
+Для dry/swarm деплоя ingress для n8n настраивается в `stack/webrtc.drs`.
+`src_n8n` использует внутренний URL n8n runtime в этом же стэке:
+`N8N_WEBHOOK_BASE_URL=http://web-rtc-komaroff_n8n:5678/webhook`.
 
 ## Код (куда смотреть)
 

@@ -6,22 +6,24 @@ Source of truth для n8n вынесен в отдельный репозито
 
 - `~/dev/monitorsoft/voice-chat/n8n`
 
-Этот репозиторий (`webrtc-komaroff-dev`) подключает bridge образом в `stack/webrtc.drs`:
+Этот репозиторий (`webrtc-komaroff-dev`) подключает n8n-образы в `stack/webrtc.drs`:
 
 - `voice-chat/n8n` (service `src_n8n`)
+- `voice-chat/n8n-runtime` (service `n8n`)
+
+Ingress для n8n (`/n8n`, `/n8n/webhook`, `/n8n/webhook-test`) настраивается в `stack/webrtc.drs`.
 
 ## Web UI
 
-- Откройте `http://127.0.0.1:5679/`
+- Локально: `http://127.0.0.1:5679/`
+- Прод: `https://webrtc-komaroff.gis-master.ru/n8n/`
 - При первом запуске n8n может попросить создать owner-аккаунт.
 
-По умолчанию runtime n8n (`n8n/n8n_webhook/n8n_worker`) запускается в отдельном репозитории:
+Source of truth для кода/сборки n8n остается в отдельном репозитории:
 
 - `~/dev/monitorsoft/voice-chat/n8n`
 
-В `webrtc-komaroff-dev` локальный n8n-рантайм оставлен только как legacy-профиль и не поднимается обычным `docker compose up`:
-
-- `docker compose -f docker/docker-compose.yml --profile local-n8n up -d --build`
+В `voice-chat/n8n/stack/stack.drs` ingress для prod не задается.
 
 ## Демо-workflows
 
