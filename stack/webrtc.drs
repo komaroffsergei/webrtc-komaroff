@@ -244,7 +244,7 @@ Service :n8n, image: webrtc_registry['voice-chat/n8n-runtime'] do
       N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false',
       TOOL_PROXY_URL: 'http://web-rtc-komaroff_src_n8n:9000/tool'
   volume name: 'N8N_DATA', target: '/home/node/.n8n'
-  command ['start']
+  command ['/bin/sh', '-lc', 'n8n start & pid=$!; for i in $(seq 1 30); do if /bin/sh /usr/local/bin/import-missing-workflows.sh; then echo "[n8n_import] sync completed"; break; fi; echo "[n8n_import] sync retry ${i}/30"; sleep 2; done; wait "$pid"']
 end
 
 
