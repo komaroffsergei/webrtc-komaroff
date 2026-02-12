@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install -U --force-reinstall -r requirements.txt
 
 COPY . /app/src_core
+COPY --from=shared . /app/src_shared
 
 RUN cat <<'EOF' >/entrypoint.sh
 #!/bin/sh

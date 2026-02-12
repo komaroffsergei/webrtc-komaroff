@@ -7,10 +7,10 @@ services:
       additional_contexts:
         postgres: ../docker/postgres
       dockerfile: ../docker/postgres/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH:-dev}
     ports:
-      # Bind explicitly to loopback so host-run dev services can use localhost/127.0.0.1.
-      - "127.0.0.1:5432:5432"
+      # Publish on host so external project stacks (for example voice-chat/n8n) can reuse this DB.
+      - "5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mcp}
       POSTGRES_USER: ${POSTGRES_USER:-mcp}
@@ -29,7 +29,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/api/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/api-gateway/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/api-gateway/${CI_COMMIT_BRANCH:-dev}
     ports:
       - "127.0.0.1:8101:8100"
     environment:
@@ -43,8 +43,10 @@ services:
   src_core:
     build:
       context: ../src_core
+      additional_contexts:
+        shared: ../src_shared
       dockerfile: ../docker/core/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/core/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/core/${CI_COMMIT_BRANCH:-dev}
     ports:
       - "8000:8000"
     depends_on:
@@ -60,12 +62,14 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/agent/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/agent/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/agent/${CI_COMMIT_BRANCH:-dev}
     depends_on:
-      - nats
-      - src_api_gateway
-      - src_postgres
-      - src_n8n
+      nats:
+        condition: service_started
+      src_api_gateway:
+        condition: service_started
+      src_postgres:
+        condition: service_healthy
     environment:
       NATS_URL: nats://nats:4222
       POSTGRES_HOST: src_postgres
@@ -77,7 +81,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/llm/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/llm/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/llm/${CI_COMMIT_BRANCH:-dev}
     depends_on:
       - nats
     environment:
@@ -85,47 +89,19 @@ services:
       USER_ID: ${USER_ID:-user123}
       LLM_MODE: mock
 
-  src_n8n:
-    build:
-      context: ../src_n8n
-      additional_contexts:
-        shared: ../src_shared
-      dockerfile: ../docker/n8n_bridge/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/n8n-bridge/${CI_COMMIT_BRANCH}
-    depends_on:
-      - nats
-      - src_postgres
-      - n8n_webhook
-      - src_llm
-      - src_api_gateway
-    environment:
-      USER_ID: ${USER_ID:-user123}
-      STACK_SERVICE_NAME: src_n8n
-      NATS_URL: nats://nats:4222
-      NATS_N8N_RUN_SUBJECT: nats.n8n.run
-      NATS_N8N_HEALTH_SUBJECT: nats.n8n.health
-      NATS_LLM_SUBJECT: nats.llm.
-      NATS_TOOLS_PREFIX: nats.tools.
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
-      POSTGRES_HOST: src_postgres
-      N8N_BASE_URL: http://n8n:5678
-      N8N_WEBHOOK_BASE_URL: http://n8n_webhook:5678/webhook
-      TOOL_PROXY_HOST: 0.0.0.0
-      TOOL_PROXY_PORT: 9000
-
   src_front:
     build:
       context: ../src_front
       additional_contexts:
         nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH:-dev}
     ports:
       - "8080:8000"
     depends_on:
       - src_core
       - nats
-  
+
   src_e2e:
     profiles: ["test"]
     build:
@@ -133,13 +109,12 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/e2e/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/e2e/${CI_COMMIT_BRANCH}
+    image: ${REGISTRY_HOST:-local}/gis/webrtc-komaroff/e2e/${CI_COMMIT_BRANCH:-dev}
     depends_on:
       - nats
       - src_postgres
       - src_api_gateway
       - src_llm
-      - src_n8n
       - src_agent
     environment:
       USER_ID: ${USER_ID:-user123}
@@ -153,214 +128,10 @@ services:
     image: nats:2.11
     command: ["-c", "/etc/nats/nats.conf"]
     ports:
-      - "127.0.0.1:4222:4222"  # NATS TCP (host)
+      - "14222:4222"  # NATS TCP (host)
       - "9222:9222"  # NATS WebSocket
     volumes:
       - ./nats/nats.conf:/etc/nats/nats.conf:ro
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "127.0.0.1:6379:6379"
-
-  n8n:
-    image: n8nio/n8n:2.6.3
-    ports:
-      - "127.0.0.1:5679:5678"
-    depends_on:
-      src_postgres:
-        condition: service_healthy
-      n8n_activate_router:
-        condition: service_completed_successfully
-      n8n_activate_echo:
-        condition: service_completed_successfully
-      n8n_activate_collect_name:
-        condition: service_completed_successfully
-      n8n_activate_airports_weather:
-        condition: service_completed_successfully
-      redis:
-        condition: service_started
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-      EXECUTIONS_MODE: queue
-      QUEUE_BULL_REDIS_HOST: redis
-      QUEUE_BULL_REDIS_PORT: 6379
-      N8N_DIAGNOSTICS_ENABLED: "false"
-      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
-      N8N_TEMPLATES_ENABLED: "false"
-      # Keep env expressions enabled for workflows that may use `{{$env.*}}` in dev.
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: http://src_n8n:9000/tool
-    volumes:
-      - ./n8n/workflows:/workflows:ro
-    command: ["start"]
-
-  n8n_webhook:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      src_postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      n8n_activate_router:
-        condition: service_completed_successfully
-      n8n_activate_echo:
-        condition: service_completed_successfully
-      n8n_activate_collect_name:
-        condition: service_completed_successfully
-      n8n_activate_airports_weather:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-      EXECUTIONS_MODE: queue
-      QUEUE_BULL_REDIS_HOST: redis
-      QUEUE_BULL_REDIS_PORT: 6379
-      N8N_DIAGNOSTICS_ENABLED: "false"
-      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
-      N8N_TEMPLATES_ENABLED: "false"
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: http://src_n8n:9000/tool
-    command: ["webhook"]
-
-  n8n_worker:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      src_postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      n8n_activate_router:
-        condition: service_completed_successfully
-      n8n_activate_echo:
-        condition: service_completed_successfully
-      n8n_activate_collect_name:
-        condition: service_completed_successfully
-      n8n_activate_airports_weather:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-      EXECUTIONS_MODE: queue
-      QUEUE_BULL_REDIS_HOST: redis
-      QUEUE_BULL_REDIS_PORT: 6379
-      N8N_DIAGNOSTICS_ENABLED: "false"
-      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
-      N8N_TEMPLATES_ENABLED: "false"
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
-      TOOL_PROXY_URL: http://src_n8n:9000/tool
-    command: ["worker"]
-
-  n8n_import:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      src_postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-      EXECUTIONS_MODE: queue
-      QUEUE_BULL_REDIS_HOST: redis
-      QUEUE_BULL_REDIS_PORT: 6379
-    volumes:
-      - ./n8n/workflows:/workflows:ro
-    command: ["import:workflow", "--separate", "--input=/workflows"]
-    restart: "no"
-
-  n8n_activate_router:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      n8n_import:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-    command: ["update:workflow", "--id=Router1o0o0o0Abc", "--active=true"]
-    restart: "no"
-
-  n8n_activate_echo:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      n8n_import:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-    command: ["update:workflow", "--id=Echo1o0o0o0Abcde", "--active=true"]
-    restart: "no"
-
-  n8n_activate_collect_name:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      n8n_import:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-    command: ["update:workflow", "--id=Collect1o0o0o0AbX", "--active=true"]
-    restart: "no"
-
-  n8n_activate_airports_weather:
-    image: n8nio/n8n:2.6.3
-    depends_on:
-      n8n_import:
-        condition: service_completed_successfully
-    environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:-n8n_encryption_key_dev_only_change_me}
-      DB_TYPE: postgresdb
-      DB_POSTGRESDB_HOST: src_postgres
-      DB_POSTGRESDB_PORT: 5432
-      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB:-mcp}
-      DB_POSTGRESDB_USER: ${POSTGRES_USER:-mcp}
-      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD:-mcp_pass}
-      DB_POSTGRESDB_SCHEMA: n8n
-    command: ["update:workflow", "--id=AirWx1o0o0o0Abcd", "--active=true"]
-    restart: "no"
 
 volumes:
   src_postgres_data:

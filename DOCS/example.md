@@ -63,7 +63,7 @@ docker compose -f docker/docker-compose.yml up -d --no-deps src_n8n
 Проверки:
 
 - n8n UI: `http://127.0.0.1:5679/`
-- NATS TCP: `nats://127.0.0.1:4222`
+- NATS TCP: `nats://127.0.0.1:14222`
 - `src_n8n` tool proxy в docker-сети: `http://src_n8n:9000/tool` (используется workflows)
 
 ### 1.2 Локально (UI + core + agent + tools)
@@ -71,7 +71,7 @@ docker compose -f docker/docker-compose.yml up -d --no-deps src_n8n
 Минимальные env:
 
 - `USER_ID=user123` (должен совпадать с UI/subjects)
-- `NATS_URL=nats://127.0.0.1:4222`
+- `NATS_URL=nats://127.0.0.1:14222`
 - `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
 
 Старт:
@@ -284,4 +284,3 @@ Tool proxy endpoint:
 - tools (NATS): `src_api_gateway/main.py`
 - agent runner: `src_agent/agent.py` и публикация UI events: `src_agent/service.py`
 - core ingress: `src_core/main.py` и `src_core/handlers/handle_transcription.py`
-

@@ -23,14 +23,7 @@ ASR/Whisper is expected to run as an external service (see "Whisper / ASR servic
 
 ## Start with Docker (recommended)
 
-This repo uses one shared Docker network (`monitorsoft_nats`) so you can run the ASR service from another repo
-while still using the same NATS instance.
-
-Create the shared network once (ignore the error if it already exists):
-
-```bash
-docker network create monitorsoft_nats
-```
+This repo provides NATS + PostgreSQL for local multi-repo mode (`webrtc-komaroff-dev` + `voice-chat/n8n`).
 
 Start infra (NATS + PostgreSQL):
 
@@ -52,7 +45,7 @@ docker compose -f docker/docker-compose.yml up -d
 
 Useful endpoints (host machine):
 
-- NATS TCP: `nats://127.0.0.1:4222`
+- NATS TCP: `nats://127.0.0.1:14222`
 - NATS WebSocket: `ws://127.0.0.1:9222`
 - NATS WebSocket (via Front reverse-proxy): `ws://127.0.0.1:8080/ws`
 - PostgreSQL: `127.0.0.1:5432` (user: `mcp`, password: `mcp_pass`, db: `mcp`)
@@ -64,9 +57,8 @@ Useful endpoints (host machine):
 
 Notes:
 
-- NATS and PostgreSQL are bound to `127.0.0.1` on purpose (local-only).
-- Compose project name is pinned, so running other repos from their own `docker/` folders does not collide.
-  - NATS TCP is bound to `127.0.0.1:4222`.
+- n8n runtime is moved to `~/dev/monitorsoft/voice-chat/n8n`.
+- This repo publishes host ports required by that stack: NATS `14222`, Postgres `5432`.
 
 ## Documentation
 
@@ -97,7 +89,7 @@ docker compose -f docker/docker-compose.yml up -d nats src_postgres
 Sanity checks:
 
 ```bash
-nc -zvw2 127.0.0.1 4222
+nc -zvw2 127.0.0.1 14222
 nc -zvw2 127.0.0.1 5432
 ```
 
@@ -123,7 +115,7 @@ Each service reads environment variables from its own `.env` file:
 
 Minimum values for local run:
 
-- `NATS_URL=nats://127.0.0.1:4222`
+- `NATS_URL=nats://127.0.0.1:14222`
 - `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp` (for `src_agent`)
 
 ### 4) Run services

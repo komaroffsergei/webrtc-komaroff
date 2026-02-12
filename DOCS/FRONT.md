@@ -16,6 +16,12 @@
 
 ## Какой трафик и куда
 
+### Docker runtime (nginx)
+
+- `GET /` -> статика `src_front`
+- `POST /core/*` -> proxy на `src_core:8000`
+- `WS /ws` -> proxy на `nats:9222`
+
 ### Исходящий (пользователь -> backend)
 
 - HTTP: `POST /core/message` (в `src_core`)
@@ -25,6 +31,8 @@
 
 - NATS WS subscription: `nats.events.<user_id>`
 - UI ожидает JSON-события (строка/utf-8).
+- В Docker по умолчанию используется `ws(s)://<host>/ws` (через nginx proxy).
+- В Dev (Vite) по умолчанию используется `ws://localhost:9222`.
 
 ## UI-команды
 
@@ -59,7 +67,8 @@
 Проверьте:
 
 - открыт ли UI: `http://127.0.0.1:8080/`
-- доступен ли NATS WebSocket: `ws://127.0.0.1:9222`
+- доступен ли NATS WebSocket через фронт: `ws://127.0.0.1:8080/ws`
+- для прямой проверки NATS также доступен `ws://127.0.0.1:9222`
 - совпадает ли `user_id` в subjects (сейчас захардкожено `user123`)
 
 ### Дубли команд (одно и то же сообщение показывается 2+ раза)

@@ -1,13 +1,10 @@
 # Быстрый старт (локальная разработка)
 
-Этот документ отвечает на вопросы "как быстро поднять стек" и "что менять в env при локальном запуске".
-
-Важно: не запускайте одновременно два экземпляра одного сервиса (контейнер + процесс из IDE), иначе NATS сообщения
-будут "делиться" между ними и поведение станет нестабильным.
+Этот документ отвечает на вопросы "как быстро поднять стек" и "как запускать два репозитория без override/cat/env-хака".
 
 ## 0) Ключевые порты (хост-машина)
 
-- NATS TCP: `nats://127.0.0.1:4222`
+- NATS TCP: `nats://127.0.0.1:14222`
 - NATS WebSocket: `ws://127.0.0.1:9222`
 - Postgres: `127.0.0.1:5432` (db `mcp`, user `mcp`, pass `mcp_pass`)
 - Front: `http://127.0.0.1:8080/`
@@ -16,33 +13,53 @@
 Важно: n8n-стек и bridge вынесены в отдельный репозиторий `~/dev/monitorsoft/voice-chat/n8n`.
 В этом репо (`webrtc-komaroff-dev`) n8n bridge подключается как образ в `stack/webrtc.drs`.
 
-## 1) Вариант A (рекомендуемый): все сервисы в Docker
+## 1) Рекомендуемый запуск в 2 терминала (Docker + Docker)
+
+Порядок: сначала поднимите `webrtc-komaroff-dev` (он дает NATS/Postgres), потом `voice-chat/n8n`.
+
+### Терминал 1 (в `~/dev/monitorsoft/webrtc-komaroff-dev`)
 
 ```bash
 docker compose -f docker/docker-compose.yml down -v --remove-orphans
-docker network create monitorsoft_nats || true
+docker compose -f docker/docker-compose.yml up -d --build
+```
+
+### Терминал 2 (в `~/dev/monitorsoft/voice-chat/n8n`)
+
+```bash
+docker compose -f docker/docker-compose.yml down -v --remove-orphans
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Проверка:
 
-- UI: `http://127.0.0.1:8080/`
-- n8n: `http://127.0.0.1:5679/`
-- список контейнеров: `docker compose -f docker/docker-compose.yml ps`
+- `http://127.0.0.1:8080/` (front)
+- `http://127.0.0.1:5679/` (n8n UI)
+- `docker compose -f docker/docker-compose.yml ps` в каждой директории
 
-### Что менять в env
+В этом режиме ничего менять не нужно:
 
-В этом режиме ничего менять не нужно. По умолчанию n8n вызывает tool proxy так:
+- `REGISTRY_HOST` / `CI_COMMIT_BRANCH` уже имеют defaults в compose.
+- `voice-chat/n8n` по умолчанию подключается к `host.docker.internal:14222/5432`.
+- `webrtc` теперь публикует `4222` и `5432` на хост, чтобы второй проект подключался без override.
 
-- `TOOL_PROXY_URL=http://src_n8n:9000/tool` (это адрес внутри docker-сети, фиксирован в compose)
+## 2) Локальный n8n внутри webrtc (legacy-режим)
 
-## 2) Вариант B: инфраструктура в Docker, сервисы запускать напрямую (IDE)
+Если нужен старый режим (runtime n8n внутри этого репо), он теперь вынесен в профиль `local-n8n`:
 
-### 2.1 Поднять инфраструктуру
+```bash
+docker compose -f docker/docker-compose.yml --profile local-n8n up -d --build
+```
+
+По умолчанию (`up` без профиля) локальные `src_n8n/n8n/n8n_webhook/n8n_worker` в этом репо не стартуют.
+
+## 3) Вариант IDE: часть сервисов запускать локально
+
+### 3.1 Поднять инфраструктуру
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d nats src_postgres
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --build
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Если вам нужны демо-tools:
@@ -51,7 +68,7 @@ docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up 
 docker compose -f docker/docker-compose.yml up -d src_api_gateway
 ```
 
-### 2.2 Локальный Python env
+### 3.2 Локальный Python env
 
 Из корня репо:
 
@@ -62,15 +79,15 @@ pip install -U pip
 pip install -r src_agent/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
 ```
 
-### 2.3 Какие env выставить
+### 3.3 Какие env выставить
 
 Минимальный набор для запуска локально (в шелле или в `.env` файлов сервиса):
 
-- `NATS_URL=nats://127.0.0.1:4222`
+- `NATS_URL=nats://127.0.0.1:14222`
 - `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
 - `USER_ID=user123` (должен совпадать с UI/stack)
 
-### 2.4 Как запускать сервисы напрямую
+### 3.4 Как запускать сервисы напрямую
 
 ```bash
 python src_api_gateway/main.py
@@ -93,16 +110,16 @@ Workflows лежат в `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*
 Импорт:
 
 ```bash
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm n8n_import
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm n8n_import
 ```
 
 Важно: CLI импорт деактивирует workflows. Чтобы включить обратно, запустите activation jobs:
 
 ```bash
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_router
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_echo
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_collect_name
-docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml run --rm --no-deps n8n_activate_airports_weather
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_router
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_echo
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_collect_name
+cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_airports_weather
 ```
 
 ## 6) Быстрый smoke / E2E

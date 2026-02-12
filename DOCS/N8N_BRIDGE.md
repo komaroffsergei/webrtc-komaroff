@@ -52,13 +52,13 @@
 
 ### Вариант (поддерживаемый): всё в Docker
 
-- Запуск: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --build`
-- Остановка только моста: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml stop src_n8n`
+- Запуск (из `~/dev/monitorsoft/voice-chat/n8n`): `docker compose -f docker/docker-compose.yml up -d --build`
+- Остановка только моста: `docker compose -f docker/docker-compose.yml stop src_n8n`
 
 Если часть сервисов вы запускаете локально (например, `src_api_gateway`), запускайте `src_n8n` в Docker с `--no-deps`,
 чтобы Compose не поднял второй (docker) инстанс tools-сервиса:
 
-- `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml up -d --no-deps src_n8n`
+- `docker compose -f docker/docker-compose.yml up -d --no-deps src_n8n`
 
 В контейнере `src_n8n` использует:
 
@@ -83,7 +83,7 @@
 Проверка:
 
 - UI: `http://127.0.0.1:5679/`
-- контейнеры: `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml ps n8n n8n_webhook n8n_worker`
+- контейнеры: `docker compose -f docker/docker-compose.yml ps n8n n8n_webhook n8n_worker`
 
 ### `n8n returned 500 ... Hint: n8n must be able to reach the tool proxy URL`
 
@@ -103,7 +103,7 @@
 
 Если меняли compose/окружение — проверьте env в контейнере:
 
-- `docker compose -f ~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml exec -T n8n sh -lc 'echo $N8N_BLOCK_ENV_ACCESS_IN_NODE'`
+- `docker compose -f docker/docker-compose.yml exec -T n8n sh -lc 'echo $N8N_BLOCK_ENV_ACCESS_IN_NODE'`
 
 ### Дубли/нестабильность при отладке
 

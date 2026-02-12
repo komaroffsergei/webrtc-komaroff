@@ -15,15 +15,13 @@ Source of truth для n8n вынесен в отдельный репозито
 - Откройте `http://127.0.0.1:5679/`
 - При первом запуске n8n может попросить создать owner-аккаунт.
 
-Технически в этом проекте webhooks обслуживает отдельный процесс `n8n_webhook`, но для локальной разработки можно дергать
-webhook endpoint и через основной `n8n` (он проброшен на `127.0.0.1:5679`).
+По умолчанию runtime n8n (`n8n/n8n_webhook/n8n_worker`) запускается в отдельном репозитории:
 
-В этом репо n8n запускается в queue mode:
+- `~/dev/monitorsoft/voice-chat/n8n`
 
-- `n8n` (основной сервис)
-- `n8n_worker` (worker для executions)
-- `n8n_webhook` (приём webhook запросов)
-- `redis` (bull queue backend)
+В `webrtc-komaroff-dev` локальный n8n-рантайм оставлен только как legacy-профиль и не поднимается обычным `docker compose up`:
+
+- `docker compose -f docker/docker-compose.yml --profile local-n8n up -d --build`
 
 ## Демо-workflows
 

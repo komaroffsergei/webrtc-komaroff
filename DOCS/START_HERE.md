@@ -63,7 +63,7 @@ Router workflow выбирает один из демо-workflows:
 - остановить контейнер: `docker compose -f docker/docker-compose.yml stop src_core`
 - или запустить локальный `src_core` на другом порту: `CORE_PORT=8002 python -m src_core.main`
 
-### 5.2 `ConnectionRefusedError ... ('127.0.0.1', 4222)`
+### 5.2 `ConnectionRefusedError ... ('127.0.0.1', 14222)`
 
 Причина: NATS не запущен на хосте.
 
