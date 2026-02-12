@@ -3,6 +3,9 @@ import { connect, type Connection } from "@provide/nats.ws";
 export type NatsClientOptions = {
   url: string;
   name?: string;
+  user?: string;
+  pass?: string;
+  token?: string;
 };
 
 export type NatsStatus =
@@ -24,6 +27,9 @@ export class FrontendNatsClient {
     this.connection = await connect({
       url: options.url,
       name: options.name,
+      user: options.user,
+      pass: options.pass,
+      token: options.token,
       payload: "string" as any,
     });
     this.subscribedSubjects.clear();

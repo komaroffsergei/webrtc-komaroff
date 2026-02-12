@@ -104,6 +104,8 @@ Service :src_front, image: webrtc_registry['front'] do
 
   env FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
       FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
+      FRONT_NATS_USER: NATS_USER,
+      FRONT_NATS_PASS: NATS_PASS,
       FRONT_NATS_CLIENT_NAME: 'src_front',
       FRONT_CORE_ORIGIN: 'http://web-rtc-komaroff_src_core:8000',
       COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'] ||
@@ -147,7 +149,7 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
     accounts: {
       local: {
         users: [
-          { user: #{NATS_USER}, password: #{NATS_PASS}, allowed_connection_types: [ STANDARD ] }
+          { user: #{NATS_USER}, password: #{NATS_PASS}, allowed_connection_types: [ STANDARD, WEBSOCKET ] }
         ]
         exports: [
           { stream: "to.inference.>" }
@@ -233,5 +235,6 @@ end
 
 Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL },
         ingress: { host: "pgweb.#{HOST}", port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
+
 
 

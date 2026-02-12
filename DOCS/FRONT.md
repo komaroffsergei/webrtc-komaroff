@@ -33,6 +33,8 @@
 - UI ожидает JSON-события (строка/utf-8).
 - В Docker по умолчанию используется `ws(s)://<host>/ws` (через nginx proxy).
 - В Dev (Vite) по умолчанию используется `ws://localhost:9222`.
+- Если NATS требует auth, фронт берет `NATS_USER`/`NATS_PASS`/`NATS_TOKEN` из `window.SETTINGS`
+  (прокидываются как `FRONT_NATS_USER`/`FRONT_NATS_PASS`/`FRONT_NATS_TOKEN`).
 
 ## UI-команды
 
@@ -70,6 +72,14 @@
 - доступен ли NATS WebSocket через фронт: `ws://127.0.0.1:8080/ws`
 - для прямой проверки NATS также доступен `ws://127.0.0.1:9222`
 - совпадает ли `user_id` в subjects (сейчас захардкожено `user123`)
+
+### В консоли `NatsError: 'Authorization Violation'`
+
+Проверьте:
+
+- в stack-конфиге для пользователя NATS разрешен `WEBSOCKET` в `allowed_connection_types`
+- у `src_front` прокинуты `FRONT_NATS_USER` и `FRONT_NATS_PASS` (или `FRONT_NATS_TOKEN`)
+- фронт подключается к правильному endpoint (`/ws` через ingress/nginx)
 
 ### Дубли команд (одно и то же сообщение показывается 2+ раза)
 

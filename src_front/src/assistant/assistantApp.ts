@@ -164,6 +164,9 @@ export class AssistantApp {
       await this.nats.connect({
         url: this.config.nats.url,
         name: this.config.nats.clientName,
+        user: this.config.nats.user,
+        pass: this.config.nats.pass,
+        token: this.config.nats.token,
       });
 
       await this.nats.subscribe(this.config.nats.eventsSubject, (payload) =>

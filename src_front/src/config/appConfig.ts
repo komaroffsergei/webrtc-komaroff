@@ -36,6 +36,9 @@ export type AppConfig = {
     eventsSubject: string;
     agentSubject: string;
     clientName: string;
+    user?: string;
+    pass?: string;
+    token?: string;
   };
 };
 
@@ -48,6 +51,9 @@ const natsUrl =
 const natsEventsSubject = "nats.events.user123";
 const natsAgentSubject = "nats.agent.user123";
 const natsClientName = "src_front";
+const natsUser = (window as any)?.SETTINGS?.NATS_USER;
+const natsPass = (window as any)?.SETTINGS?.NATS_PASS;
+const natsToken = (window as any)?.SETTINGS?.NATS_TOKEN;
 
 export const appConfig: AppConfig = {
   signaling: {
@@ -87,5 +93,8 @@ export const appConfig: AppConfig = {
     eventsSubject: natsEventsSubject,
     agentSubject: natsAgentSubject,
     clientName: natsClientName,
+    user: natsUser,
+    pass: natsPass,
+    token: natsToken,
   },
 };
