@@ -7,7 +7,7 @@ services:
       additional_contexts:
         postgres: ../docker/postgres
       dockerfile: ../docker/postgres/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
     ports:
       # Publish on host so external project stacks (for example voice-chat/n8n) can reuse this DB.
       - "5432:5432"
@@ -29,7 +29,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/api/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/api-gateway
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/api-gateway/${CI_COMMIT_BRANCH}
     ports:
       - "127.0.0.1:8101:8100"
     environment:
@@ -46,14 +46,14 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/core/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/core
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/core/${CI_COMMIT_BRANCH}
     ports:
       - "8000:8000"
     depends_on:
       - nats
       - src_api_gateway
     environment:
-      API_URL: http://src_api_gateway:8100/api
+      API_URL: http://src_api_gateway:8100/api/${CI_COMMIT_BRANCH}
       NATS_URL: nats://nats:4222
 
   src_agent:
@@ -62,7 +62,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/agent/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/agent
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/agent/${CI_COMMIT_BRANCH}
     depends_on:
       nats:
         condition: service_started
@@ -73,7 +73,7 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       POSTGRES_HOST: src_postgres
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
+      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp/${CI_COMMIT_BRANCH}
 
   src_llm:
     build:
@@ -81,7 +81,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/llm/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/llm
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/llm/${CI_COMMIT_BRANCH}
     depends_on:
       - nats
     environment:
@@ -95,7 +95,7 @@ services:
       additional_contexts:
         nginx: ../docker/front/nginx
       dockerfile: ../docker/front/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH}
     ports:
       - "8080:8000"
     depends_on:
@@ -109,7 +109,7 @@ services:
       additional_contexts:
         shared: ../src_shared
       dockerfile: ../docker/e2e/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/e2e
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/e2e/${CI_COMMIT_BRANCH}
     depends_on:
       - nats
       - src_postgres
@@ -119,7 +119,7 @@ services:
     environment:
       USER_ID: ${USER_ID:-user123}
       NATS_URL: nats://nats:4222
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
+      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp/${CI_COMMIT_BRANCH}
       NATS_AGENT_SUBJECT: nats.agent.
       NATS_N8N_HEALTH_SUBJECT: nats.n8n.health
     restart: "no"
