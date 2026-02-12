@@ -14,12 +14,9 @@ ASR_OUT_PREFIX = "inference.whisper.text."
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
 N8N_UI_PATH = ENV.fetch('N8N_UI_PATH', '/n8n')
-N8N_UI_PATH_SLASH = ENV.fetch('N8N_UI_PATH_SLASH', '/n8n/')
 N8N_UI_PATH_REWRITE = ENV.fetch('N8N_UI_PATH_REWRITE', '^/n8n(.*)')
 N8N_WEBHOOK_PATH = ENV.fetch('N8N_WEBHOOK_PATH', "#{N8N_UI_PATH}/webhook")
-N8N_WEBHOOK_PATH_SLASH = ENV.fetch('N8N_WEBHOOK_PATH_SLASH', "#{N8N_UI_PATH}/webhook/")
 N8N_WEBHOOK_TEST_PATH = ENV.fetch('N8N_WEBHOOK_TEST_PATH', "#{N8N_UI_PATH}/webhook-test")
-N8N_WEBHOOK_TEST_PATH_SLASH = ENV.fetch('N8N_WEBHOOK_TEST_PATH_SLASH', "#{N8N_UI_PATH}/webhook-test/")
 N8N_PUBLIC_BASE_URL = ENV.fetch('N8N_PUBLIC_BASE_URL', 'https://webrtc-komaroff.gis-master.ru')
 N8N_EDITOR_BASE_URL = ENV.fetch('N8N_EDITOR_BASE_URL', "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/")
 WEBHOOK_URL = ENV.fetch('WEBHOOK_URL', "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/")
@@ -225,11 +222,8 @@ end
 
 Service :n8n, image: webrtc_registry['voice-chat/n8n-runtime'] do
   ingress host: HOST, path: N8N_UI_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-  ingress host: HOST, path: N8N_UI_PATH_SLASH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
   ingress host: HOST, path: N8N_WEBHOOK_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-  ingress host: HOST, path: N8N_WEBHOOK_PATH_SLASH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
   ingress host: HOST, path: N8N_WEBHOOK_TEST_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-  ingress host: HOST, path: N8N_WEBHOOK_TEST_PATH_SLASH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
 
   env N8N_ENCRYPTION_KEY: N8N_ENCRYPTION_KEY,
       DB_TYPE: 'postgresdb',
@@ -250,7 +244,7 @@ Service :n8n, image: webrtc_registry['voice-chat/n8n-runtime'] do
       N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false',
       TOOL_PROXY_URL: 'http://web-rtc-komaroff_src_n8n:9000/tool'
   volume name: 'N8N_DATA', target: '/home/node/.n8n'
-  command ['/bin/sh', '-lc', 'n8n start & pid=$!; for i in $(seq 1 30); do if /bin/sh /usr/local/bin/import-missing-workflows.sh; then echo "[n8n_import] sync completed"; break; fi; echo "[n8n_import] sync retry ${i}/30"; sleep 2; done; wait "$pid"']
+  command ['/bin/sh', '-lc', 'n8n start & pid=$!; for i in $(seq 1 30); do if /usr/local/bin/import-missing-workflows.sh; then echo "[n8n_import] sync completed"; break; fi; echo "[n8n_import] sync retry ${i}/30"; sleep 2; done; wait "$pid"']
 end
 
 
