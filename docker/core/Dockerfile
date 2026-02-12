@@ -39,3 +39,4 @@ WORKDIR /app/src_core
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "-m", "src_core.main"]
+
