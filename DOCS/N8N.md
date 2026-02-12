@@ -12,8 +12,6 @@ Source of truth для n8n вынесен в отдельный репозито
 - `voice-chat/n8n-runtime` (service `n8n`)
 
 Ingress для n8n (`/n8n`, `/n8n/webhook`, `/n8n/webhook-test`) настраивается в `stack/webrtc.drs`.
-При старте сервиса `n8n` в `webrtc`-стеке автоматически выполняется
-`/usr/local/bin/import-missing-workflows.sh` (импортирует только отсутствующие workflows).
 
 ## Web UI
 
@@ -66,8 +64,7 @@ Source of truth для кода/сборки n8n остается в отдел�
 
 Причина — механизм bootstrap импорта.
 
-В `webrtc`-стеке missing-only импорт выполняется startup-скриптом перед `n8n start`.
-В `voice-chat/n8n/docker/docker-compose.yml` это реализовано отдельным сервисом `n8n_import`.
+В `~/dev/monitorsoft/voice-chat/n8n/docker/docker-compose.yml` есть сервис `n8n_import`, который при каждом поднятии стека выполняет `n8n import:workflow`.
 Этот CLI импорт:
 
 - не делает “умный upsert” по имени/ID,
