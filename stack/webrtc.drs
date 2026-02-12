@@ -104,6 +104,7 @@ Service :src_front, image: webrtc_registry['front'] do
 
   env FRONT_NATS_EVENTS_SUBJECT: "#{NATS_EVENTS_SUBJECT}#{USER_ID}",
       FRONT_NATS_AGENT_SUBJECT: "#{NATS_AGENT_SUBJECT}#{USER_ID}",
+      FRONT_NATS_WS_UPSTREAM: 'web-rtc-komaroff_audio_nats',
       FRONT_NATS_USER: NATS_USER,
       FRONT_NATS_PASS: NATS_PASS,
       FRONT_NATS_CLIENT_NAME: 'src_front',

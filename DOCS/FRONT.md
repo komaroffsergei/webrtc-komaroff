@@ -20,7 +20,7 @@
 
 - `GET /` -> статика `src_front`
 - `POST /core/*` -> proxy на `src_core:8000`
-- `WS /ws` -> proxy на `nats:9222`
+- `WS /ws` -> proxy на `${FRONT_NATS_WS_UPSTREAM}:9222` (по умолчанию `nats` в docker-compose)
 
 ### Исходящий (пользователь -> backend)
 
@@ -35,6 +35,7 @@
 - В Dev (Vite) по умолчанию используется `ws://localhost:9222`.
 - Если NATS требует auth, фронт берет `NATS_USER`/`NATS_PASS`/`NATS_TOKEN` из `window.SETTINGS`
   (прокидываются как `FRONT_NATS_USER`/`FRONT_NATS_PASS`/`FRONT_NATS_TOKEN`).
+- Upstream для nginx websocket proxy задается через `FRONT_NATS_WS_UPSTREAM`.
 
 ## UI-команды
 
