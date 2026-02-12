@@ -13,6 +13,8 @@ RUN npm run build
 
 FROM nginx:1.20-alpine as deploy
 
+ENV FRONT_NATS_WS_UPSTREAM=nats
+
 RUN rm -rf /usr/share/nginx/html/*
 RUN rm -f /etc/nginx/conf.d/*.conf /etc/nginx/templates/*.conf.template /etc/nginx/sites-enabled/*.conf
 
@@ -24,4 +26,3 @@ COPY --from=nginx /50-settings.sh /docker-entrypoint.d/50-settings.sh
 RUN chmod +x /docker-entrypoint.d/50-settings.sh
 
 CMD ["nginx", "-g", "daemon off;"]
-

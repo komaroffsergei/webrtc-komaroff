@@ -98,6 +98,8 @@ services:
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/front/${CI_COMMIT_BRANCH}
     ports:
       - "8080:8000"
+    environment:
+      FRONT_NATS_WS_UPSTREAM: nats
     depends_on:
       - src_core
       - nats
@@ -136,4 +138,3 @@ services:
 volumes:
   src_postgres_data:
     name: src_postgres_data
-
