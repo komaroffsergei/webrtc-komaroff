@@ -53,7 +53,7 @@ services:
       - nats
       - src_api_gateway
     environment:
-      API_URL: http://src_api_gateway:8100/api/${CI_COMMIT_BRANCH}
+      API_URL: http://src_api_gateway:8100/api
       NATS_URL: nats://nats:4222
 
   src_agent:
@@ -73,7 +73,7 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       POSTGRES_HOST: src_postgres
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp/${CI_COMMIT_BRANCH}
+      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
 
   src_llm:
     build:
@@ -121,7 +121,7 @@ services:
     environment:
       USER_ID: ${USER_ID:-user123}
       NATS_URL: nats://nats:4222
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp/${CI_COMMIT_BRANCH}
+      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
       NATS_AGENT_SUBJECT: nats.agent.
       NATS_N8N_HEALTH_SUBJECT: nats.n8n.health
     restart: "no"
