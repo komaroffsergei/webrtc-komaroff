@@ -199,47 +199,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
   CONF
 end
 
-Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
-  env USER_ID: USER_ID,
-      STACK_SERVICE_NAME: 'src_n8n',
-      NATS_URL: NATS_URL,
-      NATS_N8N_RUN_SUBJECT: NATS_N8N_RUN_SUBJECT,
-      NATS_N8N_HEALTH_SUBJECT: NATS_N8N_HEALTH_SUBJECT,
-      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
-      DATABASE_URL: DATABASE_URL,
-      N8N_WEBHOOK_BASE_URL: N8N_WEBHOOK_BASE_URL,
-      N8N_HTTP_TIMEOUT_SECONDS: N8N_HTTP_TIMEOUT_SECONDS,
-      TOOL_PROXY_HOST: '0.0.0.0',
-      TOOL_PROXY_PORT: TOOL_PROXY_PORT
-end
-
-Service :n8n, image: webrtc_registry['voice-chat/n8n-runtime'] do
-  ingress host: HOST, path: N8N_UI_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-  ingress host: HOST, path: N8N_WEBHOOK_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-  ingress host: HOST, path: N8N_WEBHOOK_TEST_PATH, path_sub: [N8N_UI_PATH_REWRITE, '$1'], port: 5678
-
-  env N8N_ENCRYPTION_KEY: N8N_ENCRYPTION_KEY,
-      DB_TYPE: 'postgresdb',
-      DB_POSTGRESDB_HOST: POSTGRES_HOST,
-      DB_POSTGRESDB_PORT: POSTGRES_PORT,
-      DB_POSTGRESDB_DATABASE: POSTGRES_DB,
-      DB_POSTGRESDB_USER: POSTGRES_USER,
-      DB_POSTGRESDB_PASSWORD: POSTGRES_PASSWORD,
-      DB_POSTGRESDB_SCHEMA: N8N_DB_SCHEMA,
-      EXECUTIONS_MODE: 'regular',
-      N8N_PATH: "#{N8N_UI_PATH}/",
-      N8N_EDITOR_BASE_URL: N8N_EDITOR_BASE_URL,
-      WEBHOOK_URL: WEBHOOK_URL,
-      N8N_PROXY_HOPS: N8N_PROXY_HOPS,
-      N8N_DIAGNOSTICS_ENABLED: 'false',
-      N8N_VERSION_NOTIFICATIONS_ENABLED: 'false',
-      N8N_TEMPLATES_ENABLED: 'false',
-      N8N_BLOCK_ENV_ACCESS_IN_NODE: 'false',
-      TOOL_PROXY_URL: 'http://web-rtc-komaroff_src_n8n:9000/tool'
-  volume name: 'N8N_DATA', target: '/home/node/.n8n'
-  command ['start']
-end
 
 
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
