@@ -21,12 +21,4 @@ N8N_TIMEOUT_SECONDS = int(os.getenv("N8N_TIMEOUT_SECONDS", "120"))
 RUNTIME_CONFLICT_RETRIES = int(os.getenv("RUNTIME_CONFLICT_RETRIES", "3"))
 
 # Database
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "mcp")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "mcp")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "mcp_pass")
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}",
-)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")

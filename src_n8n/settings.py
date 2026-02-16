@@ -16,28 +16,9 @@ NATS_N8N_HEALTH_SUBJECT = os.getenv("NATS_N8N_HEALTH_SUBJECT", Subjects.N8N_HEAL
 NATS_LLM_SUBJECT_PREFIX = os.getenv("NATS_LLM_SUBJECT", Subjects.LLM_PREFIX)
 NATS_TOOLS_PREFIX = os.getenv("NATS_TOOLS_PREFIX", Subjects.TOOLS_PREFIX)
 
-POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
-POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
-POSTGRES_DB = os.getenv("POSTGRES_DB", "mcp")
-POSTGRES_USER = os.getenv("POSTGRES_USER", "mcp")
-POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "mcp_pass")
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}",
-)
-
-def _is_running_in_docker() -> bool:
-    # https://docs.docker.com/engine/reference/run/#container-identification
-    return os.path.exists("/.dockerenv")
-
-
-_DEFAULT_N8N_BASE_URL = "http://n8n:5678" if _is_running_in_docker() else "http://127.0.0.1:5679"
-_DEFAULT_N8N_WEBHOOK_BASE_URL = (
-    "http://n8n_webhook:5678/webhook" if _is_running_in_docker() else f"{_DEFAULT_N8N_BASE_URL}/webhook"
-)
-
-N8N_BASE_URL = os.getenv("N8N_BASE_URL", _DEFAULT_N8N_BASE_URL)
-N8N_WEBHOOK_BASE_URL = os.getenv("N8N_WEBHOOK_BASE_URL", _DEFAULT_N8N_WEBHOOK_BASE_URL)
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://mcp:mcp_pass@localhost:5432/mcp")
+N8N_BASE_URL = os.getenv("N8N_BASE_URL", "http://n8n:5678")
+N8N_WEBHOOK_BASE_URL = os.getenv("N8N_WEBHOOK_BASE_URL", "http://n8n_webhook:5678/webhook")
 
 TOOL_PROXY_HOST = os.getenv("TOOL_PROXY_HOST", "0.0.0.0")
 TOOL_PROXY_PORT = int(os.getenv("TOOL_PROXY_PORT", "9000"))

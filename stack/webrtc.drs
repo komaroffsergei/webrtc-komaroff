@@ -13,23 +13,32 @@ ASR_OUT_PREFIX = "inference.whisper.text."
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
-N8N_UI_PATH = ENV.fetch('N8N_UI_PATH', '/n8n')
-N8N_UI_PATH_REWRITE = ENV.fetch('N8N_UI_PATH_REWRITE', '^/n8n(.*)')
-N8N_WEBHOOK_PATH = ENV.fetch('N8N_WEBHOOK_PATH', "#{N8N_UI_PATH}/webhook")
-N8N_WEBHOOK_TEST_PATH = ENV.fetch('N8N_WEBHOOK_TEST_PATH', "#{N8N_UI_PATH}/webhook-test")
-N8N_PUBLIC_BASE_URL = ENV.fetch('N8N_PUBLIC_BASE_URL', 'https://webrtc-komaroff.gis-master.ru')
-N8N_EDITOR_BASE_URL = ENV.fetch('N8N_EDITOR_BASE_URL', "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/")
-WEBHOOK_URL = ENV.fetch('WEBHOOK_URL', "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/")
-N8N_PROXY_HOPS = ENV.fetch('N8N_PROXY_HOPS', '1')
-N8N_ENCRYPTION_KEY = ENV.fetch('N8N_ENCRYPTION_KEY', 'n8n_encryption_key_dev_only_change_me')
-N8N_DB_SCHEMA = ENV.fetch('N8N_DB_SCHEMA', 'n8n')
-POSTGRES_HOST = ENV.fetch("POSTGRES_HOST", "web-rtc-komaroff_src_postgres")
-POSTGRES_PORT = ENV.fetch("POSTGRES_PORT", "5432")
-POSTGRES_DB = ENV.fetch("POSTGRES_DB", "mcp")
-POSTGRES_USER = ENV.fetch("POSTGRES_USER", "mcp")
-POSTGRES_PASSWORD = ENV.fetch("POSTGRES_PASSWORD", "mcp_pass")
+N8N_UI_PATH = '/n8n'
+N8N_UI_PATH_REWRITE = '^/n8n(.*)'
+N8N_WEBHOOK_PATH = "#{N8N_UI_PATH}/webhook"
+N8N_WEBHOOK_TEST_PATH = "#{N8N_UI_PATH}/webhook-test"
+N8N_PUBLIC_BASE_URL = 'https://webrtc-komaroff.gis-master.ru'
+N8N_EDITOR_BASE_URL = "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/"
+WEBHOOK_URL = "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/"
+N8N_PROXY_HOPS = '1'
+N8N_ENCRYPTION_KEY = 'n8n_encryption_key_dev_only_change_me'
+N8N_DB_SCHEMA = 'n8n'
+POSTGRES_HOST = 'web-rtc-komaroff_src_postgres'
+POSTGRES_PORT = '5432'
+POSTGRES_DB = 'mcp'
+POSTGRES_USER = 'mcp'
+POSTGRES_PASSWORD = 'mcp_pass'
 DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}?sslmode=disable"
-N8N_WEBHOOK_BASE_URL = ENV.fetch('N8N_WEBHOOK_BASE_URL', 'http://web-rtc-komaroff_n8n:5678/webhook')
+N8N_WEBHOOK_BASE_URL = 'http://web-rtc-komaroff_n8n:5678/webhook'
+NATS_TOOLS_PREFIX = 'nats.tools.'
+NATS_REQUEST_TIMEOUT = '600'
+AGENT_MAX_STEPS = '10'
+MAX_STEPS = '10'
+TIMEOUT_SECONDS = '600'
+NATS_N8N_RUN_SUBJECT = 'nats.n8n.run'
+NATS_N8N_HEALTH_SUBJECT = 'nats.n8n.health'
+N8N_HTTP_TIMEOUT_SECONDS = '120'
+TOOL_PROXY_PORT = '9000'
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
@@ -46,7 +55,7 @@ Service :src_core, image: webrtc_registry['core']do
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
-      NATS_REQUEST_TIMEOUT: ENV.fetch("NATS_REQUEST_TIMEOUT", "600"),
+      NATS_REQUEST_TIMEOUT: NATS_REQUEST_TIMEOUT,
       STACK_SERVICE_NAME: 'src_core',
       USER_ID: USER_ID,
       CORE_HOST: '0.0.0.0',
@@ -65,7 +74,7 @@ Service :src_api_gateway, image: webrtc_registry['api-gateway']do
   env API_HOST: '0.0.0.0',
       API_PORT: 8100,
       NATS_URL: NATS_URL,
-      NATS_TOOLS_PREFIX: ENV.fetch('NATS_TOOLS_PREFIX', 'nats.tools.')
+      NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX
 end
 
 Service :src_agent, image: webrtc_registry['agent'] do
@@ -75,18 +84,10 @@ Service :src_agent, image: webrtc_registry['agent'] do
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      AGENT_MAX_STEPS: ENV.fetch('AGENT_MAX_STEPS', '10'),
-      MAX_STEPS: ENV.fetch('MAX_STEPS', '10'),
-      TIMEOUT_SECONDS: ENV.fetch('TIMEOUT_SECONDS', '600'),
-      POSTGRES_HOST: POSTGRES_HOST,
-      POSTGRES_PORT: POSTGRES_PORT,
-      POSTGRES_DB: POSTGRES_DB,
-      POSTGRES_USER: POSTGRES_USER,
-      POSTGRES_PASSWORD: POSTGRES_PASSWORD,
-      DATABASE_URL: ENV.fetch(
-        'DATABASE_URL',
-        "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}"
-      ),
+      AGENT_MAX_STEPS: AGENT_MAX_STEPS,
+      MAX_STEPS: MAX_STEPS,
+      TIMEOUT_SECONDS: TIMEOUT_SECONDS,
+      DATABASE_URL: DATABASE_URL,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
       RUNWAYS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports',
@@ -122,9 +123,7 @@ Service :src_front, image: webrtc_registry['front'] do
       FRONT_NATS_PASS: NATS_PASS,
       FRONT_NATS_CLIENT_NAME: 'src_front',
       FRONT_CORE_ORIGIN: 'http://web-rtc-komaroff_src_core:8000',
-      COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'] ||
-                                 ENV['CI_PIPELINE_IID'] ||
-                                 'local'
+      COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'].to_s
 end
 
 Service :src_postgres, image: webrtc_registry['postgres'] do
@@ -204,20 +203,15 @@ Service :src_n8n, image: webrtc_registry['voice-chat/n8n'] do
   env USER_ID: USER_ID,
       STACK_SERVICE_NAME: 'src_n8n',
       NATS_URL: NATS_URL,
-      NATS_N8N_RUN_SUBJECT: ENV.fetch('NATS_N8N_RUN_SUBJECT', 'nats.n8n.run'),
-      NATS_N8N_HEALTH_SUBJECT: ENV.fetch('NATS_N8N_HEALTH_SUBJECT', 'nats.n8n.health'),
+      NATS_N8N_RUN_SUBJECT: NATS_N8N_RUN_SUBJECT,
+      NATS_N8N_HEALTH_SUBJECT: NATS_N8N_HEALTH_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      NATS_TOOLS_PREFIX: ENV.fetch('NATS_TOOLS_PREFIX', 'nats.tools.'),
-      POSTGRES_HOST: POSTGRES_HOST,
-      POSTGRES_PORT: POSTGRES_PORT,
-      POSTGRES_DB: POSTGRES_DB,
-      POSTGRES_USER: POSTGRES_USER,
-      POSTGRES_PASSWORD: POSTGRES_PASSWORD,
+      NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
       DATABASE_URL: DATABASE_URL,
       N8N_WEBHOOK_BASE_URL: N8N_WEBHOOK_BASE_URL,
-      N8N_HTTP_TIMEOUT_SECONDS: ENV.fetch('N8N_HTTP_TIMEOUT_SECONDS', '120'),
+      N8N_HTTP_TIMEOUT_SECONDS: N8N_HTTP_TIMEOUT_SECONDS,
       TOOL_PROXY_HOST: '0.0.0.0',
-      TOOL_PROXY_PORT: ENV.fetch('TOOL_PROXY_PORT', '9000')
+      TOOL_PROXY_PORT: TOOL_PROXY_PORT
 end
 
 Service :n8n, image: webrtc_registry['voice-chat/n8n-runtime'] do
