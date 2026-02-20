@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import signal
+from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any, Optional
 from uuid import UUID, uuid4
@@ -13,13 +14,11 @@ import httpx
 from fastapi import FastAPI
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
-from pydantic import BaseModel
 import uvicorn
 
 from src_n8n.settings import (
-    WORKFLOW_ENTITY_IDS,
-    WORKFLOW_ROUTER,
-    WORKFLOW_WEBHOOK_PATHS,
+    N8N_ENGINE_WORKFLOW_ID,
+    N8N_ENGINE_WEBHOOK_PATH,
     NATS_LLM_SUBJECT_PREFIX,
     NATS_TOOLS_PREFIX,
 )
@@ -66,6 +65,9 @@ class N8nBridgeService:
         self.nats_url = nats_url
         self.database_url = database_url
         self.n8n_webhook_base_url = n8n_webhook_base_url.rstrip("/")
+        self.n8n_engine_workflow_id = N8N_ENGINE_WORKFLOW_ID.strip()
+        self.n8n_engine_webhook_path = N8N_ENGINE_WEBHOOK_PATH.strip("/")
+        self._runtime_engine_webhook_path = self.n8n_engine_webhook_path
         self.n8n_http_timeout_s = float(n8n_http_timeout_s)
         self.n8n_run_subject = n8n_run_subject
         self.n8n_health_subject = n8n_health_subject
@@ -75,6 +77,8 @@ class N8nBridgeService:
 
         self._deps: Optional[BridgeDeps] = None
         self._stop = asyncio.Event()
+        self._tool_cache_limit = 5000
+        self._tool_response_cache: "OrderedDict[str, ToolCallResponse]" = OrderedDict()
 
         self._tool_app = FastAPI(title="src_n8n tool proxy")
 
@@ -115,7 +119,11 @@ class N8nBridgeService:
                 return json.loads(resp.model_dump_json())
 
             try:
+                cached = self._get_cached_tool_response(req)
+                if cached is not None:
+                    return json.loads(cached.model_dump_json())
                 resp = await self._dispatch_tool_call(req)
+                self._store_cached_tool_response(req, resp)
             except Exception as exc:
                 logger.exception("Tool call failed")
                 resp = ToolCallResponse(
@@ -128,6 +136,24 @@ class N8nBridgeService:
                     error=ErrorInfo(code="tool_call_failed", message=str(exc)),
                 )
             return json.loads(resp.model_dump_json())
+
+    def _tool_cache_key(self, req: ToolCallRequest) -> str:
+        return f"{req.request_id}:{req.tool_name.strip()}"
+
+    def _get_cached_tool_response(self, req: ToolCallRequest) -> ToolCallResponse | None:
+        key = self._tool_cache_key(req)
+        cached = self._tool_response_cache.get(key)
+        if cached is None:
+            return None
+        self._tool_response_cache.move_to_end(key)
+        return cached
+
+    def _store_cached_tool_response(self, req: ToolCallRequest, resp: ToolCallResponse) -> None:
+        key = self._tool_cache_key(req)
+        self._tool_response_cache[key] = resp
+        self._tool_response_cache.move_to_end(key)
+        while len(self._tool_response_cache) > self._tool_cache_limit:
+            self._tool_response_cache.popitem(last=False)
 
     async def run(self) -> None:
         nc = NATS()
@@ -152,8 +178,9 @@ class N8nBridgeService:
         )
 
         logger.info("Using n8n webhook base URL: %s", self.n8n_webhook_base_url)
-
-        await self._ensure_static_webhooks_with_retry()
+        logger.info("Using n8n engine workflow id: %s", self.n8n_engine_workflow_id)
+        logger.info("Using n8n engine webhook path: %s", self.n8n_engine_webhook_path)
+        await self._ensure_engine_webhook_with_retry()
 
         # Queue groups prevent duplicate processing if multiple bridge instances are running.
         await nc.subscribe(self.n8n_run_subject, queue="src_n8n.run.q", cb=self._handle_run)
@@ -186,54 +213,101 @@ class N8nBridgeService:
         logger.info("Shutdown requested: %s", getattr(signal_obj, "name", signal_obj))
         self._stop.set()
 
-    async def _ensure_static_webhooks_with_retry(self) -> None:
+    async def _ensure_engine_webhook_with_retry(
+        self,
+        *,
+        attempts: int = 20,
+        sleep_seconds: float = 1.0,
+    ) -> None:
         last_error: Exception | None = None
-        for attempt in range(1, 31):
+        for attempt in range(1, attempts + 1):
             try:
-                await self._ensure_static_webhooks()
+                await self._ensure_engine_webhook()
                 return
             except Exception as exc:
                 last_error = exc
                 logger.warning(
-                    "Failed to ensure n8n webhook_entity rows (attempt=%s/30): %s",
+                    "Failed to ensure engine webhook row (attempt=%s/%s): %s",
                     attempt,
+                    attempts,
                     str(exc),
                 )
-                await asyncio.sleep(1)
-        raise RuntimeError(f"Failed to ensure static n8n webhooks: {last_error}")
+                if attempt < attempts and sleep_seconds > 0:
+                    await asyncio.sleep(sleep_seconds)
+        raise RuntimeError(f"failed to ensure engine webhook row: {last_error}")
 
-    async def _ensure_static_webhooks(self) -> None:
+    async def _ensure_engine_webhook(self) -> None:
         assert self._deps is not None
-        rows: list[tuple[str, str, str, str]] = []
-        for runtime_workflow_id, webhook_path in WORKFLOW_WEBHOOK_PATHS.items():
-            workflow_entity_id = WORKFLOW_ENTITY_IDS.get(runtime_workflow_id)
-            if not workflow_entity_id:
-                continue
-            rows.append((webhook_path, "POST", "Webhook", workflow_entity_id))
-
-        if not rows:
-            return
-
+        logger.info(
+            "Ensuring engine webhook row: workflow_id=%s path=%s",
+            self.n8n_engine_workflow_id,
+            self.n8n_engine_webhook_path,
+        )
         async with self._deps.pg.acquire() as conn:
-            existing_ids = {
-                r["id"]
-                for r in await conn.fetch(
-                    'select id from n8n.workflow_entity where id = any($1::text[])',
-                    list({row[3] for row in rows}),
-                )
-            }
-            filtered = [row for row in rows if row[3] in existing_ids]
-            if not filtered:
-                return
-            await conn.executemany(
+            exists = await conn.fetchval(
+                'select 1 from n8n.workflow_entity where id = $1',
+                self.n8n_engine_workflow_id,
+            )
+            if not exists:
+                raise RuntimeError(f"engine workflow not found: {self.n8n_engine_workflow_id}")
+
+            # Keep only one deterministic production webhook path for engine.
+            await conn.execute(
+                """
+                delete from n8n.webhook_entity
+                where "workflowId" = $1
+                  and method = 'POST'
+                  and "webhookPath" <> $2
+                """,
+                self.n8n_engine_workflow_id,
+                self.n8n_engine_webhook_path,
+            )
+            await conn.execute(
                 """
                 insert into n8n.webhook_entity("webhookPath", method, node, "workflowId")
-                values ($1, $2, $3, $4)
+                values ($1, 'POST', 'Webhook', $2)
                 on conflict ("webhookPath", method) do update
-                set node = excluded.node, "workflowId" = excluded."workflowId"
+                set node = excluded.node,
+                    "workflowId" = excluded."workflowId"
                 """,
-                filtered,
+                self.n8n_engine_webhook_path,
+                self.n8n_engine_workflow_id,
             )
+        await self._refresh_runtime_engine_webhook_path()
+        logger.info("Engine webhook row ensured")
+
+    async def _refresh_runtime_engine_webhook_path(self) -> None:
+        assert self._deps is not None
+        async with self._deps.pg.acquire() as conn:
+            path = await conn.fetchval(
+                """
+                select "webhookPath"
+                from n8n.webhook_entity
+                where "workflowId" = $1
+                  and method = 'POST'
+                order by char_length("webhookPath") desc
+                limit 1
+                """,
+                self.n8n_engine_workflow_id,
+            )
+        if path:
+            self._runtime_engine_webhook_path = str(path).strip("/")
+            logger.info("Resolved engine webhook path: %s", self._runtime_engine_webhook_path)
+
+    def _build_engine_webhook_url(self) -> str:
+        return f"{self._deps.n8n_webhook_base_url}/{self._runtime_engine_webhook_path}"
+
+    @staticmethod
+    def _normalize_engine_response_payload(payload: Any, req: N8nRunRequest) -> dict[str, Any]:
+        if not isinstance(payload, dict):
+            raise RuntimeError("n8n engine returned non-object JSON")
+
+        payload.setdefault("trace_id", str(req.trace_id))
+        payload.setdefault("correlation_id", str(req.correlation_id or req.trace_id))
+        payload.setdefault("request_id", str(req.request_id))
+        payload.setdefault("session_id", str(req.session_id))
+        payload.setdefault("ts_ms", now_ts_ms())
+        return payload
 
     async def _handle_health(self, msg: Msg) -> None:
         try:
@@ -337,12 +411,7 @@ class N8nBridgeService:
             logger.warning("Failed to insert runtime_requests row (request_id=%s): %s", str(req.request_id), str(exc))
 
         try:
-            workflow_id = req.runtime.active_workflow_id or WORKFLOW_ROUTER
-            path = WORKFLOW_WEBHOOK_PATHS.get(workflow_id)
-            if not path:
-                raise RuntimeError(f"Unknown workflow_id: {workflow_id}")
-
-            resp = await self._call_n8n_webhook(path=path, req=req)
+            resp = await self._call_n8n_engine(req=req)
             try:
                 await self._store_response(req.request_id, resp)
             except Exception as exc:
@@ -371,120 +440,52 @@ class N8nBridgeService:
                 )
             await msg.respond(resp.model_dump_json().encode("utf-8"))
 
-    async def _call_n8n_webhook(self, *, path: str, req: N8nRunRequest) -> N8nRunResponse:
+    async def _call_n8n_engine(self, *, req: N8nRunRequest) -> N8nRunResponse:
         assert self._deps is not None
-        url = f"{self._deps.n8n_webhook_base_url}/{path}"
-        workflow_entity_id = path.split("/", 1)[0] if isinstance(path, str) and "/" in path else None
+        url = self._build_engine_webhook_url()
         payload = json.loads(req.model_dump_json())
         try:
             r = await self._deps.http.post(url, json=payload)
-        except httpx.RequestError as exc:
-            raise RuntimeError(
-                f"Failed to call n8n webhook (url={url}). "
-                "Check N8N_WEBHOOK_BASE_URL and that the n8n webhook server is reachable. "
-                "Hints: in Docker use http://n8n_webhook:5678/webhook; locally use http://127.0.0.1:5679/webhook."
-            ) from exc
-        if r.status_code == 404:
-            # n8n import/activation can wipe webhook_entity rows; restore and retry once.
-            logger.warning("n8n webhook returned 404; re-ensuring webhook_entity rows and retrying. url=%s", url)
-            await self._ensure_static_webhooks_with_retry()
+        except httpx.RequestError:
+            # n8n_webhook container can be recreated and get a new IP.
+            # Recreate client to force fresh DNS/TCP state and retry once.
+            await self._deps.http.aclose()
+            self._deps.http = httpx.AsyncClient(timeout=httpx.Timeout(self.n8n_http_timeout_s))
             try:
                 r = await self._deps.http.post(url, json=payload)
             except httpx.RequestError as exc:
                 raise RuntimeError(
-                    f"Failed to call n8n webhook after restoring webhook entities (url={url}). "
+                    f"Failed to call n8n engine workflow (url={url}). "
                     "Check N8N_WEBHOOK_BASE_URL and that the n8n webhook server is reachable. "
                     "Hints: in Docker use http://n8n_webhook:5678/webhook; locally use http://127.0.0.1:5679/webhook."
                 ) from exc
+        if r.status_code == 404:
+            logger.warning("Engine webhook returned 404, attempting to ensure webhook row and retry")
+            await self._ensure_engine_webhook_with_retry(attempts=3, sleep_seconds=0.3)
+            await self._refresh_runtime_engine_webhook_path()
+            url = self._build_engine_webhook_url()
+            r = await self._deps.http.post(url, json=payload)
+        if r.status_code == 404:
+            raise RuntimeError(
+                f"n8n engine workflow returned 404 for url={url}. "
+                f"Expected webhook path: {self._runtime_engine_webhook_path}"
+            )
         if r.status_code >= 500:
-            dbg = None
-            if workflow_entity_id:
-                try:
-                    dbg = await self._load_latest_execution_error(workflow_entity_id)
-                except Exception as exc:
-                    logger.warning("Failed to load n8n execution error details: %s", str(exc))
             msg = f"n8n returned {r.status_code} for url={url}."
-            if dbg:
-                msg = (
-                    f"{msg} execution_id={dbg.get('execution_id')} node={dbg.get('node_name')} "
-                    f"error={dbg.get('error_name')} http_code={dbg.get('http_code')} message={dbg.get('message')}"
-                )
+            body_excerpt = (r.text or "").strip().replace("\n", " ")
+            if body_excerpt:
+                msg = f"{msg} Body: {body_excerpt[:240]}"
             msg = (
                 f"{msg} Hint: n8n must be able to reach the tool proxy URL. "
                 "Ensure TOOL_PROXY_URL points to http://src_n8n:9000/tool and that the src_n8n container is running."
             )
             raise RuntimeError(msg)
         r.raise_for_status()
-        data = r.json()
+        data = self._normalize_engine_response_payload(r.json(), req)
         resp = N8nRunResponse.model_validate(data)
         if resp.trace_id != req.trace_id or resp.session_id != req.session_id:
             raise RuntimeError("n8n response trace/session mismatch")
         return resp
-
-    async def _load_latest_execution_error(self, workflow_entity_id: str) -> dict[str, Any] | None:
-        """
-        Best-effort helper to extract the most recent execution error details from n8n DB.
-
-        This is a dev UX improvement: n8n webhooks often respond with a generic 500, so we read
-        the execution record to provide a concrete reason (DNS, tool proxy unreachable, etc).
-        """
-        assert self._deps is not None
-        async with self._deps.pg.acquire() as conn:
-            exec_id = await conn.fetchval(
-                """
-                select id
-                from n8n.execution_entity
-                where "workflowId" = $1
-                  and status = 'error'
-                  and "startedAt" >= now() - interval '60 seconds'
-                order by id desc
-                limit 1
-                """,
-                workflow_entity_id,
-            )
-            if not exec_id:
-                return None
-            data_txt = await conn.fetchval(
-                """
-                select left(data, 200000)
-                from n8n.execution_data
-                where "executionId" = $1
-                """,
-                int(exec_id),
-            )
-            if not isinstance(data_txt, str) or not data_txt:
-                return {"execution_id": int(exec_id)}
-
-        try:
-            raw = json.loads(data_txt)
-        except Exception:
-            return {"execution_id": int(exec_id)}
-
-        best: dict[str, Any] = {"execution_id": int(exec_id)}
-        stack: list[Any] = [raw]
-        while stack:
-            cur = stack.pop()
-            if isinstance(cur, dict):
-                name = cur.get("name")
-                message = cur.get("message")
-                node = cur.get("node")
-                http_code = cur.get("httpCode")
-                if isinstance(name, str) and isinstance(message, str) and "Error" in name:
-                    best.update(
-                        {
-                            "error_name": name,
-                            "message": message,
-                            "node_name": node if isinstance(node, str) else None,
-                            "http_code": http_code if isinstance(http_code, str) else None,
-                        }
-                    )
-                    break
-                for v in cur.values():
-                    stack.append(v)
-            elif isinstance(cur, list):
-                stack.extend(cur)
-
-        return best
 
     async def _dispatch_tool_call(self, req: ToolCallRequest) -> ToolCallResponse:
         assert self._deps is not None

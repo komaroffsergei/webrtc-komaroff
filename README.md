@@ -8,7 +8,7 @@ Local development guide for the WebRTC + NATS microservices stack.
 - `src_agent` - thin runner (NATS + PostgreSQL): stores `runtime_state`, calls n8n over NATS, publishes UI events.
 - `src_n8n` - NATS bridge: `nats.n8n.run` -> n8n webhook, plus an internal HTTP tool proxy for workflows.
 - `n8n` - workflow orchestration (stores workflows in Postgres schema `n8n`).
-- `src_llm` - LLM gateway over NATS (strict JSON schemas; can run in mock mode).
+- `src_llm` - LLM gateway over NATS (strict JSON schemas; `LLM_MODE=local|remote`).
 - `src_api_gateway` - mock APIs + NATS tools (`nats.tools.*`) used by workflows via `src_n8n` tool proxy.
 - `src_front` - web UI (connects to NATS over WebSocket).
 - Infrastructure (Docker): NATS, PostgreSQL, Redis (for n8n queue mode).
@@ -200,14 +200,13 @@ On first start n8n may ask you to create an owner account.
 
 The demo workflows are named and versioned as:
 
-- `router@1.0.0`
+- `engine@1.0.0`
 - `echo@1.0.0`
 - `collect_name@1.0.0`
 - `airports_and_weather@1.0.0`
 
-Important: this repo bootstraps workflows from `docker/n8n/workflows/*.json`. If you change workflows in the UI,
-export them back to JSON (and commit) or disable the bootstrap import, otherwise your local changes can be overwritten
-on the next stack recreate.
+Important: canonical workflows are owned by `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json`.
+If you change workflows in UI, export JSON to that repo and commit there.
 
 ### NATS subjects
 
@@ -254,18 +253,18 @@ duplicate `request_id` values.
 
 ### Workflows
 
-Workflows are stored and visually managed in n8n, but this repo bootstraps demo workflows from JSON files:
+Workflows are stored and visually managed in n8n, canonical JSON files live in:
 
-- `docker/n8n/workflows/router_1_0_0.json`
-- `docker/n8n/workflows/echo_1_0_0.json`
-- `docker/n8n/workflows/collect_name_1_0_0.json`
-- `docker/n8n/workflows/airports_and_weather_1_0_0.json`
+- `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/router_1_0_0.json`
+- `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/echo_1_0_0.json`
+- `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/collect_name_1_0_0.json`
+- `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/airports_and_weather_1_0_0.json`
 
 To add a new workflow:
 
-1) Create/export the workflow JSON into `docker/n8n/workflows/`.
+1) Create/export the workflow JSON into `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/`.
 2) Give it a stable runtime id in the workflow name (example: `my_flow@1.0.0`).
-3) Add it to `src_n8n/settings.py` mappings so `src_n8n` can call the correct n8n webhook path.
+3) If this is a top-level entrypoint, call it from `router@1.0.0` using `Execute Workflow`.
 4) Ensure the workflow returns a JSON object compatible with `N8nRunResponse`.
 
 ### Run E2E tests
@@ -302,3 +301,8 @@ If you want to remove it from the repo, delete `src_whisper/` and also remove/cl
 
 - `webrtc-komaroff-dev/docker/whisper/`
 - `webrtc-komaroff-dev/stack/webrtc.drs` (if your branch still deploys `src_whisper`)
+
+
+
+
+docker compose -f docker/docker-compose.yml up --build

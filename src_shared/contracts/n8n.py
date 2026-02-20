@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .common import ErrorInfo, TraceEnvelope
 
-N8nStatus = Literal["RUNNING", "DONE", "FAILED"]
+N8nStatus = Literal["RUNNING", "PARTIAL", "DONE", "FAILED"]
 
 
 class N8nRuntimeState(BaseModel):
@@ -35,4 +35,3 @@ class N8nRunResponse(TraceEnvelope):
     client_events: list[dict[str, Any]] = Field(default_factory=list)
     next_runtime: N8nRuntimeState = Field(default_factory=N8nRuntimeState)
     errors: list[ErrorInfo] = Field(default_factory=list)
-

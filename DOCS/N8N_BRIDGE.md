@@ -1,5 +1,8 @@
 # src_n8n (мост NATS <-> n8n)
 
+> NOTE: Документ частично устарел. После миграции bridge вызывает только `router_1_0_0` и не использует `WORKFLOW_WEBHOOK_PATHS`/`webhook_entity`-восстановление.
+> Актуальный source-of-truth: `~/dev/monitorsoft/voice-chat/n8n/src/service.py` и `~/dev/monitorsoft/voice-chat/n8n/src/settings.py`.
+
 ## Где находится код bridge
 
 Код и сборка `src_n8n` вынесены в отдельный репозиторий:

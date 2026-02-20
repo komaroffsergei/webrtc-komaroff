@@ -41,7 +41,7 @@ collect_file_contents.sh
 #src_front
 #src_llm
 #src_agent
-src_api_gateway
+#src_api_gateway
 src_postgres
 #src_whisper
 src_llm_test

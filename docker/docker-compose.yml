@@ -86,7 +86,8 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       USER_ID: ${USER_ID:-user123}
-      LLM_MODE: mock
+      LLM_MODE: remote
+      OLLAMA_URL: http://ollama.h100.local # https://ollama-webui.gis-master.ru
 
   src_front:
     build:

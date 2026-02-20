@@ -22,9 +22,12 @@ Subject:
 
 - n8n HTTP Request node -> `src_n8n /tool` -> NATS `nats.llm.<user_id>`
 
-## Mock mode
+## LLM mode
 
-В docker-compose используется `LLM_MODE=mock`, чтобы демо-сценарии работали детерминированно.
+Поддерживаются только два режима:
+
+- `LLM_MODE=local`
+- `LLM_MODE=remote`
 
 ## Код (куда смотреть)
 
@@ -40,5 +43,5 @@ Subject:
 
 Что делать:
 
-- в dev используйте `LLM_MODE=mock` (в compose уже так)
-- если включаете реальную модель — проверьте, что prompts требуют **строго один JSON объект** и что включён строгий парсер
+- используйте `LLM_MODE=local` или `LLM_MODE=remote`
+- проверьте, что prompts требуют **строго один JSON объект** и что включён строгий парсер

@@ -54,6 +54,8 @@ class LLMService(BaseService):
         self.llm_remote_model = llm_remote_model
         self.default_max_tokens = int(default_max_tokens)
         self.llm_mode = (llm_mode or "remote").strip().lower()
+        if self.llm_mode not in {"local", "remote"}:
+            raise ValueError("LLM_MODE must be either 'local' or 'remote'")
         self.llm_models_dir = llm_models_dir
         self.ollama_model_file = (ollama_model_file or "").strip() or None
         self.llm_context_size = int(llm_context_size)
@@ -113,9 +115,6 @@ class LLMService(BaseService):
             )
             return json.loads(resp.model_dump_json())
 
-        if self.llm_mode == "mock":
-            return json.loads(self._mock(req).model_dump_json())
-
         try:
             if req.mode == "routing_decision":
                 data = self._routing_decision(req)
@@ -139,80 +138,117 @@ class LLMService(BaseService):
             )
             return json.loads(resp.model_dump_json())
 
-    def _mock(self, req: LlmRequest) -> LlmResponse:
-        text = str((req.input or {}).get("text") or "")
-        allow = (req.input or {}).get("allowlist_workflows") or []
-        allow_set = {str(x) for x in allow} if isinstance(allow, list) else set()
-
-        def _pick(workflow_id: str, reason: str) -> RoutingDecisionData:
-            wid = workflow_id if workflow_id in allow_set else (next(iter(allow_set)) if allow_set else workflow_id)
-            return RoutingDecisionData(workflow_id=wid, reason=reason, confidence=0.9)
-
-        if req.mode == "routing_decision":
-            t = text.lower()
-            rus_name_kw = "\u0437\u043e\u0432\u0443\u0442"
-            rus_airport_kw = "\u0430\u044d\u0440\u043e\u043f\u043e\u0440\u0442"
-            rus_weather_kw = "\u043f\u043e\u0433\u043e\u0434\u0430"
-            if (rus_name_kw in t or "name" in t) and "collect_name@1.0.0" in allow_set:
-                data = _pick("collect_name@1.0.0", "Name collection keywords detected.")
-            elif (rus_airport_kw in t or "airport" in t or rus_weather_kw in t or "weather" in t) and "airports_and_weather@1.0.0" in allow_set:
-                data = _pick("airports_and_weather@1.0.0", "Airport/weather keywords detected.")
-            elif "echo@1.0.0" in allow_set:
-                data = _pick("echo@1.0.0", "Fallback to echo.")
-            else:
-                return LlmResponse(
-                    trace_id=req.trace_id,
-                    correlation_id=req.correlation_id,
-                    request_id=req.request_id,
-                    session_id=req.session_id,
-                    ts_ms=now_ts_ms(),
-                    ok=False,
-                    data=None,
-                    error=ErrorInfo(code="no_workflow_selected", message="No workflow selected."),
-                )
-            return LlmResponse.from_validated_data(request=req, data=data)
-
-        if req.mode == "params_extract":
-            required = req.input.get("required_fields") if isinstance(req.input, dict) else None
-            required_list = [str(x) for x in required] if isinstance(required, list) else []
-            values: dict[str, Any] = {}
-            missing: list[str] = []
-            for f in required_list:
-                if f == "radius_km":
-                    import re
-                    m = re.search(r"(\\d{1,4})", text)
-                    if m:
-                        values["radius_km"] = int(m.group(1))
-                    else:
-                        missing.append("radius_km")
-                else:
-                    missing.append(f)
-            return LlmResponse.from_validated_data(request=req, data=ParamsExtractData(values=values, missing=missing))
-
-        if req.mode == "revise":
-            return LlmResponse.from_validated_data(
-                request=req,
-                data=ReviseData(need_user_input=True, question="Please clarify the request."),
-            )
-
-        return LlmResponse(
-            trace_id=req.trace_id,
-            correlation_id=req.correlation_id,
-            request_id=req.request_id,
-            session_id=req.session_id,
-            ts_ms=now_ts_ms(),
-            ok=False,
-            data=None,
-            error=ErrorInfo(code="unsupported_mode", message=f"Unsupported mode: {req.mode}"),
-        )
-
     def _routing_decision(self, req: LlmRequest) -> RoutingDecisionData:
         data = self._infer_json(req, RoutingDecisionData)
-        return RoutingDecisionData.model_validate(data)
+        inp = req.input if isinstance(req.input, dict) else {}
+        text = str(inp.get("text") or "").lower()
+        allow_raw = inp.get("allowlist_workflows")
+        allowlist = [str(x) for x in allow_raw] if isinstance(allow_raw, list) else []
+        allowset = set(allowlist)
+
+        def _fallback() -> RoutingDecisionData:
+            if (
+                ("зовут" in text or "name" in text)
+                and "collect_name@1.0.0" in allowset
+            ):
+                return RoutingDecisionData(
+                    workflow_id="collect_name@1.0.0",
+                    reason="fallback keyword routing: name",
+                    confidence=0.6,
+                )
+            if (
+                any(k in text for k in ["аэропорт", "airport", "погода", "weather"])
+                and "airports_and_weather@1.0.0" in allowset
+            ):
+                return RoutingDecisionData(
+                    workflow_id="airports_and_weather@1.0.0",
+                    reason="fallback keyword routing: airport/weather",
+                    confidence=0.6,
+                )
+            if "echo@1.0.0" in allowset:
+                return RoutingDecisionData(
+                    workflow_id="echo@1.0.0",
+                    reason="fallback default routing: echo",
+                    confidence=0.4,
+                )
+            if allowlist:
+                return RoutingDecisionData(
+                    workflow_id=allowlist[0],
+                    reason="fallback default routing: first allowlist item",
+                    confidence=0.3,
+                )
+            raise ValueError("No workflow selected and allowlist is empty")
+
+        try:
+            parsed = RoutingDecisionData.model_validate(data)
+        except Exception:
+            # Be tolerant to slightly off-schema model outputs.
+            workflow_id = str(
+                data.get("workflow_id")
+                or data.get("workflow")
+                or data.get("scenario_id")
+                or ""
+            ).strip()
+            if not workflow_id:
+                return _fallback()
+
+            reason = str(data.get("reason") or "normalized routing decision").strip()
+            try:
+                confidence = float(data.get("confidence", 0.5))
+            except Exception:
+                confidence = 0.5
+            confidence = max(0.0, min(1.0, confidence))
+            parsed = RoutingDecisionData(
+                workflow_id=workflow_id,
+                reason=reason or "normalized routing decision",
+                confidence=confidence,
+            )
+
+        if allowset and parsed.workflow_id not in allowset:
+            return _fallback()
+        return parsed
 
     def _params_extract(self, req: LlmRequest) -> ParamsExtractData:
         data = self._infer_json(req, ParamsExtractData)
-        return ParamsExtractData.model_validate(data)
+        try:
+            return ParamsExtractData.model_validate(data)
+        except Exception:
+            # Normalize flat outputs like {"city":"Moscow","radius_km":25}
+            # into strict schema {"ok","values","missing","confidence","notes"}.
+            inp = req.input if isinstance(req.input, dict) else {}
+            spec = inp.get("spec") if isinstance(inp.get("spec"), dict) else {}
+            fields = spec.get("fields") if isinstance(spec.get("fields"), dict) else {}
+            requested = [str(k) for k in fields.keys()]
+
+            values: dict[str, Any] = {}
+            for key in requested:
+                if key in data and data[key] is not None and str(data[key]).strip() != "":
+                    values[key] = data[key]
+
+            # If spec is missing, fallback to all non-meta keys.
+            if not requested:
+                for key, value in data.items():
+                    if key in {"ok", "values", "missing", "confidence", "notes"}:
+                        continue
+                    if value is None or (isinstance(value, str) and value.strip() == ""):
+                        continue
+                    values[str(key)] = value
+
+            missing = [key for key in requested if key not in values]
+            confidence_raw = data.get("confidence", 0.75 if values else 0.25)
+            try:
+                confidence = float(confidence_raw)
+            except Exception:
+                confidence = 0.25
+            confidence = max(0.0, min(1.0, confidence))
+
+            return ParamsExtractData(
+                ok=len(missing) == 0,
+                values=values,
+                missing=missing,
+                confidence=confidence,
+                notes=["normalized_from_flat_json"],
+            )
 
     def _revise(self, req: LlmRequest) -> ReviseData:
         data = self._infer_json(req, ReviseData)

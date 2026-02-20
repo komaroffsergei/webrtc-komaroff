@@ -1,5 +1,8 @@
 # n8n (оркестрация сценариев)
 
+> NOTE: Документ частично устарел после миграции на `engine@1.0.0` и внутренний `Execute Workflow`.
+> Актуальный source-of-truth: `~/dev/monitorsoft/voice-chat/n8n/README.md` и `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json`.
+
 ## Где находится n8n-стек сейчас
 
 Source of truth для n8n вынесен в отдельный репозиторий:
@@ -244,8 +247,8 @@ return [{ json: {
 Откройте `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/router_1_0_0.json` и найдите Function node `Build LLM Request`.
 В массив `allowlist_workflows` добавьте `my_scenario@1.0.0`.
 
-Если вы используете `LLM_MODE=mock`, то для стабильного роутинга в демо-режиме добавьте эвристику в `src_llm/service.py`
-(иначе LLM может никогда не выбрать ваш новый workflow).
+Убедитесь, что `src_llm` работает в `LLM_MODE=local` или `LLM_MODE=remote` и возвращает валидный `routing_decision`,
+иначе LLM может никогда не выбрать ваш новый workflow.
 
 ### Шаг 6: обеспечьте активацию после импорта
 

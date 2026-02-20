@@ -29,8 +29,11 @@ class RoutingDecisionData(BaseModel):
 class ParamsExtractData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    ok: bool = True
     values: dict[str, Any] = Field(default_factory=dict)
     missing: list[str] = Field(default_factory=list)
+    confidence: float = Field(ge=0.0, le=1.0, default=0.0)
+    notes: list[str] = Field(default_factory=list)
 
 
 class ReviseData(BaseModel):
@@ -74,4 +77,3 @@ class LlmResponse(TraceEnvelope):
             data=json.loads(data.model_dump_json()),
             error=None,
         )
-

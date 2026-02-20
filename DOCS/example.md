@@ -1,5 +1,8 @@
 # Пример (end-to-end): "Найди ближайший аэропорт"
 
+> NOTE: Документ частично устарел после миграции на `router@1.0.0` и внутренний `Execute Workflow`.
+> Для актуального потока смотрите `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/router_1_0_0.json`.
+
 Этот документ объясняет, как сейчас работает запрос "найди ближайший аэропорт" в текущей архитектуре (n8n orchestration + NATS),
 где используется LLM, какие subjects/контракты участвуют, и как это воспроизвести локально.
 
@@ -12,7 +15,7 @@
 - `src_agent` (локально): тонкий раннер. Достаёт runtime из Postgres, вызывает `src_n8n` по NATS, публикует UI-команды/события.
 - `src_n8n` (Docker): мост NATS <-> n8n + tool proxy HTTP endpoint для workflows.
 - `n8n` (Docker): хранит и исполняет workflows (router + сценарии).
-- `src_llm` (Docker): LLM gateway, NATS req-reply `nats.llm.<user_id>` (в dev обычно `LLM_MODE=mock`).
+- `src_llm` (Docker): LLM gateway, NATS req-reply `nats.llm.<user_id>` (`LLM_MODE=local|remote`).
 - `src_postgres` (Docker): хранит runtime_state (agent) и n8n schema `n8n` (n8n).
 - `nats` (Docker): транспорт межсервисного обмена.
 - `src_api_gateway` (локально): демо-tools по NATS (`nats.tools.*`) + HTTP mock API для `init_map` в `src_core`.
