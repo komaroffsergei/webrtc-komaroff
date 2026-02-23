@@ -163,6 +163,100 @@ def _tool_get_weather(*, city: str) -> dict:
     return {"data": {"weather": {"city": city, "temperature_c": temp, "condition": "CLEAR"}}}
 
 
+def _tool_get_flight_status(*, flight_number: str = None, last_name: str = None) -> dict:
+    flights = [
+        {"flight_number": "SU123", "last_name": "Иванов", "status": "ON_TIME", "from": "SVO", "to": "AMS",
+         "departure_time": "2026-01-14T12:30:00Z", "arrival_time": "2026-01-14T15:10:00Z", "gate": "A12", "terminal": "C"},
+        {"flight_number": "S123", "last_name": "Петров", "status": "DELAYED", "from": "DME", "to": "LED",
+         "departure_time": "2026-01-14T09:10:00Z", "arrival_time": "2026-01-14T10:35:00Z", "gate": "B07", "terminal": "B"},
+    ]
+    if flight_number:
+        fn = flight_number.strip().upper()
+        found = next((f for f in flights if f.get("flight_number") == fn), None)
+        if found:
+            return {"data": {"flight": found}}
+        return {"error": {"code": "not_found", "message": f"Flight {flight_number} not found"}}
+    if last_name:
+        ln = last_name.strip().casefold()
+        found = next((f for f in flights if f.get("last_name", "").casefold() == ln), None)
+        if found:
+            return {"data": {"flight": found}}
+        return {"error": {"code": "not_found", "message": f"Passenger {last_name} not found"}}
+    return {"error": {"code": "invalid_args", "message": "flight_number or last_name is required"}}
+
+
+def _tool_get_current_position() -> dict:
+    return {"data": {"lat": 55.7558, "lon": 37.6173, "city": "Moscow"}}
+
+
+def _tool_build_route(*, from_lat: float, from_lon: float, to_lat: float, to_lon: float) -> dict:
+    geometry = great_circle_geometry(start_lat=from_lat, start_lon=from_lon, end_lat=to_lat, end_lon=to_lon)
+    return {"data": {"geometry": geometry, "distance_km": round(haversine(from_lat, from_lon, to_lat, to_lon), 2)}}
+
+
+def get_tools_schema() -> dict:
+    return {
+        "tools": [
+            {
+                "name": "search_airports_nearby",
+                "description": "Search for airports near a city within a specified radius",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "city": {"type": "string", "description": "City name or IATA code"},
+                        "radius_km": {"type": "number", "description": "Search radius in kilometers", "default": 50}
+                    },
+                    "required": ["city"]
+                }
+            },
+            {
+                "name": "get_weather",
+                "description": "Get current weather for a city",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"city": {"type": "string", "description": "City name"}},
+                    "required": ["city"]
+                }
+            },
+            {
+                "name": "get_flight_status",
+                "description": "Get flight status by flight number or passenger last name",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "flight_number": {"type": "string", "description": "Flight number like SU123"},
+                        "last_name": {"type": "string", "description": "Passenger last name"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_current_position",
+                "description": "Get current user position (GPS)",
+                "parameters": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "build_route",
+                "description": "Build a route between two points",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "from_lat": {"type": "number", "description": "Starting point latitude"},
+                        "from_lon": {"type": "number", "description": "Starting point longitude"},
+                        "to_lat": {"type": "number", "description": "Destination latitude"},
+                        "to_lon": {"type": "number", "description": "Destination longitude"}
+                    },
+                    "required": ["from_lat", "from_lon", "to_lat", "to_lon"]
+                }
+            }
+        ]
+    }
+
+
+async def _handle_discover(msg: Msg) -> None:
+    await msg.respond(json.dumps(get_tools_schema()).encode("utf-8"))
+
+
 async def _handle_tool_request(msg: Msg) -> None:
     try:
         req = ToolCallRequest.model_validate(json.loads(msg.data.decode("utf-8")))
@@ -171,13 +265,25 @@ async def _handle_tool_request(msg: Msg) -> None:
 
         if tool == "search_airports_nearby":
             city = str(args.get("city") or "")
-            radius_km = args.get("radius_km")
-            if radius_km is None:
-                raise ValueError("radius_km is required")
+            radius_km = args.get("radius_km", 50)
             out = _tool_search_airports_nearby(city=city, radius_km=float(radius_km))
         elif tool == "get_weather":
             city = str(args.get("city") or "")
             out = _tool_get_weather(city=city)
+        elif tool == "get_flight_status":
+            out = _tool_get_flight_status(
+                flight_number=args.get("flight_number"),
+                last_name=args.get("last_name")
+            )
+        elif tool == "get_current_position":
+            out = _tool_get_current_position()
+        elif tool == "build_route":
+            out = _tool_build_route(
+                from_lat=float(args["from_lat"]),
+                from_lon=float(args["from_lon"]),
+                to_lat=float(args["to_lat"]),
+                to_lon=float(args["to_lon"])
+            )
         else:
             out = {"error": {"code": "unknown_tool", "message": f"Unknown tool: {tool}"}}
 
@@ -236,6 +342,12 @@ async def _startup_nats_tools() -> None:
         max_reconnect_attempts=-1,
         reconnect_time_wait=2,
         ping_interval=10,
+    )
+    # Subscribe to tool discovery
+    await app.state.nats.subscribe(
+        "nats.tools.discover",
+        queue="src_api_gateway.discover.q",
+        cb=_handle_discover,
     )
     # Queue group prevents duplicate tool executions if multiple api_gateway instances are running.
     await app.state.nats.subscribe(

@@ -13,6 +13,9 @@ from .llm import (
     RoutingDecisionData,
     ParamsExtractData,
     ReviseData,
+    ToolDecisionData,
+    ToolParamsData,
+    FinalResponseData,
 )
 from .n8n import N8nRunRequest, N8nRunResponse, N8nStatus, N8nRuntimeState
 from .subjects import Subjects
@@ -34,6 +37,9 @@ __all__ = [
     "ParamsExtractData",
     "ReviseData",
     "RoutingDecisionData",
+    "ToolDecisionData",
+    "ToolParamsData",
+    "FinalResponseData",
     "Subjects",
     "ToolCallRequest",
     "ToolCallResponse",

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .common import ErrorInfo, TraceEnvelope
 
-LlmMode = Literal["routing_decision", "params_extract", "revise"]
+LlmMode = Literal["routing_decision", "params_extract", "revise", "tool_decision", "tool_params", "final_response"]
 
 
 class LlmRequest(TraceEnvelope):
@@ -51,6 +51,38 @@ class ReviseData(BaseModel):
             if self.fixed is not None:
                 raise ValueError("fixed must be null when need_user_input=true")
         return self
+
+
+class ToolDecisionData(BaseModel):
+    """LLM decision about which tool to call."""
+    model_config = ConfigDict(extra="forbid")
+
+    needs_tool: bool = True
+    tool_name: Optional[str] = None
+    reason: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_tool(self) -> "ToolDecisionData":
+        if self.needs_tool and not self.tool_name:
+            raise ValueError("tool_name is required when needs_tool=true")
+        return self
+
+
+class ToolParamsData(BaseModel):
+    """Extracted parameters for tool execution."""
+    model_config = ConfigDict(extra="forbid")
+
+    extracted: dict[str, Any] = Field(default_factory=dict)
+    missing: list[str] = Field(default_factory=list)
+    prompt: Optional[str] = None
+
+
+class FinalResponseData(BaseModel):
+    """Final response to user."""
+    model_config = ConfigDict(extra="forbid")
+
+    response_text: str = Field(min_length=1)
+    client_command: Optional[dict[str, Any]] = None
 
 
 class LlmResponse(TraceEnvelope):

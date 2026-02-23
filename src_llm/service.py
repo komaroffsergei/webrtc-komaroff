@@ -17,11 +17,14 @@ from src_llm.utils.base_service import BaseService
 from src_llm.utils.model_downloader import ensure_model_path
 from src_shared.contracts import (
     ErrorInfo,
+    FinalResponseData,
     LlmRequest,
     LlmResponse,
     ParamsExtractData,
     ReviseData,
     RoutingDecisionData,
+    ToolDecisionData,
+    ToolParamsData,
     now_ts_ms,
 )
 
@@ -122,6 +125,12 @@ class LLMService(BaseService):
                 data = self._params_extract(req)
             elif req.mode == "revise":
                 data = self._revise(req)
+            elif req.mode == "tool_decision":
+                data = self._tool_decision(req)
+            elif req.mode == "tool_params":
+                data = self._tool_params(req)
+            elif req.mode == "final_response":
+                data = self._final_response(req)
             else:
                 raise ValueError(f"Unsupported mode: {req.mode}")
             return json.loads(LlmResponse.from_validated_data(request=req, data=data).model_dump_json())
@@ -253,6 +262,58 @@ class LLMService(BaseService):
     def _revise(self, req: LlmRequest) -> ReviseData:
         data = self._infer_json(req, ReviseData)
         return ReviseData.model_validate(data)
+
+    def _tool_decision(self, req: LlmRequest) -> ToolDecisionData:
+        """LLM decides which tool to call based on user message and available tools."""
+        data = self._infer_json(req, ToolDecisionData)
+        try:
+            return ToolDecisionData.model_validate(data)
+        except Exception:
+            # Normalize output
+            needs_tool = bool(data.get("needs_tool", True))
+            tool_name = data.get("tool_name")
+            reason = str(data.get("reason") or "no reason provided").strip()
+            if not needs_tool:
+                return ToolDecisionData(needs_tool=False, tool_name=None, reason=reason)
+            if not tool_name:
+                raise ValueError("tool_name is required when needs_tool=true")
+            return ToolDecisionData(needs_tool=True, tool_name=str(tool_name), reason=reason)
+
+    def _tool_params(self, req: LlmRequest) -> ToolParamsData:
+        """LLM extracts parameters for tool execution."""
+        data = self._infer_json(req, ToolParamsData)
+        try:
+            return ToolParamsData.model_validate(data)
+        except Exception:
+            # Normalize output
+            extracted = data.get("extracted") or {}
+            if not isinstance(extracted, dict):
+                extracted = {}
+            missing = data.get("missing") or []
+            if not isinstance(missing, list):
+                missing = []
+            prompt = data.get("prompt")
+            if prompt and not isinstance(prompt, str):
+                prompt = str(prompt)
+            return ToolParamsData(
+                extracted=extracted,
+                missing=[str(m) for m in missing],
+                prompt=prompt if prompt else None,
+            )
+
+    def _final_response(self, req: LlmRequest) -> FinalResponseData:
+        """LLM generates final response to user."""
+        data = self._infer_json(req, FinalResponseData)
+        try:
+            return FinalResponseData.model_validate(data)
+        except Exception:
+            response_text = data.get("response_text") or data.get("response") or ""
+            if not isinstance(response_text, str) or not response_text.strip():
+                raise ValueError("response_text is required")
+            client_command = data.get("client_command")
+            if client_command and not isinstance(client_command, dict):
+                client_command = None
+            return FinalResponseData(response_text=str(response_text), client_command=client_command)
 
     def _infer_json(self, req: LlmRequest, schema: type[BaseModel]) -> dict[str, Any]:
         schema_json = schema.model_json_schema()
