@@ -215,6 +215,8 @@ class LLMService(BaseService):
         def _fallback() -> RoutingDecisionData:
             flight_keywords = ["рейс", "flight", "авиарейс", "статус рейса", "где мой рейс"]
             route_keywords = [
+                "найди аэропорт",
+                "найти аэропорт",
                 "ближайший аэропорт",
                 "nearest airport",
                 "маршрут",
@@ -311,9 +313,50 @@ class LLMService(BaseService):
                 confidence=confidence,
             )
 
+        normalized_id = self._normalize_routing_workflow_id(parsed.workflow_id, allowset)
+        if normalized_id and normalized_id != parsed.workflow_id:
+            parsed = parsed.model_copy(update={"workflow_id": normalized_id})
+
         if allowset and parsed.workflow_id not in allowset:
             return _fallback()
         return parsed
+
+    @staticmethod
+    def _normalize_routing_workflow_id(workflow_id: str, allowset: set[str]) -> str | None:
+        raw = str(workflow_id or "").strip()
+        if not raw:
+            return None
+        if raw in allowset:
+            return raw
+
+        def _norm(value: str) -> str:
+            return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+        key = _norm(raw)
+        alias_map = {
+            "wheremyflight200": "where_my_flight@2.0.0",
+            "wheremyflight": "where_my_flight@2.0.0",
+            "whereismyflight": "where_my_flight@2.0.0",
+            "flightstatuscheck": "where_my_flight@2.0.0",
+            "flightstatus": "where_my_flight@2.0.0",
+            "flightstatuslookup": "where_my_flight@2.0.0",
+            "findnearestairport200": "find_nearest_airport@2.0.0",
+            "findnearestairport": "find_nearest_airport@2.0.0",
+            "nearestairportroute": "find_nearest_airport@2.0.0",
+            "nearestairport": "find_nearest_airport@2.0.0",
+            "echo200": "echo@2.0.0",
+            "echo": "echo@2.0.0",
+            "nofoundcommand200": "no_found_command@2.0.0",
+            "nofoundcommand": "no_found_command@2.0.0",
+            "unknowncommand": "no_found_command@2.0.0",
+            "unknown": "no_found_command@2.0.0",
+        }
+        mapped = alias_map.get(key)
+        if not mapped:
+            return raw
+        if allowset and mapped not in allowset:
+            return raw
+        return mapped
 
     def _params_extract(self, req: LlmRequest) -> ParamsExtractData:
         data = self._infer_json(req, ParamsExtractData)
