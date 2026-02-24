@@ -231,7 +231,7 @@ export class AssistantApp {
           console.warn("[nats] Invalid message payload", event);
           return;
         }
-        this.chat.clearThinking();
+        this.chat.finishThinking();
         this.chat.addMessage(text, "server");
         return;
       }
@@ -286,7 +286,7 @@ export class AssistantApp {
         }
         const artifacts = this.readArtifacts(event.data.artifacts);
         const payload: ClientHandlerCommand = artifacts ? {command, artifacts} : {command};
-        this.chat.clearThinking();
+        this.chat.finishThinking();
         this.agentCommands.handle(payload);
         return;
       }

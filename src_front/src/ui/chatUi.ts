@@ -73,6 +73,24 @@ export class ChatUI {
     this.setThinking(summaryText, fullText, meta);
   }
 
+  finishThinking(): void {
+    if (!this.thinkingEl) return;
+
+    if (!this.hasRichThinkingContent(this.thinkingEl)) {
+      this.clearThinking();
+      return;
+    }
+
+    const dots = this.thinkingEl.querySelector(".thinking-dots");
+    if (dots) {
+      dots.remove();
+    }
+    this.thinkingEl.classList.add("thinking-message-complete");
+    this.thinkingEl = null;
+    this.thinkingActive = false;
+    this.updateBlockedState();
+  }
+
   clearThinking(): void {
     if (this.thinkingEl) {
       this.thinkingEl.remove();
@@ -114,5 +132,11 @@ export class ChatUI {
       parts.push(`Tools: ${meta.tools.join(", ")}`);
     }
     return parts.join("\n");
+  }
+
+  private hasRichThinkingContent(el: HTMLElement): boolean {
+    const details = (el.querySelector(".thinking-details") as HTMLElement | null)?.textContent?.trim() ?? "";
+    const meta = (el.querySelector(".thinking-meta") as HTMLElement | null)?.textContent?.trim() ?? "";
+    return Boolean(details || meta);
   }
 }

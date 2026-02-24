@@ -203,6 +203,19 @@ class AgentServer:
             "session_id": str(resp.session_id) if resp.session_id else None,
         }
 
+        sent: set[str] = set()
+        thought_handlers: list[dict[str, Any]] = []
+        regular_handlers: list[dict[str, Any]] = []
+
+        for ev in _normalize_client_events(resp.client_events):
+            (thought_handlers if _is_thought_handler(ev) else regular_handlers).append(ev)
+
+        if resp.client_handler:
+            (thought_handlers if _is_thought_handler(resp.client_handler) else regular_handlers).append(resp.client_handler)
+
+        for handler in thought_handlers:
+            await self._publish_client_command(handler, trace, sent)
+
         msg_text = _extract_result_message(resp)
         if msg_text and not _has_duplicate_client_message(resp, msg_text):
             await self.nats_logger.log(
@@ -215,12 +228,8 @@ class AgentServer:
                 },
             )
 
-        sent: set[str] = set()
-        for ev in _normalize_client_events(resp.client_events):
-            await self._publish_client_command(ev, trace, sent)
-
-        if resp.client_handler:
-            await self._publish_client_command(resp.client_handler, trace, sent)
+        for handler in regular_handlers:
+            await self._publish_client_command(handler, trace, sent)
 
         if resp.status == "FAILED" and resp.errors and not _has_explicit_error_command(resp):
             await self._publish_client_command(
@@ -249,9 +258,16 @@ class AgentServer:
         command = handler.get("command")
         if not isinstance(command, str) or not command.strip():
             return
+        command_name = command.strip()
+
+        if _is_thought_command(command_name):
+            data = _thought_event_data(handler.get("payload"), trace)
+            if data:
+                await self.nats_logger.log("command", "thought", data)
+            return
 
         artifacts = _payload_to_artifacts(handler.get("payload"))
-        data: dict[str, Any] = {"command": command.strip(), "trace": trace}
+        data: dict[str, Any] = {"command": command_name, "trace": trace}
         if artifacts:
             data["artifacts"] = artifacts
 
@@ -322,6 +338,48 @@ def _has_explicit_error_command(resp: N8nRunResponse) -> bool:
         if _is_error_cmd(ev.get("command")):
             return True
     return False
+
+
+def _is_thought_command(command: str) -> bool:
+    return command.strip().upper() in {"SHOW_THOUGHT", "EMIT_THOUGHT"}
+
+
+def _is_thought_handler(handler: Any) -> bool:
+    if not isinstance(handler, dict):
+        return False
+    command = handler.get("command")
+    return isinstance(command, str) and _is_thought_command(command)
+
+
+def _thought_event_data(payload: Any, trace: dict[str, Any]) -> dict[str, Any] | None:
+    if not isinstance(payload, dict):
+        return None
+
+    summary = payload.get("summary")
+    content = payload.get("content")
+    scenario = payload.get("scenario")
+    tools = payload.get("tools")
+
+    data: dict[str, Any] = {"summary": "Thinking…", "trace": trace}
+    if isinstance(summary, str) and summary.strip():
+        data["summary"] = summary.strip()
+    if isinstance(content, str) and content.strip():
+        data["content"] = content.strip()
+    if isinstance(scenario, dict):
+        sid = scenario.get("id")
+        reason = scenario.get("reason")
+        out_scenario: dict[str, Any] = {}
+        if isinstance(sid, str) and sid.strip():
+            out_scenario["id"] = sid.strip()
+        if isinstance(reason, str) and reason.strip():
+            out_scenario["reason"] = reason.strip()
+        if out_scenario:
+            data["scenario"] = out_scenario
+    if isinstance(tools, list):
+        tool_names = [t.strip() for t in tools if isinstance(t, str) and t.strip()]
+        if tool_names:
+            data["tools"] = tool_names
+    return data
 
 
 def _fingerprint_client_command(handler: dict[str, Any]) -> str:
