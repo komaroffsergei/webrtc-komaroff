@@ -405,10 +405,32 @@ class LLMService(BaseService):
         inp = req.input if isinstance(req.input, dict) else {}
         tool_name = str(inp.get("tool_name") or "").strip()
         user_message = str(inp.get("user_message") or "").strip()
+        tool_results = inp.get("tool_results") if isinstance(inp.get("tool_results"), list) else []
 
         extracted = dict(parsed.extracted or {})
         missing = [str(m) for m in (parsed.missing or [])]
         prompt = parsed.prompt if isinstance(parsed.prompt, str) and parsed.prompt.strip() else None
+
+        def _latest_tool_result(name: str) -> dict[str, Any] | None:
+            for item in reversed(tool_results):
+                if not isinstance(item, dict):
+                    continue
+                if str(item.get("tool_name") or "").strip() != name:
+                    continue
+                result = item.get("result")
+                if isinstance(result, dict):
+                    return result
+            return None
+
+        def _to_float(v: Any) -> float | None:
+            if isinstance(v, (int, float)):
+                return float(v)
+            if isinstance(v, str):
+                try:
+                    return float(v.strip())
+                except Exception:
+                    return None
+            return None
 
         if tool_name == "get_flight_status":
             # Try to recover common cases even if the model returned an empty object.
@@ -444,6 +466,71 @@ class LLMService(BaseService):
                     "Укажите номер рейса (например, SU123) или фамилию пассажира."
                 )
             else:
+                missing = []
+                prompt = None
+
+        elif tool_name == "search_airports_nearby":
+            pos = _latest_tool_result("get_current_position") or {}
+            pos_data = pos.get("data") if isinstance(pos.get("data"), dict) else {}
+
+            # Backward-compatible normalization if model emits old keys.
+            if "city" not in extracted and isinstance(pos_data.get("city"), str) and pos_data.get("city").strip():
+                extracted["city"] = pos_data.get("city").strip()
+            if "radius_km" not in extracted:
+                extracted["radius_km"] = 50
+
+            city_ok = isinstance(extracted.get("city"), str) and extracted["city"].strip()
+            radius = _to_float(extracted.get("radius_km"))
+            if radius is None:
+                extracted["radius_km"] = 50
+            else:
+                extracted["radius_km"] = radius
+
+            if not city_ok:
+                missing = ["city"]
+                prompt = "Не удалось определить город. Укажите город, рядом с которым нужно найти аэропорт."
+            else:
+                missing = []
+                prompt = None
+
+        elif tool_name == "build_route":
+            # Normalize legacy key names if model uses old workflow schema names.
+            key_aliases = {
+                "from_latitude": "from_lat",
+                "from_longitude": "from_lon",
+                "to_latitude": "to_lat",
+                "to_longitude": "to_lon",
+            }
+            for old_key, new_key in key_aliases.items():
+                if new_key not in extracted and old_key in extracted:
+                    extracted[new_key] = extracted.get(old_key)
+
+            pos = _latest_tool_result("get_current_position") or {}
+            pos_data = pos.get("data") if isinstance(pos.get("data"), dict) else {}
+            airports = _latest_tool_result("search_airports_nearby") or {}
+            airports_data = airports.get("data") if isinstance(airports.get("data"), dict) else {}
+            airports_list = airports_data.get("airports") if isinstance(airports_data.get("airports"), list) else []
+            first_airport = airports_list[0] if airports_list and isinstance(airports_list[0], dict) else {}
+
+            if "from_lat" not in extracted and _to_float(pos_data.get("lat")) is not None:
+                extracted["from_lat"] = _to_float(pos_data.get("lat"))
+            if "from_lon" not in extracted and _to_float(pos_data.get("lon")) is not None:
+                extracted["from_lon"] = _to_float(pos_data.get("lon"))
+            if "to_lat" not in extracted and _to_float(first_airport.get("lat")) is not None:
+                extracted["to_lat"] = _to_float(first_airport.get("lat"))
+            if "to_lon" not in extracted and _to_float(first_airport.get("lon")) is not None:
+                extracted["to_lon"] = _to_float(first_airport.get("lon"))
+
+            required = ["from_lat", "from_lon", "to_lat", "to_lon"]
+            missing_required = [k for k in required if _to_float(extracted.get(k)) is None]
+            if missing_required:
+                missing = missing_required
+                prompt = (
+                    "Не удалось собрать координаты для маршрута. Уточните пункт отправления или выберите аэропорт."
+                )
+            else:
+                for k in required:
+                    extracted[k] = _to_float(extracted.get(k))
                 missing = []
                 prompt = None
 
