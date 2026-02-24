@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass
@@ -7,6 +8,7 @@ from typing import Any, Optional
 from uuid import UUID, uuid4
 
 from nats.aio.client import Client as NATS
+from nats.errors import NoRespondersError
 
 from src_agent.repositories.runtime_state import load_runtime_state, save_runtime_state
 from src_agent.utils.db import Database, create_session
@@ -36,6 +38,8 @@ class AgentRunner:
     user_id: str
     n8n_timeout_s: int
     max_runtime_conflict_retries: int = 3
+    n8n_no_responders_retries: int = 10
+    n8n_no_responders_retry_delay_s: float = 1.0
 
     async def run(self, req: AgentInboundRequest) -> RunnerResult:
         # Ensure the `sessions` row exists even when the session_id is provided externally.
@@ -110,6 +114,24 @@ class AgentRunner:
 
     async def _call_n8n(self, req: N8nRunRequest) -> N8nRunResponse:
         payload = req.model_dump_json().encode("utf-8")
-        msg = await self.nc.request(self.n8n_subject, payload, timeout=self.n8n_timeout_s)
+        last_exc: Exception | None = None
+        for attempt in range(self.n8n_no_responders_retries + 1):
+            try:
+                msg = await self.nc.request(self.n8n_subject, payload, timeout=self.n8n_timeout_s)
+                break
+            except NoRespondersError as exc:
+                last_exc = exc
+                if attempt >= self.n8n_no_responders_retries:
+                    raise
+                logger.warning(
+                    "No responders for subject=%s (attempt=%s/%s), retrying in %.1fs",
+                    self.n8n_subject,
+                    attempt + 1,
+                    self.n8n_no_responders_retries + 1,
+                    self.n8n_no_responders_retry_delay_s,
+                )
+                await asyncio.sleep(self.n8n_no_responders_retry_delay_s)
+        else:
+            raise last_exc or RuntimeError("n8n request failed without response")
         raw = json.loads(msg.data.decode("utf-8"))
         return N8nRunResponse.model_validate(raw)
