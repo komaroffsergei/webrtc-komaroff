@@ -204,7 +204,7 @@ class AgentServer:
         }
 
         msg_text = _extract_result_message(resp)
-        if msg_text:
+        if msg_text and not _has_duplicate_client_message(resp, msg_text):
             await self.nats_logger.log(
                 "command",
                 "message",
@@ -272,6 +272,41 @@ def _normalize_client_events(events: Any) -> list[dict[str, Any]]:
     if not isinstance(events, list):
         return []
     return [e for e in events if isinstance(e, dict)]
+
+
+def _has_duplicate_client_message(resp: N8nRunResponse, msg_text: str) -> bool:
+    target = msg_text.strip()
+    if not target:
+        return False
+
+    if _client_command_message_text(resp.client_handler) == target:
+        return True
+
+    for ev in _normalize_client_events(resp.client_events):
+        if _client_command_message_text(ev) == target:
+            return True
+    return False
+
+
+def _client_command_message_text(handler: Any) -> str | None:
+    if not isinstance(handler, dict):
+        return None
+
+    command = handler.get("command")
+    if not isinstance(command, str):
+        return None
+    if command.strip().upper() not in {"SHOW_MESSAGE", "ASK_USER_INPUT", "SHOW_ERROR_MESSAGE"}:
+        return None
+
+    payload = handler.get("payload")
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("summary", "prompt", "message"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _has_explicit_error_command(resp: N8nRunResponse) -> bool:
