@@ -38,8 +38,10 @@ class AgentRunner:
     user_id: str
     n8n_timeout_s: int
     max_runtime_conflict_retries: int = 3
-    n8n_no_responders_retries: int = 10
-    n8n_no_responders_retry_delay_s: float = 1.0
+    # Production deploys can leave src_n8n unavailable while n8n/n8n_import restarts.
+    # Keep retrying long enough to survive the rollout window.
+    n8n_no_responders_retries: int = 60
+    n8n_no_responders_retry_delay_s: float = 2.0
 
     async def run(self, req: AgentInboundRequest) -> RunnerResult:
         # Ensure the `sessions` row exists even when the session_id is provided externally.
@@ -122,7 +124,12 @@ class AgentRunner:
             except NoRespondersError as exc:
                 last_exc = exc
                 if attempt >= self.n8n_no_responders_retries:
-                    raise
+                    waited_s = attempt * self.n8n_no_responders_retry_delay_s
+                    raise RuntimeError(
+                        "Сервис сценариев временно недоступен "
+                        f"(нет responder для NATS subject `{self.n8n_subject}` ~{waited_s:.0f}с). "
+                        "Вероятно, src_n8n еще запускается. Повторите запрос через несколько секунд."
+                    ) from exc
                 logger.warning(
                     "No responders for subject=%s (attempt=%s/%s), retrying in %.1fs",
                     self.n8n_subject,
