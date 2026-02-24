@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import signal
 from typing import Any
@@ -86,6 +87,14 @@ class BaseService:
         if not self._nats_logger:
             return
 
+        req_mode: str | None = None
+        try:
+            raw_req = json.loads(msg.data.decode("utf-8"))
+            if isinstance(raw_req, dict) and isinstance(raw_req.get("mode"), str):
+                req_mode = raw_req["mode"].strip()
+        except Exception:
+            req_mode = None
+
         async with self._semaphore:
             try:
                 text = await asyncio.to_thread(self.on_message, msg)
@@ -99,6 +108,9 @@ class BaseService:
                 return
 
         await self._nats_logger.info(text, name="llm_result")
+        thought = self._routing_thought_from_llm_result(text, req_mode=req_mode)
+        if thought:
+            await self._nats_logger.log("command", "thought", thought)
         await self._reply(msg, text)
 
 
@@ -106,6 +118,44 @@ class BaseService:
         if not msg.reply or not self._nc:
             return
         await self._publisher.publish(msg.reply, payload)
+
+    @staticmethod
+    def _routing_thought_from_llm_result(payload: Any, *, req_mode: str | None) -> dict[str, Any] | None:
+        if req_mode != "routing_decision":
+            return None
+        if not isinstance(payload, dict):
+            return None
+        if payload.get("ok") is not True:
+            return None
+
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return None
+
+        workflow_id = data.get("workflow_id")
+        reason = data.get("reason")
+        confidence = data.get("confidence")
+        if not isinstance(workflow_id, str) or not workflow_id.strip():
+            return None
+        if not isinstance(reason, str) or not reason.strip():
+            return None
+
+        trace = {
+            "trace_id": str(payload.get("trace_id") or ""),
+            "correlation_id": str(payload.get("correlation_id") or payload.get("trace_id") or ""),
+            "request_id": str(payload.get("request_id") or ""),
+            "session_id": str(payload.get("session_id")) if payload.get("session_id") else None,
+        }
+
+        thought: dict[str, Any] = {
+            "summary": "Thinking…",
+            "content": reason.strip(),
+            "scenario": {"id": workflow_id.strip()},
+            "trace": trace,
+        }
+        if isinstance(confidence, (int, float)):
+            thought["confidence"] = float(confidence)
+        return thought
 
     def on_message(self, msg: Msg) -> Any:
         raise NotImplementedError
