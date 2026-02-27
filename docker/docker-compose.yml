@@ -9,7 +9,7 @@ services:
       dockerfile: ../docker/postgres/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
     ports:
-      # Publish on host so external project stacks (for example voice-chat/n8n) can reuse this DB.
+      # Publish on host so external stacks can reuse this DB.
       - "5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mcp}
@@ -72,7 +72,7 @@ services:
         condition: service_healthy
     environment:
       NATS_URL: nats://nats:4222
-      NATS_N8N_RUN_SUBJECT: ${NATS_N8N_RUN_SUBJECT:-nats.n8n.run}
+      NATS_WORKFLOW_RUN_SUBJECT: ${NATS_WORKFLOW_RUN_SUBJECT:-nats.workflow.run}
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
 
   src_llm:
@@ -105,8 +105,8 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       USER_ID: ${USER_ID:-user123}
-      NATS_LANGGRAPH_RUN_SUBJECT: nats.langgraph.run
-      NATS_LANGGRAPH_HEALTH_SUBJECT: nats.langgraph.health
+      NATS_WORKFLOW_RUN_SUBJECT: nats.workflow.run
+      NATS_WORKFLOW_HEALTH_SUBJECT: nats.workflow.health
       NATS_LLM_SUBJECT: nats.llm.
       NATS_TOOLS_PREFIX: nats.tools.
       NATS_REQUEST_TIMEOUT_SECONDS: 120
@@ -146,7 +146,7 @@ services:
       NATS_URL: nats://nats:4222
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
       NATS_AGENT_SUBJECT: nats.agent.
-      NATS_N8N_HEALTH_SUBJECT: nats.n8n.health
+      NATS_WORKFLOW_HEALTH_SUBJECT: nats.workflow.health
     restart: "no"
 
   nats:

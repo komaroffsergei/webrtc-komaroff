@@ -17,7 +17,7 @@ from .llm import (
     ToolParamsData,
     FinalResponseData,
 )
-from .n8n import N8nRunRequest, N8nRunResponse, N8nStatus, N8nRuntimeState
+from .workflow import WorkflowRunRequest, WorkflowRunResponse, WorkflowStatus, WorkflowRuntimeState
 from .subjects import Subjects
 from .tools import ToolCallRequest, ToolCallResponse
 
@@ -30,10 +30,10 @@ __all__ = [
     "LlmMode",
     "LlmRequest",
     "LlmResponse",
-    "N8nRunRequest",
-    "N8nRunResponse",
-    "N8nRuntimeState",
-    "N8nStatus",
+    "WorkflowRunRequest",
+    "WorkflowRunResponse",
+    "WorkflowRuntimeState",
+    "WorkflowStatus",
     "ParamsExtractData",
     "ReviseData",
     "RoutingDecisionData",

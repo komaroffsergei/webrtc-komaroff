@@ -1,69 +1,28 @@
-# src_agent (тонкий раннер)
+# src_agent
 
-## Что это
+`src_agent` — тонкий раннер без сценарной логики.
 
-`src_agent` — тонкий раннер без логики сценариев:
+## Что делает
 
-- Принимает текст пользователя по NATS (`nats.agent.<user_id>`, req-reply).
-- Гарантирует наличие строки в `sessions` (Postgres).
-- Загружает `runtime_state` (на сессию) из Postgres.
-- Вызывает n8n через мост `src_n8n` по NATS (`nats.n8n.run`, req-reply).
-- Сохраняет `next_runtime` обратно в Postgres с optimistic locking (`runtime_state.version`).
-- Публикует UI-команды/события в `nats.events.<user_id>` (pub-sub).
+1. Принимает `AgentInboundRequest` по `nats.agent.<user_id>`.
+2. Загружает `runtime_state` из Postgres.
+3. Отправляет `WorkflowRunRequest` в `nats.workflow.run`.
+4. Сохраняет `next_runtime` обратно в `runtime_state` (optimistic lock).
+5. Публикует команды UI в `nats.events.<user_id>`.
 
-## Входящий запрос
+## Зачем trace-поля
 
-Subject: `nats.agent.<user_id>`
+- `trace_id` — единая сквозная трасса запроса между сервисами.
+- `correlation_id` — связывает дочерние/параллельные вызовы внутри одной операции.
+- `request_id` — идемпотентность конкретного запроса.
+- `session_id` — состояние диалога пользователя между сообщениями.
 
-Payload: `AgentInboundRequest` (см. `src_shared/contracts`):
+Без этих полей сложно диагностировать гонки, дубли и таймауты в распределенной цепочке.
 
-- `trace_id`, `correlation_id`, `request_id`, `session_id`, `ts_ms`
-- `text`
-- опционально `edit`
+## Где смотреть код
 
-## Запрос в n8n (через мост)
-
-Subject: `nats.n8n.run`
-
-Payload: `N8nRunRequest`:
-
-- `session_id`, `text`, `edit`
-- `runtime` (загружен из Postgres)
-- trace fields
-
-## Ошибки и отсутствие fallback
-
-Fallback "чатикам" отсутствует. Если router не выбрал workflow или workflow упал, UI получает явную ошибку
-(`SHOW_ERROR_MESSAGE`), а ответ на req-reply будет `status=FAILED`.
-
-## Код (куда смотреть)
-
-- Основная логика раннера: `src_agent/service.py`
-- Точка входа сервиса: `src_agent/main.py`
-- Контракты сообщений (Pydantic): `src_shared/contracts/*`
-
-## Частые ошибки
-
-### `validation errors for AgentInboundRequest ... Field required`
-
-Причина: upstream сервис (`src_core`) отправил неполный payload без trace-полей.
-
-Что делать:
-
-- проверьте `src_core/handlers/handle_transcription.py` (должны добавляться `trace_id`, `request_id`, `ts_ms`)
-
-### Дубли команд в UI
-
-Чаще всего причина — запущены два экземпляра одного сервиса (контейнер + локальный процесс).
-
-Что делать:
-
-- оставьте только один инстанс сервиса (и для `src_n8n` тоже): `docker compose -f docker/docker-compose.yml stop <service>`
-
-### `runtime_state version changed` / конфликт optimistic lock
-
-Причина: параллельные сообщения в одну и ту же сессию.
-
-Ожидаемое поведение:
-
-- агент перезагружает runtime и делает ограниченное число ретраев; если не получилось — возвращает ошибку пользователю
+- `src_agent/service.py`
+- `src_agent/agent.py`
+- `src_agent/repositories/runtime_state.py`
+- `src_shared/contracts/agent.py`
+- `src_shared/contracts/workflow.py`

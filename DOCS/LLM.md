@@ -1,47 +1,31 @@
-# src_llm (LLM gateway по NATS)
+# src_llm
 
-## Что это
+`src_llm` — единый gateway к модели по NATS.
 
-`src_llm` предоставляет один NATS req-reply endpoint для структурированных вызовов LLM.
+## Subject
 
-Subject:
+- `nats.llm.<user_id>` (req-reply)
 
-- `nats.llm.<user_id>`
-
-Режимы (строгие схемы):
+## Поддерживаемые режимы
 
 - `routing_decision`
-- `params_extract`
-- `revise`
+- `tool_params`
+- `final_response`
+- дополнительные режимы из `src_shared/contracts/llm.py` при необходимости
 
-Схемы request/response валидируются Pydantic моделями из `src_shared/contracts`.
+## Конфиг
 
-## Кто вызывает
+- `LLM_MODE=local|remote`
+- `OLLAMA_URL`
+- `LLM_LOCAL_MODEL`
+- `LLM_REMOTE_MODEL`
 
-В текущей архитектуре LLM вызывается из workflows n8n через tool proxy:
+## Поток вызова
 
-- n8n HTTP Request node -> `src_n8n /tool` -> NATS `nats.llm.<user_id>`
+`src_langgraph` -> `nats.llm.<user_id>` -> `src_llm` -> модель -> `LlmResponse`.
 
-## LLM mode
+## Где смотреть код
 
-Поддерживаются только два режима:
-
-- `LLM_MODE=local`
-- `LLM_MODE=remote`
-
-## Код (куда смотреть)
-
-- NATS сервис + парсинг/валидация: `src_llm/service.py`
-- Базовый NATS service helper: `src_llm/utils/base_service.py`
-- Контракты режимов: `src_shared/contracts/*`
-
-## Частые ошибки
-
-### `llm_failed: Extra data ...` / модель вернула невалидный JSON
-
-Причина: модель ответила не одним JSON-объектом (например, добавила пояснение текстом) или вернула несколько JSON подряд.
-
-Что делать:
-
-- используйте `LLM_MODE=local` или `LLM_MODE=remote`
-- проверьте, что prompts требуют **строго один JSON объект** и что включён строгий парсер
+- `src_llm/service.py`
+- `src_llm/settings.py`
+- `src_shared/contracts/llm.py`

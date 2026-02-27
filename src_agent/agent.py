@@ -15,11 +15,12 @@ from src_agent.utils.db import Database, create_session
 from src_shared.contracts import (
     AgentInboundRequest,
     ErrorInfo,
-    N8nRunRequest,
-    N8nRunResponse,
-    N8nRuntimeState,
+    WorkflowRunRequest,
+    WorkflowRunResponse,
+    WorkflowRuntimeState,
     now_ts_ms,
 )
+from src_shared.contracts.subjects import Subjects
 
 logger = logging.getLogger("src_agent.runner")
 
@@ -27,21 +28,21 @@ logger = logging.getLogger("src_agent.runner")
 @dataclass(frozen=True)
 class RunnerResult:
     session_id: UUID
-    n8n: N8nRunResponse
+    workflow: WorkflowRunResponse
 
 
 @dataclass
 class AgentRunner:
     nc: NATS
     db: Database
-    n8n_subject: str
+    workflow_subject: str
     user_id: str
-    n8n_timeout_s: int
+    workflow_timeout_s: int
     max_runtime_conflict_retries: int = 3
-    # Production deploys can leave src_n8n unavailable while n8n/n8n_import restarts.
+    # During deploys workflow responder can be temporarily unavailable.
     # Keep retrying long enough to survive the rollout window.
-    n8n_no_responders_retries: int = 60
-    n8n_no_responders_retry_delay_s: float = 2.0
+    workflow_no_responders_retries: int = 60
+    workflow_no_responders_retry_delay_s: float = 2.0
 
     async def run(self, req: AgentInboundRequest) -> RunnerResult:
         # Ensure the `sessions` row exists even when the session_id is provided externally.
@@ -51,16 +52,16 @@ class AgentRunner:
         )
 
         runtime = await load_runtime_state(self.db, session_id=session_id)
-        n8n = await self._run_with_optimistic_lock(req=req, session_id=session_id, runtime=runtime)
-        return RunnerResult(session_id=session_id, n8n=n8n)
+        workflow = await self._run_with_optimistic_lock(req=req, session_id=session_id, runtime=runtime)
+        return RunnerResult(session_id=session_id, workflow=workflow)
 
     async def _run_with_optimistic_lock(
         self,
         *,
         req: AgentInboundRequest,
         session_id: UUID,
-        runtime: N8nRuntimeState,
-    ) -> N8nRunResponse:
+        runtime: WorkflowRuntimeState,
+    ) -> WorkflowRunResponse:
         correlation_id = req.correlation_id or req.trace_id
 
         last_error: Optional[Exception] = None
@@ -68,7 +69,7 @@ class AgentRunner:
             inner_request_id = req.request_id if attempt == 0 else uuid4()
             inner_ts_ms = req.ts_ms if attempt == 0 else now_ts_ms()
 
-            n8n_req = N8nRunRequest(
+            workflow_req = WorkflowRunRequest(
                 trace_id=req.trace_id,
                 correlation_id=correlation_id,
                 request_id=inner_request_id,
@@ -79,16 +80,16 @@ class AgentRunner:
                 runtime=runtime,
             )
 
-            n8n_resp = await self._call_n8n(n8n_req)
+            workflow_resp = await self._call_workflow(workflow_req)
 
             try:
                 await save_runtime_state(
                     self.db,
                     session_id=session_id,
                     expected_version=runtime.version,
-                    next_state=n8n_resp.next_runtime,
+                    next_state=workflow_resp.next_runtime,
                 )
-                return n8n_resp
+                return workflow_resp
             except Exception as exc:
                 last_error = exc
                 if attempt >= self.max_runtime_conflict_retries:
@@ -96,7 +97,7 @@ class AgentRunner:
                 runtime = await load_runtime_state(self.db, session_id=session_id)
 
         logger.exception("runtime_state update failed after retries. session_id=%s", str(session_id))
-        return N8nRunResponse(
+        return WorkflowRunResponse(
             trace_id=req.trace_id,
             correlation_id=correlation_id,
             request_id=req.request_id,
@@ -114,31 +115,51 @@ class AgentRunner:
             next_runtime=runtime,
         )
 
-    async def _call_n8n(self, req: N8nRunRequest) -> N8nRunResponse:
+    async def _call_workflow(self, req: WorkflowRunRequest) -> WorkflowRunResponse:
         payload = req.model_dump_json().encode("utf-8")
-        last_exc: Exception | None = None
-        for attempt in range(self.n8n_no_responders_retries + 1):
-            try:
-                msg = await self.nc.request(self.n8n_subject, payload, timeout=self.n8n_timeout_s)
-                break
-            except NoRespondersError as exc:
-                last_exc = exc
-                if attempt >= self.n8n_no_responders_retries:
-                    waited_s = attempt * self.n8n_no_responders_retry_delay_s
-                    raise RuntimeError(
-                        "Сервис сценариев временно недоступен "
-                        f"(нет responder для NATS subject `{self.n8n_subject}` ~{waited_s:.0f}с). "
-                        "Вероятно, src_n8n еще запускается. Повторите запрос через несколько секунд."
-                    ) from exc
-                logger.warning(
-                    "No responders for subject=%s (attempt=%s/%s), retrying in %.1fs",
-                    self.n8n_subject,
-                    attempt + 1,
-                    self.n8n_no_responders_retries + 1,
-                    self.n8n_no_responders_retry_delay_s,
-                )
-                await asyncio.sleep(self.n8n_no_responders_retry_delay_s)
+        canonical_subject = Subjects.WORKFLOW_RUN
+        subjects = [self.workflow_subject]
+        if self.workflow_subject != canonical_subject:
+            subjects.append(canonical_subject)
+
+        total_attempts = self.workflow_no_responders_retries + 1
+        if len(subjects) == 1:
+            attempts_by_subject = [total_attempts]
         else:
-            raise last_exc or RuntimeError("n8n request failed without response")
-        raw = json.loads(msg.data.decode("utf-8"))
-        return N8nRunResponse.model_validate(raw)
+            first_budget = min(3, max(1, total_attempts - 1))
+            attempts_by_subject = [first_budget, total_attempts - first_budget]
+
+        last_exc: Exception | None = None
+        for subject, subject_attempts in zip(subjects, attempts_by_subject):
+            for attempt in range(subject_attempts):
+                try:
+                    msg = await self.nc.request(subject, payload, timeout=self.workflow_timeout_s)
+                    if subject != self.workflow_subject:
+                        logger.warning(
+                            "Workflow subject switched from %s to %s",
+                            self.workflow_subject,
+                            subject,
+                        )
+                        self.workflow_subject = subject
+                    raw = json.loads(msg.data.decode("utf-8"))
+                    return WorkflowRunResponse.model_validate(raw)
+                except NoRespondersError as exc:
+                    last_exc = exc
+                    if attempt >= subject_attempts - 1:
+                        break
+                    logger.warning(
+                        "No responders for subject=%s (attempt=%s/%s), retrying in %.1fs",
+                        subject,
+                        attempt + 1,
+                        subject_attempts,
+                        self.workflow_no_responders_retry_delay_s,
+                    )
+                    await asyncio.sleep(self.workflow_no_responders_retry_delay_s)
+
+        waited_s = self.workflow_no_responders_retries * self.workflow_no_responders_retry_delay_s
+        subject_list = ", ".join(f"`{s}`" for s in subjects)
+        raise RuntimeError(
+            "Сервис сценариев временно недоступен "
+            f"(нет responder для NATS subject {subject_list} ~{waited_s:.0f}с). "
+            "Вероятно, workflow-service еще запускается. Повторите запрос через несколько секунд."
+        ) from last_exc

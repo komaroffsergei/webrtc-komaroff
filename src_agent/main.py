@@ -2,7 +2,7 @@
 Entry point for `src_agent`.
 
 `src_agent` is a thin runner: it accepts user text over NATS, loads runtime state from Postgres,
-delegates scenario orchestration to n8n via `src_n8n` over NATS, persists updated runtime state,
+delegates scenario orchestration to workflow-service over NATS, persists updated runtime state,
 and publishes UI commands/events over NATS.
 """
 
@@ -14,14 +14,14 @@ import sys
 from src_agent.service import AgentServer
 from src_agent.settings import (
     DATABASE_URL,
-    N8N_TIMEOUT_SECONDS,
     NATS_AGENT_SUBJECT,
     NATS_EVENTS_SUBJECT,
-    NATS_N8N_RUN_SUBJECT,
     NATS_URL,
     RUNTIME_CONFLICT_RETRIES,
     STACK_SERVICE_NAME,
     USER_ID,
+    WORKFLOW_TIMEOUT_SECONDS,
+    NATS_WORKFLOW_RUN_SUBJECT,
 )
 
 
@@ -46,8 +46,8 @@ def main():
         nats_url=NATS_URL,
         agent_subject=f"{NATS_AGENT_SUBJECT}{USER_ID}",
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
-        n8n_subject=NATS_N8N_RUN_SUBJECT,
-        n8n_timeout_s=N8N_TIMEOUT_SECONDS,
+        workflow_subject=NATS_WORKFLOW_RUN_SUBJECT,
+        workflow_timeout_s=WORKFLOW_TIMEOUT_SECONDS,
         db_url=DATABASE_URL,
         user_id=USER_ID,
         runtime_conflict_retries=RUNTIME_CONFLICT_RETRIES,
