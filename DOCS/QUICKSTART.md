@@ -41,10 +41,11 @@ docker compose --env-file .env --env-file .env.debug \
 - Эти порты должны быть свободны на хосте (их слушает PyCharm `Python Remote Debug`).
 
 4. PyCharm attach:
-- Конфигурация: `Python Debug Server` (по одному на сервис/порт).
+- Конфигурация: `Python Remote Debug` (по одному на сервис/порт).
 - Host: `127.0.0.1`.
 - Port: из списка выше.
 - Готовые shared-конфиги уже лежат в `.run/Attach_*.run.xml`.
+- Для одновременной отладки нескольких сервисов запускай несколько `Attach ...` конфигов параллельно (в shared-конфигах это уже разрешено).
 - Path mappings:
   - `src_core` -> `/app/src_core`
   - `src_agent` -> `/app/src_agent`

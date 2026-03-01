@@ -35,7 +35,7 @@ docker compose --profile langgraph up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-## Docker + отладка (PyCharm/debugpy)
+## Docker + отладка (PyCharm Remote Debug)
 
 `debugpy` включается только через override-файл, обычный запуск без отладки не меняется.
 
@@ -64,6 +64,7 @@ docker compose --env-file .env --env-file .env.debug \
 - при `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach произойдёт в фоне, когда запустишь `Attach ...` конфиг в PyCharm.
 
 В проект уже добавлены shared PyCharm run-конфиги (`.run/Attach_*.run.xml`) для `Attach` к каждому сервису.
+В них уже включен параллельный запуск (`singleton=false`), поэтому можно одновременно подключаться к нескольким сервисам.
 
 ## Локальный запуск Python-сервисов
 

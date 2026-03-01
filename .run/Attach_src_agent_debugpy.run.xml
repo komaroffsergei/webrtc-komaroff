@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Attach src_agent (pycharm 5672)" type="PyRemoteDebugConfigurationType" factoryName="Python Remote Debug">
+  <configuration default="false" singleton="false" name="Attach src_agent (pycharm 5672)" type="PyRemoteDebugConfigurationType" factoryName="Python Remote Debug">
     <module name="webrtc-komaroff" />
     <option name="HOST" value="127.0.0.1" />
     <option name="PORT" value="5672" />

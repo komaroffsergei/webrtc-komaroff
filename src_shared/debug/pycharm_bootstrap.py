@@ -102,6 +102,7 @@ def _attach(host: str, port: int, suspend: bool, redirect_output: bool) -> None:
         stdout_to_server=redirect_output,
         stderr_to_server=redirect_output,
         suspend=suspend,
+        trace_only_current_thread=False,
         patch_multiprocessing=True,
     )
     print(
