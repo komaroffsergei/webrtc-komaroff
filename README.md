@@ -62,6 +62,8 @@ docker compose --env-file .env --env-file .env.debug \
 - `DEBUGPY_WAIT_FOR_CLIENT=1`
 - при этом сервисы не начнут слушать HTTP/NATS до attach, и до подключения дебаггера `src_front` может отвечать `502` на `/core/*` — это ожидаемо.
 - при `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach произойдёт в фоне, когда запустишь `Attach ...` конфиг в PyCharm.
+- `PYCHARM_REDIRECT_OUTPUT=0` рекомендуется для стабильного переподключения (логи смотри через `docker compose logs`).
+- `PYCHARM_PATCH_MULTIPROCESSING=0` рекомендуется оставить по умолчанию (стабильнее attach). Включай `1` только если нужно дебажить дочерние `multiprocessing` процессы.
 
 В проект уже добавлены shared PyCharm run-конфиги (`.run/Attach_*.run.xml`) для `Attach` к каждому сервису.
 В них уже включен параллельный запуск (`singleton=false`), поэтому можно одновременно подключаться к нескольким сервисам.

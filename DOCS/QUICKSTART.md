@@ -57,6 +57,8 @@ docker compose --env-file .env --env-file .env.debug \
 5. Если нужен стоп на старте до attach, поставь `DEBUGPY_WAIT_FOR_CLIENT=1` в `docker/.env.debug`.
    До attach сервисы не поднимают свои порты, поэтому `502` на `/core/*` в этот момент — ожидаемое поведение.
    При `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach можно включить позже (подключение в фоне).
+   Для стабильного переподключения оставь `PYCHARM_REDIRECT_OUTPUT=0` (логи смотри через `docker compose logs`).
+   Для стабильного attach оставь `PYCHARM_PATCH_MULTIPROCESSING=0` (по умолчанию). Значение `1` включай только если нужен дебаг дочерних `multiprocessing` процессов.
 
 ## Локально через IDE (гибрид)
 
