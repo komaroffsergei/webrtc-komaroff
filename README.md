@@ -50,6 +50,8 @@ docker compose --env-file .env --env-file .env.debug \
   --profile langgraph up -d --build
 ```
 
+Важно: не запускай debug-стек без `-d` на длительную сессию. В attached-режиме (`up` без `-d`) закрытие/прерывание этой команды останавливает контейнеры, и все PyCharm attach-сессии сразу рвутся.
+
 Порты отладки:
 - `src_core`: `127.0.0.1:5671`
 - `src_agent`: `127.0.0.1:5672`

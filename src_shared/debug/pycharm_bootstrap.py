@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import os
 import runpy
-import socket
 import sys
 import threading
 import time
@@ -22,14 +21,6 @@ def _to_bool(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
-
-
-def _can_connect(host: str, port: int, timeout_s: float = 1.0) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout_s):
-            return True
-    except OSError:
-        return False
 
 
 def _resolve_path_mappings() -> list[tuple[str, str]]:
@@ -83,11 +74,27 @@ def _apply_path_mappings() -> None:
         )
 
 
-def _wait_server(host: str, port: int, timeout_s: float) -> bool:
+def _wait_attach(
+    *,
+    host: str,
+    port: int,
+    timeout_s: float,
+    redirect_output: bool,
+    patch_multiprocessing: bool,
+) -> bool:
     deadline = time.time() + timeout_s
     while time.time() < deadline:
-        if _can_connect(host, port):
+        try:
+            _attach(
+                host=host,
+                port=port,
+                suspend=True,
+                redirect_output=redirect_output,
+                patch_multiprocessing=patch_multiprocessing,
+            )
             return True
+        except Exception:
+            pass
         time.sleep(0.25)
     return False
 
@@ -135,65 +142,13 @@ def _normalize_attach_state() -> None:
         return
 
 
-def _is_thread_alive(obj: object) -> bool:
-    if obj is None:
-        return False
-    checker = getattr(obj, "is_alive", None)
-    if checker is None:
-        return True
-    try:
-        return bool(checker())
-    except Exception:
-        return False
-
-
 def _is_attached() -> bool:
     try:
         import pydevd
 
-        dbg = pydevd.get_global_debugger()
-        if not pydevd.connected or dbg is None:
-            return False
-        if bool(getattr(dbg, "pydb_disposed", False)):
-            return False
-        reader = getattr(dbg, "reader", None)
-        writer = getattr(dbg, "writer", None)
-        return _is_thread_alive(reader) and _is_thread_alive(writer)
+        return bool(getattr(pydevd, "connected", False))
     except Exception:
         return False
-
-
-def _reset_attach_state() -> None:
-    reset_error: Optional[Exception] = None
-    try:
-        import pydevd
-        pydevd.connected = False
-        try:
-            pydevd.set_global_debugger(None)
-        except Exception:
-            pass
-
-        try:
-            import pydevd_pycharm
-
-            pydevd_pycharm.stoptrace()
-        except Exception as exc:
-            reset_error = exc
-    except Exception as exc:
-        reset_error = exc
-
-    if reset_error is None:
-        print(
-            "[pycharm-debug] debugger state reset; waiting for fresh attach",
-            file=sys.stderr,
-            flush=True,
-        )
-    else:
-        print(
-            f"[pycharm-debug] debugger reset had warnings: {reset_error}",
-            file=sys.stderr,
-            flush=True,
-        )
 
 
 def _background_attach(
@@ -204,33 +159,19 @@ def _background_attach(
     redirect_output: bool,
     patch_multiprocessing: bool,
 ) -> None:
-    was_attached = False
     while True:
         try:
-            attached_now = _is_attached()
-            if attached_now:
-                was_attached = True
+            if _is_attached():
                 time.sleep(retry_seconds)
                 continue
 
-            if was_attached:
-                print(
-                    f"[pycharm-debug] debugger disconnected; waiting for re-attach on {host}:{port}",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                _reset_attach_state()
-                was_attached = False
-
-            if _can_connect(host, port):
-                _attach(
-                    host=host,
-                    port=port,
-                    suspend=False,
-                    redirect_output=redirect_output,
-                    patch_multiprocessing=patch_multiprocessing,
-                )
-                was_attached = True
+            _attach(
+                host=host,
+                port=port,
+                suspend=False,
+                redirect_output=redirect_output,
+                patch_multiprocessing=patch_multiprocessing,
+            )
         except Exception as exc:
             print(
                 f"[pycharm-debug] retry attach failed: {exc}",
@@ -272,28 +213,19 @@ def main() -> int:
             file=sys.stderr,
             flush=True,
         )
-        if not _wait_server(host, args.port, attach_timeout_s):
+        if not _wait_attach(
+            host=host,
+            port=args.port,
+            timeout_s=attach_timeout_s,
+            redirect_output=redirect_output,
+            patch_multiprocessing=patch_multiprocessing,
+        ):
             print(
                 f"[pycharm-debug] timeout waiting for {host}:{args.port}",
                 file=sys.stderr,
                 flush=True,
             )
             return 2
-        try:
-            _attach(
-                host=host,
-                port=args.port,
-                suspend=True,
-                redirect_output=redirect_output,
-                patch_multiprocessing=patch_multiprocessing,
-            )
-        except Exception as exc:
-            print(
-                f"[pycharm-debug] attach failed in wait mode: {exc}",
-                file=sys.stderr,
-                flush=True,
-            )
-            return 3
     else:
         thread = threading.Thread(
             target=_background_attach,
