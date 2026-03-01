@@ -13,6 +13,50 @@ docker compose --profile langgraph up -d --build
 - API: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
+## Docker + debug (PyCharm)
+
+1. Подготовить debug-env:
+
+```bash
+cd docker
+cp .env.debug.example .env.debug
+# обязательно задай абсолютный путь к корню репозитория:
+# PYCHARM_PROJECT_ROOT=/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff
+```
+
+2. Запустить stack в debug-режиме:
+
+```bash
+docker compose --env-file .env --env-file .env.debug \
+  -f docker-compose.yml -f docker-compose.debug.yml \
+  --profile langgraph up -d --build
+```
+
+3. Debug-порты сервисов:
+- `src_core`: `5671`
+- `src_agent`: `5672`
+- `src_api_gateway`: `5673`
+- `src_langgraph`: `5674`
+- `src_llm`: `5675`
+- Эти порты должны быть свободны на хосте (их слушает PyCharm `Python Remote Debug`).
+
+4. PyCharm attach:
+- Конфигурация: `Python Debug Server` (по одному на сервис/порт).
+- Host: `127.0.0.1`.
+- Port: из списка выше.
+- Готовые shared-конфиги уже лежат в `.run/Attach_*.run.xml`.
+- Path mappings:
+  - `src_core` -> `/app/src_core`
+  - `src_agent` -> `/app/src_agent`
+  - `src_api_gateway` -> `/app`
+  - `src_langgraph` -> `/app/src_langgraph`
+  - `src_llm` -> `/app/src_llm`
+  - `src_shared` -> `/app/src_shared`
+
+5. Если нужен стоп на старте до attach, поставь `DEBUGPY_WAIT_FOR_CLIENT=1` в `docker/.env.debug`.
+   До attach сервисы не поднимают свои порты, поэтому `502` на `/core/*` в этот момент — ожидаемое поведение.
+   При `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach можно включить позже (подключение в фоне).
+
 ## Локально через IDE (гибрид)
 
 1. Поднять инфраструктуру:

@@ -35,6 +35,36 @@ docker compose --profile langgraph up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
+## Docker + отладка (PyCharm/debugpy)
+
+`debugpy` включается только через override-файл, обычный запуск без отладки не меняется.
+
+```bash
+cd docker
+cp .env.debug.example .env.debug
+# обязательно: абсолютный путь к корню репозитория на хосте
+# пример:
+# PYCHARM_PROJECT_ROOT=/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff
+docker compose --env-file .env --env-file .env.debug \
+  -f docker-compose.yml -f docker-compose.debug.yml \
+  --profile langgraph up -d --build
+```
+
+Порты отладки:
+- `src_core`: `127.0.0.1:5671`
+- `src_agent`: `127.0.0.1:5672`
+- `src_api_gateway`: `127.0.0.1:5673`
+- `src_langgraph`: `127.0.0.1:5674`
+- `src_llm`: `127.0.0.1:5675`
+- эти порты должны быть свободны на хосте для `Python Remote Debug` в PyCharm (docker их не публикует).
+
+Если нужен стоп на старте до подключения IDE, выстави в `docker/.env.debug`:
+- `DEBUGPY_WAIT_FOR_CLIENT=1`
+- при этом сервисы не начнут слушать HTTP/NATS до attach, и до подключения дебаггера `src_front` может отвечать `502` на `/core/*` — это ожидаемо.
+- при `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach произойдёт в фоне, когда запустишь `Attach ...` конфиг в PyCharm.
+
+В проект уже добавлены shared PyCharm run-конфиги (`.run/Attach_*.run.xml`) для `Attach` к каждому сервису.
+
 ## Локальный запуск Python-сервисов
 
 ```bash
