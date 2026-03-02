@@ -34,6 +34,10 @@ export function logError(name: string, val: any) {
   console.error(name, val);
 }
 
+export function logReplayBundle(bundle: unknown): void {
+  console.debug("[dialog.replay.bundle]", clone(bundle));
+}
+
 
 function pickConsoleMethod(event: ServerEvent): (...args: unknown[]) => void {
   if (event.type === "log" && event.kind === "error") return console.error;
@@ -72,4 +76,12 @@ function formatEventTag(event: ServerEvent): string {
 
 function isLlmEvent(event: ServerEvent): boolean {
   return event.name === "llm_request_debug" || event.name === "llm_result";
+}
+
+function clone<T>(value: T): T {
+  try {
+    return JSON.parse(JSON.stringify(value)) as T;
+  } catch {
+    return value;
+  }
 }

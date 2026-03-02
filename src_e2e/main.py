@@ -21,7 +21,9 @@ from src_shared.contracts.subjects import Subjects
 
 _YEAR_RE = re.compile(r"\b(1[6-9]\d{2}|20\d{2}|21\d{2})\b")
 _CONTEXT_REFUSAL_RE = re.compile(
-    r"(в текущих данных нет|нет подтвержденной информации|данных о годе|могу помочь с тем, что известно в текущем диалоге)",
+    r"(в текущих данных нет|нет подтвержденной информации|данных о годе|"
+    r"могу помочь с тем, что известно в текущем диалоге|не могу указать|"
+    r"нет такой информации|в контексте нет)",
     re.IGNORECASE,
 )
 
@@ -83,7 +85,10 @@ async def _agent_request(
     subject: str,
     text: str,
     session_id: UUID | None = None,
+    turn_id: str | None = None,
+    edit_turn_id: str | None = None,
 ) -> AgentInboundResponse:
+    edit_payload = {"turn_id": edit_turn_id} if isinstance(edit_turn_id, str) and edit_turn_id.strip() else None
     req = AgentInboundRequest(
         trace_id=uuid4(),
         correlation_id=None,
@@ -91,7 +96,8 @@ async def _agent_request(
         session_id=session_id,
         ts_ms=now_ts_ms(),
         text=text,
-        edit=None,
+        turn_id=turn_id,
+        edit=edit_payload,
     )
     msg = await nc.request(subject, req.model_dump_json().encode("utf-8"), timeout=120)
     return AgentInboundResponse.model_validate(json.loads(msg.data.decode("utf-8")))
@@ -217,6 +223,80 @@ async def test_airport_followup_singular_resolves_focus(nc: NATS, subject: str) 
     _assert("уточните, о каком объекте" not in text, "singular follow-up should not ask clarification when focus is resolvable")
 
 
+async def test_edit_branch_keeps_model_knowledge(nc: NATS, subject: str) -> None:
+    edited_turn_id = f"edit-root-{uuid4().hex[:10]}"
+    first = await _agent_request(nc, subject=subject, text="найди аэропорт", turn_id=edited_turn_id)
+    _assert_show_message(first)
+    _assert(first.session_id is not None, "session_id must be present for edit flow")
+
+    edited = await _agent_request(
+        nc,
+        subject=subject,
+        text="найди ближайший аэропорт",
+        session_id=first.session_id,
+        edit_turn_id=edited_turn_id,
+    )
+    _assert_show_message(edited)
+
+    follow_up = await _agent_request(
+        nc,
+        subject=subject,
+        text="в каком году он был открыт",
+        session_id=first.session_id,
+    )
+    _assert_show_message(follow_up)
+    text = str((follow_up.client_handler or {}).get("payload", {}).get("message") or "").lower()
+    _assert(not _CONTEXT_REFUSAL_RE.search(text), "edit follow-up should not fallback to context-only refusal")
+    _assert(bool(_YEAR_RE.search(text)), "edit follow-up should include explicit year from model knowledge")
+
+
+async def test_airport_followup_year_query_triggers_knowledge_retry(nc: NATS, env: Env) -> None:
+    query = "какой год постройки этих аэропортов"
+    sub = await nc.subscribe(env.events_subject)
+    try:
+        first = await _agent_request(nc, subject=env.agent_subject, text="найди аэропорт")
+        _assert_show_message(first)
+        _assert(first.session_id is not None, "session_id must be present for year follow-up")
+
+        second = await _agent_request(
+            nc,
+            subject=env.agent_subject,
+            text=query,
+            session_id=first.session_id,
+        )
+        _assert_show_message(second)
+        text = str((second.client_handler or {}).get("payload", {}).get("message") or "").lower()
+        _assert(not _CONTEXT_REFUSAL_RE.search(text), "year follow-up should not fallback to context-only refusal")
+        _assert(bool(_YEAR_RE.search(text)), "year follow-up should include explicit year")
+
+        saw_knowledge_retry = False
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline:
+            try:
+                msg = await sub.next_msg(timeout=1.0)
+            except Exception:
+                continue
+            event = json.loads(msg.data.decode("utf-8"))
+            if not isinstance(event, dict):
+                continue
+            if event.get("service") != "src_llm" or event.get("name") != "llm_request_debug":
+                continue
+            data = event.get("data") if isinstance(event.get("data"), dict) else {}
+            payload = data.get("payload") if isinstance(data.get("payload"), dict) else {}
+            if str(payload.get("mode") or "") != "final_response":
+                continue
+            input_payload = payload.get("input") if isinstance(payload.get("input"), dict) else {}
+            if str(input_payload.get("user_message") or "") != query:
+                continue
+            if str(input_payload.get("free_speech_pass") or "") == "knowledge_retry":
+                saw_knowledge_retry = True
+                break
+
+        _assert(saw_knowledge_retry, "year follow-up should trigger free_speech knowledge_retry pass")
+    finally:
+        await sub.unsubscribe()
+
+
 async def main() -> None:
     env = _env()
     nc = NATS()
@@ -231,6 +311,8 @@ async def main() -> None:
         await test_find_nearest_airport(nc, env.agent_subject)
         await test_airport_followup_uses_context(nc, env.agent_subject)
         await test_airport_followup_singular_resolves_focus(nc, env.agent_subject)
+        await test_edit_branch_keeps_model_knowledge(nc, env.agent_subject)
+        await test_airport_followup_year_query_triggers_knowledge_retry(nc, env)
         print("E2E OK")
     finally:
         await nc.drain()

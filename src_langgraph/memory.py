@@ -140,13 +140,16 @@ def prepare_dialog_memory(
     context_max_chars: int,
 ) -> dict[str, Any]:
     summary, recent_turns, extra = memory_from_context(req.runtime.context if isinstance(req.runtime.context, dict) else None)
+    edit_turn_id = extract_edit_turn_id(req.edit)
     summary, recent_turns = apply_edit_rewrite(
         summary=summary,
         recent_turns=recent_turns,
-        edit_turn_id=extract_edit_turn_id(req.edit),
+        edit_turn_id=edit_turn_id,
         recent_messages_limit=recent_messages_limit,
         summary_max_chars=summary_max_chars,
     )
+    if edit_turn_id:
+        extra.pop(DEFAULT_ARTIFACT_CONTEXT_KEY, None)
     return {
         "summary": summary,
         "recent_turns": recent_turns,

@@ -61,3 +61,53 @@ export type HistoryTurn = {
   ts_ms: number;
   meta?: Record<string, unknown>;
 };
+
+export type MessageEditPayload = {
+  turn_id: string;
+};
+
+export type MessageRequestPayload = {
+  text: string;
+  turn_id: string;
+  session_id: string | null;
+  edit?: MessageEditPayload;
+};
+
+export type CommandRequestTelemetryEvent = {
+  phase: "start" | "done" | "error";
+  endpoint: "/core/message";
+  request: MessageRequestPayload;
+  response_status?: number;
+  response_body?: Record<string, unknown> | null;
+  session_id_after?: string | null;
+  error?: string;
+};
+
+export type ReplayFlowItem = {
+  source: "http" | "nats" | "client";
+  action: string;
+  service?: string;
+  turn_id?: string | null;
+  edit_turn_id?: string | null;
+  phase?: "start" | "done" | "error";
+  mode?: string;
+  command?: string;
+  scenario?: string;
+  workflow?: string;
+  text?: string;
+  prompt?: string;
+  missing?: string[];
+  extracted?: Record<string, unknown>;
+  status_code?: number;
+  blocked?: boolean;
+  error?: string;
+  details?: Record<string, unknown>;
+};
+
+export type ReplayBundle = {
+  schema: "dialog_replay@2";
+  session_id: string | null;
+  trigger: string;
+  flow: ReplayFlowItem[];
+  dropped: number;
+};

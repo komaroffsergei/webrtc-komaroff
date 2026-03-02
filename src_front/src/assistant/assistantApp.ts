@@ -13,9 +13,15 @@ import {
 } from "../webrtc/session";
 import {FrontendNatsClient} from "../net/natsClient";
 import {CommandHandler} from "../core/commandHandler";
-import {logError, logEvent} from "../core/logging";
+import {logError, logEvent, logReplayBundle} from "../core/logging";
+import {DialogReplayCollector} from "../core/dialogReplayCollector";
 import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
-import {ClientHandlerCommand, HistoryTurn, ServerEvent} from "../types";
+import {
+  ClientHandlerCommand,
+  CommandRequestTelemetryEvent,
+  HistoryTurn,
+  ServerEvent,
+} from "../types";
 import { MapController } from "../map/mapController";
 
 /* ===========================
@@ -38,8 +44,16 @@ export class AssistantApp {
 
   private agentCommands: AgentCommandHandler;
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
+  private replayCollector: DialogReplayCollector;
 
   constructor(private config: AppConfig) {
+    this.replayCollector = new DialogReplayCollector({
+      maxItems: 10,
+    });
+    if (this.config.ui.debug) {
+      this.commands.setTelemetryHook((event) => this.onCommandTelemetry(event));
+    }
+
     this.map.init("mapRoot");
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
@@ -203,8 +217,16 @@ export class AssistantApp {
   private handleNatsPayload(payload: string): void {
     try {
       const event = JSON.parse(payload) as ServerEvent;
+      if (this.config.ui.debug) {
+        this.emitReplayBundle(this.replayCollector.onNatsEvent(event));
+      }
       void this.handleServerEvent(event);
     } catch (err) {
+      if (this.config.ui.debug) {
+        this.emitReplayBundle(
+          this.replayCollector.onClientError("nats.parse", err),
+        );
+      }
       logError("nats", err);
     }
   }
@@ -374,13 +396,25 @@ export class AssistantApp {
     const sid = sessionStorage.getItem(AssistantApp.SESSION_STORAGE_KEY);
     if (sid && typeof sid === "string") {
       this.commands.setSessionId(sid);
+      this.replayCollector.setSessionId(sid);
     }
   }
 
   private persistSessionId(sessionId: string | null): void {
     if (!sessionId) return;
     this.commands.setSessionId(sessionId);
+    this.replayCollector.setSessionId(sessionId);
     sessionStorage.setItem(AssistantApp.SESSION_STORAGE_KEY, sessionId);
+  }
+
+  private onCommandTelemetry(event: CommandRequestTelemetryEvent): void {
+    if (!this.config.ui.debug) return;
+    this.emitReplayBundle(this.replayCollector.onHttpTelemetry(event));
+  }
+
+  private emitReplayBundle(bundle: unknown): void {
+    if (!this.config.ui.debug) return;
+    logReplayBundle(bundle);
   }
 
   private async restoreChatHistory(): Promise<void> {

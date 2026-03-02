@@ -22,7 +22,7 @@ LangGraph runtime builds and updates compact context per session in `next_runtim
 
 On every request:
 1. Reads existing memory from `req.runtime.context`.
-2. If `edit.turn_id` is present, rewrites memory tail from that user turn.
+2. If `edit.turn_id` is present, rewrites memory tail from that user turn and clears `artifact_memory` for the rebuilt branch.
 3. Builds compact `dialog_context` string.
 4. Passes `dialog_context` to routing and scenario LLM calls.
 5. Appends current user+assistant turns, compacts memory again, returns updated context.
@@ -41,8 +41,9 @@ All scenarios are stateful because they receive this shared `dialog_context`.
 - `free_speech` uses both compact dialog context and model general knowledge; when confidence is low, it should state uncertainty explicitly.
 - For fact-like queries runtime uses two-pass generation:
   - pass 1: regular `final_response` with full context
-  - pass 2 (recovery): retried `final_response` with knowledge-priority instruction and compacted context
+  - pass 2 (knowledge pass): retried for fact-like requests and also for context-only refusals (even if fact detector missed a wording variant)
   - runtime picks the better response using generic quality heuristics (no domain-specific hardcoding)
+  - debug input markers: `free_speech_pass` (`primary|knowledge_retry`) and optional `retry_reason`
 
 ## Turn IDs
 - Uses `req.turn_id` as user turn identifier.

@@ -31,6 +31,10 @@ Incoming:
 ## Debug logging
 - Events are logged in grouped format via `src_front/src/core/logging.ts`.
 - LLM debug events (`name=llm_request_debug`) and LLM responses (`name=llm_result`) are printed with structured payloads for easier inspection.
+- Replay snapshot is printed as one compact expandable object on each telemetry/event tick:
+  - prefix: `[dialog.replay.bundle]`
+  - payload: compact object (`schema=dialog_replay@2`) without timestamp noise and trace/request ids
+  - includes last 10 compact flow steps with edit context.
 
 ## Run/stop
 Docker UI:

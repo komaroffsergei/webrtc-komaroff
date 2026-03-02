@@ -37,20 +37,37 @@ FREE_SPEECH_CONTEXT = text_block(
 _SINGULAR_REF_RE = re.compile(r"\b(он|она|оно|его|ее|её|нему|ней|нем|этот|эта|это|данный|данная)\b", flags=re.IGNORECASE)
 _PLURAL_REF_RE = re.compile(r"\b(они|их|ими|эти|этих|этим)\b", flags=re.IGNORECASE)
 _FACT_QUERY_RE = re.compile(
-    r"\b(когда|в каком году|какого года|кем|кто|где|почему|что известно|история|основан|основание|построен|постройка|открыт|создан)\b",
+    r"\b(когда|в каком году|какого года|какой год|какие годы|кем|кто|где|почему|что известно|история|"
+    r"год(?:а|у|ом)?(?:\s+(?:основания|постройки|создания|строительства))?|"
+    r"основан(?:а|о|ы)?|основание|построен(?:а|о|ы)?|постройк(?:а|и)|"
+    r"строительств(?:о|а)|открыт(?:а|о|ы)?|создан(?:а|о|ы)?)\b",
     flags=re.IGNORECASE,
 )
-_YEAR_QUERY_RE = re.compile(r"\b(в каком году|какого года|год (основания|постройки|создания))\b", flags=re.IGNORECASE)
+_YEAR_QUERY_RE = re.compile(
+    r"\b(в каком году|какого года|какой год|какие годы|"
+    r"год(?:а|у|ом)?(?:\s+(?:основания|постройки|создания|строительства))?)\b",
+    flags=re.IGNORECASE,
+)
 _YEAR_VALUE_RE = re.compile(r"\b(1[6-9]\d{2}|20\d{2}|21\d{2})\b")
 _CONTEXT_ONLY_REFUSAL_HINTS = (
     "в текущих данных нет",
+    "в текущем контексте нет",
+    "в контексте нет этой информации",
+    "в контексте нет данных",
+    "в диалоге нет этой информации",
+    "в текущем диалоге нет",
     "нет подтвержденной информации",
+    "не могу указать",
+    "к сожалению, я не уверен",
+    "я не уверен, кто",
     "могу помочь с тем, что известно в текущем диалоге",
     "данных о годе",
 )
 _KNOWLEDGE_RETRY_TASK_SUFFIX = (
     "Если вопрос пользователя требует фактов, не ограничивайся только полями из context_artifacts.\n"
     "Используй общие знания модели вместе с контекстом диалога.\n"
+    "Считай context_artifacts подсказками, а не ограничением знаний.\n"
+    "Для вопросов про даты/историю/авторство используй знания модели, даже если в context_artifacts нет этих данных.\n"
     "Не отвечай шаблоном о нехватке данных, если факт можно дать из общих знаний.\n"
     "Если уверенность низкая, прямо укажи это в ответе."
 )
@@ -217,7 +234,7 @@ def _clarify_entity_message(entities: list[dict[str, Any]]) -> str:
 
 def _is_fact_query(text: str) -> bool:
     clean = str(text or "").strip()
-    return bool(clean and _FACT_QUERY_RE.search(clean))
+    return bool(clean and (_FACT_QUERY_RE.search(clean) or _YEAR_QUERY_RE.search(clean)))
 
 
 def _is_year_query(text: str) -> bool:
@@ -286,17 +303,38 @@ def _needs_knowledge_retry(
     resolved_entities: list[dict[str, Any]],
 ) -> bool:
     text = str(response_text or "").strip()
-    if not _is_fact_query(user_text):
-        return False
     if not text:
         return True
     if _contains_context_only_refusal(text):
         return True
-    if _is_year_query(user_text) and not _contains_year(text):
-        return True
     if resolved_mode in {"single", "multi"} and not _mentions_resolved_entities(text, resolved_entities):
         return True
+    if _is_year_query(user_text) and not _contains_year(text):
+        return True
+    if _is_fact_query(user_text):
+        return True
     return False
+
+
+def _retry_reason(
+    *,
+    user_text: str,
+    response_text: str,
+    resolved_mode: str,
+    resolved_entities: list[dict[str, Any]],
+) -> str:
+    text = str(response_text or "").strip()
+    if not text:
+        return "empty_response"
+    if _contains_context_only_refusal(text):
+        return "context_only_refusal"
+    if _is_year_query(user_text) and not _contains_year(text):
+        return "missing_year_for_year_query"
+    if resolved_mode in {"single", "multi"} and not _mentions_resolved_entities(text, resolved_entities):
+        return "missing_resolved_entity_reference"
+    if _is_fact_query(user_text):
+        return "fact_query_secondary_pass"
+    return "generic_secondary_pass"
 
 
 def _short_dialog_context(dialog_context: str, *, max_lines: int = 10, max_chars: int = 2400) -> str:
@@ -351,6 +389,7 @@ async def run_free_speech(
         "resolved_reference_mode": resolved_mode if resolved_mode in {"single", "multi"} else "none",
         "resolved_entities": resolved_entities[:5],
         "resolved_hint": resolved_hint,
+        "free_speech_pass": "primary",
     }
     primary_resp = await io.call_llm(
         parent=req,
@@ -359,13 +398,22 @@ async def run_free_speech(
         constraints={"temperature": 0.4},
     )
     primary_text = _extract_text(primary_resp) or ""
-    if not _needs_knowledge_retry(
+    fact_query = _is_fact_query(req.text or "")
+    needs_retry = _needs_knowledge_retry(
         user_text=req.text or "",
         response_text=primary_text,
         resolved_mode=resolved_mode,
         resolved_entities=resolved_entities,
-    ):
+    )
+    if not (fact_query or needs_retry):
         return done_response(req, primary_text or "Чем могу помочь?")
+
+    retry_reason = _retry_reason(
+        user_text=req.text or "",
+        response_text=primary_text,
+        resolved_mode=resolved_mode,
+        resolved_entities=resolved_entities,
+    )
 
     secondary_input: dict[str, Any] = {
         **primary_input,
@@ -375,6 +423,8 @@ async def run_free_speech(
             context_artifacts=context_artifacts,
             resolved_entities=resolved_entities,
         ),
+        "free_speech_pass": "knowledge_retry",
+        "retry_reason": retry_reason,
     }
     secondary_resp = await io.call_llm(
         parent=req,
