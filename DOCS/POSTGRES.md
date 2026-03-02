@@ -28,6 +28,10 @@ Purpose: stateful LangGraph/runtime memory and pending workflow state per sessio
 - `active_workflow_id text null`: currently active workflow ID.
 - `pending jsonb null`: partially collected workflow parameters.
 - `context jsonb null`: compact dialog memory (`summary + recent_turns`) and extra runtime context.
+  - Includes:
+    - `dialog_memory.summary`
+    - `dialog_memory.recent_turns`
+    - `artifact_memory` (latest airports/position/route for contextual follow-up questions)
 - `updated_at timestamptz not null default now()`: last state update timestamp.
 
 Indexes:

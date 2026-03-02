@@ -111,12 +111,44 @@ async def test_where_my_flight(nc: NATS, subject: str) -> None:
     _assert_show_message(resp)
 
 
+async def test_where_my_flight_pending_exit(nc: NATS, subject: str) -> None:
+    first = await _agent_request(nc, subject=subject, text="где мой рейс")
+    _assert(first.ok is True, "first pending response must be ok")
+    _assert(first.status == "PARTIAL", f"expected PARTIAL on first turn, got {first.status}")
+    command = str((first.client_handler or {}).get("command") or "")
+    _assert(command == "ASK_USER_INPUT", f"expected ASK_USER_INPUT, got {command}")
+    _assert(first.session_id is not None, "session_id must be present for pending follow-up")
+
+    second = await _agent_request(nc, subject=subject, text="как дела", session_id=first.session_id)
+    _assert(second.ok is True, "second response must be ok")
+    _assert(second.status == "DONE", f"expected DONE after pending escape, got {second.status}")
+    second_command = str((second.client_handler or {}).get("command") or "")
+    _assert(second_command == "SHOW_MESSAGE", f"expected SHOW_MESSAGE after pending escape, got {second_command}")
+
+
 async def test_find_nearest_airport(nc: NATS, subject: str) -> None:
     resp = await _agent_request(nc, subject=subject, text="найди ближайший аэропорт")
     _assert_show_message(resp)
     commands = [e.get("command") for e in (resp.client_events or []) if isinstance(e, dict)]
     expected = {"SET_POSITION", "SET_AIRPORTS", "BUILD_ROUTE"}
     _assert(expected.issubset(set(str(c) for c in commands)), "nearest_airport must return map events")
+
+
+async def test_airport_followup_uses_context(nc: NATS, subject: str) -> None:
+    first = await _agent_request(nc, subject=subject, text="найди аэропорт")
+    _assert_show_message(first)
+    _assert(first.session_id is not None, "session_id must be present for follow-up")
+
+    second = await _agent_request(
+        nc,
+        subject=subject,
+        text="кем и когда был основан каждый из этих аэропортов",
+        session_id=first.session_id,
+    )
+    _assert_show_message(second)
+    text = str((second.client_handler or {}).get("payload", {}).get("message") or "").lower()
+    _assert("нет информации" in text, "follow-up should explicitly avoid hallucinated airport founding facts")
+    _assert("аэропорт" in text, "follow-up should reference airports from previous context")
 
 
 async def main() -> None:
@@ -128,7 +160,9 @@ async def main() -> None:
         await test_echo(nc, env.agent_subject)
         await test_free_speech(nc, env.agent_subject)
         await test_where_my_flight(nc, env.agent_subject)
+        await test_where_my_flight_pending_exit(nc, env.agent_subject)
         await test_find_nearest_airport(nc, env.agent_subject)
+        await test_airport_followup_uses_context(nc, env.agent_subject)
         print("E2E OK")
     finally:
         await nc.drain()

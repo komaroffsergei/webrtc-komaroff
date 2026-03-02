@@ -3,7 +3,9 @@ from __future__ import annotations
 from src_shared.contracts import WorkflowRunRequest, WorkflowRunResponse
 
 from src_langgraph.config_loader import dict_value, load_config, text_block
+from src_langgraph.memory import memory_from_context
 from src_langgraph.responses import done_response, failed_response, partial_response, next_runtime
+from src_langgraph.router import choose_scenario
 from src_langgraph.runtime_io import RuntimeIO
 from src_langgraph.scenarios.common import (
     extract_llm_text,
@@ -11,7 +13,10 @@ from src_langgraph.scenarios.common import (
     merge_non_empty_params,
     normalize_tool_params,
 )
-from src_langgraph.state import SC_WHERE_MY_FLIGHT
+from src_langgraph.scenarios.echo import run_echo
+from src_langgraph.scenarios.free_speech import run_free_speech
+from src_langgraph.scenarios.nearest_airport import run_find_nearest_airport
+from src_langgraph.state import SC_ECHO, SC_FIND_NEAREST_AIRPORT, SC_WHERE_MY_FLIGHT
 
 _CFG = load_config("where_my_flight")
 _PROMPTS = dict_value(_CFG.get("prompts"))
@@ -71,6 +76,7 @@ def _format_flight_message(tool_data: dict) -> str:
 async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> WorkflowRunResponse:
     """Обрабатывает сценарий статуса рейса с поддержкой мультитурового сбора параметров."""
     pending = req.runtime.pending if isinstance(req.runtime.pending, dict) else {}
+    had_pending = bool(pending)
     prev = pending.get("extracted") if isinstance(pending.get("extracted"), dict) else {}
 
     params_resp = await io.call_llm(
@@ -92,6 +98,23 @@ async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_
     has_flight = isinstance(merged.get("flight_number"), str) and bool(str(merged["flight_number"]).strip())
     has_last = isinstance(merged.get("last_name"), str) and bool(str(merged["last_name"]).strip())
     if not (has_flight or has_last):
+        if had_pending:
+            _summary, _recent, context_extra = memory_from_context(req.runtime.context if isinstance(req.runtime.context, dict) else None)
+            context_artifacts = context_extra.get("artifact_memory")
+            context_artifacts = context_artifacts if isinstance(context_artifacts, dict) else {}
+            scenario, _routing = await choose_scenario(
+                req,
+                io,
+                dialog_context=dialog_context,
+                excluded_scenarios={SC_WHERE_MY_FLIGHT},
+                context_artifacts=context_artifacts,
+            )
+            if scenario == SC_FIND_NEAREST_AIRPORT:
+                return await run_find_nearest_airport(req, io, dialog_context=dialog_context)
+            if scenario == SC_ECHO:
+                return await run_echo(req)
+            return await run_free_speech(req, io, dialog_context=dialog_context, context_extra=context_extra)
+
         prompt = str(parsed.get("prompt") or ASK_INPUT_DEFAULT).strip() or ASK_INPUT_DEFAULT
         pending_state = {
             "type": "tool_params",

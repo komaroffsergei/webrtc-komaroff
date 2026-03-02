@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Iterable
 
 from src_shared.contracts import WorkflowRunRequest
 
@@ -40,21 +40,55 @@ def parse_echo_payload(text: str) -> str:
     return re.sub(r"^\s*(echo|эхо)\b[:\s-]*", "", stripped, flags=re.IGNORECASE).strip()
 
 
-async def choose_scenario(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> tuple[str, dict[str, Any]]:
+def _excluded_set(excluded_scenarios: Iterable[str] | None) -> set[str]:
+    return {str(x).strip() for x in (excluded_scenarios or []) if str(x).strip()}
+
+
+def _filtered_scenarios(excluded_scenarios: Iterable[str] | None) -> list[dict[str, str]]:
+    excluded = _excluded_set(excluded_scenarios)
+    out: list[dict[str, str]] = []
+    for row in ROUTER_SCENARIOS:
+        if not isinstance(row, dict):
+            continue
+        scenario_id = str(row.get("id") or "").strip()
+        if not scenario_id or scenario_id in excluded:
+            continue
+        out.append({"id": scenario_id, "description": str(row.get("description") or "").strip()})
+    return out
+
+
+async def choose_scenario(
+    req: WorkflowRunRequest,
+    io: RuntimeIO,
+    *,
+    dialog_context: str = "",
+    excluded_scenarios: Iterable[str] | None = None,
+    context_artifacts: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Выбирает сценарий через fast-path или LLM router и отдает routing-метаданные."""
+    excluded = _excluded_set(excluded_scenarios)
+    scenarios = _filtered_scenarios(excluded_scenarios)
+    allowed_ids = {str(x.get("id") or "").strip() for x in scenarios if isinstance(x, dict)}
+    if not scenarios:
+        return SC_FREE_SPEECH, {"reason": "No scenarios available after exclusions"}
+
     # Fast path for explicit local command; no LLM call needed.
-    if is_explicit_echo(req.text):
+    if is_explicit_echo(req.text) and SC_ECHO not in excluded:
         return SC_ECHO, {}
+
+    llm_input: dict[str, Any] = {
+        "task": ROUTER_TASK,
+        "text": req.text,
+        "available_scenarios": scenarios,
+        "dialog_context": dialog_context,
+    }
+    if isinstance(context_artifacts, dict) and context_artifacts:
+        llm_input["context_artifacts"] = context_artifacts
 
     llm_resp = await io.call_llm(
         parent=req,
         mode="routing_decision",
-        input_data={
-            "task": ROUTER_TASK,
-            "text": req.text,
-            "available_scenarios": ROUTER_SCENARIOS,
-            "dialog_context": dialog_context,
-        },
+        input_data=llm_input,
         constraints={"temperature": 0},
     )
     if not llm_resp.ok or not isinstance(llm_resp.data, dict):
@@ -62,13 +96,13 @@ async def choose_scenario(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_cont
 
     data = dict(llm_resp.data)
     candidate = str(data.get("workflow_id") or "").strip()
-    if candidate == SC_WHERE_MY_FLIGHT:
+    if candidate == SC_WHERE_MY_FLIGHT and candidate in allowed_ids:
         return SC_WHERE_MY_FLIGHT, data
-    if candidate == SC_FIND_NEAREST_AIRPORT:
+    if candidate == SC_FIND_NEAREST_AIRPORT and candidate in allowed_ids:
         return SC_FIND_NEAREST_AIRPORT, data
-    if candidate == SC_FREE_SPEECH:
+    if candidate == SC_FREE_SPEECH and candidate in allowed_ids:
         return SC_FREE_SPEECH, data
-    if candidate == SC_ECHO and is_explicit_echo(req.text):
+    if candidate == SC_ECHO and SC_ECHO not in excluded and is_explicit_echo(req.text):
         return SC_ECHO, data
     # Unknown/invalid router output always degrades to free speech.
     return SC_FREE_SPEECH, data

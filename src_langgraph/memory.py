@@ -5,6 +5,7 @@ from typing import Any
 from src_shared.contracts import WorkflowRunRequest, WorkflowRunResponse
 
 DEFAULT_MEMORY_CONTEXT_KEY = "dialog_memory"
+DEFAULT_ARTIFACT_CONTEXT_KEY = "artifact_memory"
 
 
 def memory_from_context(context: dict[str, Any] | None) -> tuple[str, list[dict[str, str]], dict[str, Any]]:
@@ -69,8 +70,17 @@ def compact_memory(
     return next_summary, kept
 
 
-def build_dialog_context(*, summary: str, recent_turns: list[dict[str, str]], max_chars: int) -> str:
+def build_dialog_context(
+    *,
+    summary: str,
+    recent_turns: list[dict[str, str]],
+    extra: dict[str, Any] | None,
+    max_chars: int,
+) -> str:
     sections: list[str] = []
+    artifact_block = _artifact_context_block(extra)
+    if artifact_block:
+        sections.append(artifact_block)
     if summary.strip():
         sections.append(f"Summary:\n{summary.strip()}")
     if recent_turns:
@@ -141,7 +151,12 @@ def prepare_dialog_memory(
         "summary": summary,
         "recent_turns": recent_turns,
         "context_extra": extra,
-        "dialog_context": build_dialog_context(summary=summary, recent_turns=recent_turns, max_chars=context_max_chars),
+        "dialog_context": build_dialog_context(
+            summary=summary,
+            recent_turns=recent_turns,
+            extra=extra,
+            max_chars=context_max_chars,
+        ),
     }
 
 
@@ -193,3 +208,49 @@ def _trim_tail(text: str, max_chars: int) -> str:
 
 def _role_label(role: str) -> str:
     return "User" if role == "user" else "Assistant"
+
+
+def _artifact_context_block(extra: dict[str, Any] | None) -> str:
+    if not isinstance(extra, dict):
+        return ""
+    artifact = extra.get(DEFAULT_ARTIFACT_CONTEXT_KEY)
+    if not isinstance(artifact, dict):
+        return ""
+
+    sections: list[str] = []
+    airports = artifact.get("last_airports")
+    if isinstance(airports, list) and airports:
+        lines: list[str] = []
+        for row in airports[:5]:
+            if not isinstance(row, dict):
+                continue
+            name = str(row.get("name") or "").strip()
+            code = str(row.get("code") or "").strip()
+            ident = f"{name} ({code})".strip() if name and code else (name or code)
+            if not ident:
+                continue
+            status = str(row.get("status") or "").strip()
+            lines.append(f"- {ident}{f', status={status}' if status else ''}")
+        if lines:
+            sections.append("Recent airports:\n" + "\n".join(lines))
+
+    position = artifact.get("last_position")
+    if isinstance(position, dict):
+        city = str(position.get("city") or "").strip()
+        lat = position.get("lat")
+        lon = position.get("lon")
+        parts: list[str] = []
+        if city:
+            parts.append(f"city={city}")
+        if lat is not None and lon is not None:
+            parts.append(f"coords=({lat},{lon})")
+        if parts:
+            sections.append("Recent position: " + ", ".join(parts))
+
+    route = artifact.get("last_route")
+    if isinstance(route, dict):
+        distance = route.get("distance_km")
+        if distance is not None:
+            sections.append(f"Recent route distance_km={distance}")
+
+    return "\n".join(sections).strip()

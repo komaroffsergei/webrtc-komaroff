@@ -18,6 +18,7 @@ Outbound req/reply calls:
 LangGraph runtime builds and updates compact context per session in `next_runtime.context`:
 - `dialog_memory.summary`: compressed text of older turns
 - `dialog_memory.recent_turns`: bounded list of latest user/assistant turns
+- `artifact_memory`: compact structured artifacts from previous tool responses (last airports/position/route)
 
 On every request:
 1. Reads existing memory from `req.runtime.context`.
@@ -27,6 +28,11 @@ On every request:
 5. Appends current user+assistant turns, compacts memory again, returns updated context.
 
 All scenarios are stateful because they receive this shared `dialog_context`.
+
+### Pending exit policy (`where_my_flight`)
+- First turn without required params (`flight_number` or `last_name`) returns `PARTIAL + ASK_USER_INPUT`.
+- If the next user message still does not contain required params, runtime exits pending state and reroutes this same message through normal scenario selection (excluding `where_my_flight`).
+- This prevents infinite `ASK_USER_INPUT` loops and lets user switch topic immediately.
 
 ## Turn IDs
 - Uses `req.turn_id` as user turn identifier.
