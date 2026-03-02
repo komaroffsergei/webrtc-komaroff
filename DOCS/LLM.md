@@ -20,8 +20,9 @@ Defined in `src_shared/contracts/llm.py`:
 
 ## Debug output
 For every inbound LLM request, `src_llm` emits:
-- `log/info name=llm_request_debug` with trace, mode, constraints, and truncated input payload
-- `log/info name=llm_result` with response payload
+- `log/info name=llm_runtime_config` with startup runtime config (`mode`, `configured_model`, `llm_context_size`)
+- `log/info name=llm_request_debug` with trace, mode, requested/configured model, constraints, and truncated input payload
+- `log/info name=llm_result` with response payload and `_debug` block (`effective_model`, `provider`, `duration_ms`)
 
 This is consumed by frontend console logging for readable per-request diagnostics.
 

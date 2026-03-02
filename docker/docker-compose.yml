@@ -89,6 +89,8 @@ services:
       NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
       USER_ID: ${USER_ID:-user123}
       LLM_MODE: remote
+      LLM_REMOTE_MODEL: qwen3:30b
+      LLM_CONTEXT_SIZE: 16384
       OLLAMA_URL: http://ollama.h100.local
 
   src_langgraph:

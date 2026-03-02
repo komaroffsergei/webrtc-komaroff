@@ -29,7 +29,7 @@ LLM_LOCAL_MODEL = os.getenv("LLM_LOCAL_MODEL", "Qwen/Qwen3-1.7B-GGUF")
 LLM_REMOTE_MODEL = os.getenv("LLM_REMOTE_MODEL", "qwen3:30b")
 LLM_MODELS = os.getenv("LLM_MODELS", "models/llm")
 OLLAMA_MODEL_FILE = os.getenv("OLLAMA_MODEL_FILE", "")
-LLM_CONTEXT_SIZE = int(os.getenv("LLM_CONTEXT_SIZE", "8192"))
+LLM_CONTEXT_SIZE = int(os.getenv("LLM_CONTEXT_SIZE", "16384"))
 
 # ---- LIMITS ----
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "8096"))

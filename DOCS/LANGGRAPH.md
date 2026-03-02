@@ -39,6 +39,10 @@ All scenarios are stateful because they receive this shared `dialog_context`.
 - For plural references, assistant answers against all resolved entities.
 - For singular references, runtime first tries to resolve focus from the latest assistant turn; clarification is used only if focus is ambiguous.
 - `free_speech` uses both compact dialog context and model general knowledge; when confidence is low, it should state uncertainty explicitly.
+- For fact-like queries runtime uses two-pass generation:
+  - pass 1: regular `final_response` with full context
+  - pass 2 (recovery): retried `final_response` with knowledge-priority instruction and compacted context
+  - runtime picks the better response using generic quality heuristics (no domain-specific hardcoding)
 
 ## Turn IDs
 - Uses `req.turn_id` as user turn identifier.

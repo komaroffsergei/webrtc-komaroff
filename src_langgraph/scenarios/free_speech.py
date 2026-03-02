@@ -36,6 +36,24 @@ FREE_SPEECH_CONTEXT = text_block(
 )
 _SINGULAR_REF_RE = re.compile(r"\b(он|она|оно|его|ее|её|нему|ней|нем|этот|эта|это|данный|данная)\b", flags=re.IGNORECASE)
 _PLURAL_REF_RE = re.compile(r"\b(они|их|ими|эти|этих|этим)\b", flags=re.IGNORECASE)
+_FACT_QUERY_RE = re.compile(
+    r"\b(когда|в каком году|какого года|кем|кто|где|почему|что известно|история|основан|основание|построен|постройка|открыт|создан)\b",
+    flags=re.IGNORECASE,
+)
+_YEAR_QUERY_RE = re.compile(r"\b(в каком году|какого года|год (основания|постройки|создания))\b", flags=re.IGNORECASE)
+_YEAR_VALUE_RE = re.compile(r"\b(1[6-9]\d{2}|20\d{2}|21\d{2})\b")
+_CONTEXT_ONLY_REFUSAL_HINTS = (
+    "в текущих данных нет",
+    "нет подтвержденной информации",
+    "могу помочь с тем, что известно в текущем диалоге",
+    "данных о годе",
+)
+_KNOWLEDGE_RETRY_TASK_SUFFIX = (
+    "Если вопрос пользователя требует фактов, не ограничивайся только полями из context_artifacts.\n"
+    "Используй общие знания модели вместе с контекстом диалога.\n"
+    "Не отвечай шаблоном о нехватке данных, если факт можно дать из общих знаний.\n"
+    "Если уверенность низкая, прямо укажи это в ответе."
+)
 
 
 def _extract_text(resp: LlmResponse) -> str | None:
@@ -197,6 +215,111 @@ def _clarify_entity_message(entities: list[dict[str, Any]]) -> str:
     return f"Уточните, о каком объекте речь: {labels}."
 
 
+def _is_fact_query(text: str) -> bool:
+    clean = str(text or "").strip()
+    return bool(clean and _FACT_QUERY_RE.search(clean))
+
+
+def _is_year_query(text: str) -> bool:
+    clean = str(text or "").strip()
+    return bool(clean and _YEAR_QUERY_RE.search(clean))
+
+
+def _contains_year(text: str) -> bool:
+    return bool(_YEAR_VALUE_RE.search(str(text or "")))
+
+
+def _contains_context_only_refusal(text: str) -> bool:
+    lower = str(text or "").lower()
+    if not lower:
+        return False
+    return any(marker in lower for marker in _CONTEXT_ONLY_REFUSAL_HINTS)
+
+
+def _mentions_resolved_entities(text: str, resolved_entities: list[dict[str, Any]]) -> bool:
+    if not resolved_entities:
+        return True
+    clean = str(text or "")
+    if not clean:
+        return False
+    hits = 0
+    for entity in resolved_entities[:5]:
+        label = _entity_label(entity).strip()
+        if not label:
+            continue
+        if label.lower() in clean.lower():
+            hits += 1
+            continue
+        tokens = [tok for tok in _tokenize_label(label) if len(tok) >= 3]
+        if any(re.search(rf"\b{re.escape(tok)}\b", clean, flags=re.IGNORECASE) for tok in tokens):
+            hits += 1
+    if len(resolved_entities) <= 1:
+        return hits >= 1
+    return hits >= min(2, len(resolved_entities))
+
+
+def _response_quality_score(
+    *,
+    user_text: str,
+    response_text: str,
+    resolved_mode: str,
+    resolved_entities: list[dict[str, Any]],
+) -> int:
+    text = str(response_text or "").strip()
+    if not text:
+        return 0
+    score = 1
+    if not _contains_context_only_refusal(text):
+        score += 2
+    if _is_year_query(user_text) and _contains_year(text):
+        score += 2
+    if resolved_mode in {"single", "multi"} and _mentions_resolved_entities(text, resolved_entities):
+        score += 1
+    return score
+
+
+def _needs_knowledge_retry(
+    *,
+    user_text: str,
+    response_text: str,
+    resolved_mode: str,
+    resolved_entities: list[dict[str, Any]],
+) -> bool:
+    text = str(response_text or "").strip()
+    if not _is_fact_query(user_text):
+        return False
+    if not text:
+        return True
+    if _contains_context_only_refusal(text):
+        return True
+    if _is_year_query(user_text) and not _contains_year(text):
+        return True
+    if resolved_mode in {"single", "multi"} and not _mentions_resolved_entities(text, resolved_entities):
+        return True
+    return False
+
+
+def _short_dialog_context(dialog_context: str, *, max_lines: int = 10, max_chars: int = 2400) -> str:
+    lines = [ln.strip() for ln in str(dialog_context or "").splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    tail = "\n".join(lines[-max_lines:])
+    return tail if len(tail) <= max_chars else tail[-max_chars:]
+
+
+def _retry_context_artifacts(
+    *,
+    context_artifacts: dict[str, Any],
+    resolved_entities: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not resolved_entities:
+        return context_artifacts
+    resolved_raw = [row.get("raw") for row in resolved_entities[:5] if isinstance(row.get("raw"), dict)]
+    if not resolved_raw:
+        return context_artifacts
+    return {"resolved_entities": resolved_raw}
+
+
 async def run_free_speech(
     req: WorkflowRunRequest,
     io: RuntimeIO,
@@ -218,7 +341,7 @@ async def run_free_speech(
     context_artifacts = extra.get("artifact_memory")
     context_artifacts = context_artifacts if isinstance(context_artifacts, dict) else {}
 
-    llm_input: dict[str, Any] = {
+    primary_input: dict[str, Any] = {
         "task": FREE_SPEECH_TASK,
         "user_message": req.text,
         "tool_results": [],
@@ -229,10 +352,49 @@ async def run_free_speech(
         "resolved_entities": resolved_entities[:5],
         "resolved_hint": resolved_hint,
     }
-    final_resp = await io.call_llm(
+    primary_resp = await io.call_llm(
         parent=req,
         mode="final_response",
-        input_data=llm_input,
+        input_data=primary_input,
         constraints={"temperature": 0.4},
     )
-    return done_response(req, _extract_text(final_resp) or "Чем могу помочь?")
+    primary_text = _extract_text(primary_resp) or ""
+    if not _needs_knowledge_retry(
+        user_text=req.text or "",
+        response_text=primary_text,
+        resolved_mode=resolved_mode,
+        resolved_entities=resolved_entities,
+    ):
+        return done_response(req, primary_text or "Чем могу помочь?")
+
+    secondary_input: dict[str, Any] = {
+        **primary_input,
+        "task": f"{FREE_SPEECH_TASK}\n{_KNOWLEDGE_RETRY_TASK_SUFFIX}",
+        "dialog_context": _short_dialog_context(dialog_context),
+        "context_artifacts": _retry_context_artifacts(
+            context_artifacts=context_artifacts,
+            resolved_entities=resolved_entities,
+        ),
+    }
+    secondary_resp = await io.call_llm(
+        parent=req,
+        mode="final_response",
+        input_data=secondary_input,
+        constraints={"temperature": 0.3},
+    )
+    secondary_text = _extract_text(secondary_resp) or ""
+
+    primary_score = _response_quality_score(
+        user_text=req.text or "",
+        response_text=primary_text,
+        resolved_mode=resolved_mode,
+        resolved_entities=resolved_entities,
+    )
+    secondary_score = _response_quality_score(
+        user_text=req.text or "",
+        response_text=secondary_text,
+        resolved_mode=resolved_mode,
+        resolved_entities=resolved_entities,
+    )
+    best_text = secondary_text if secondary_score >= primary_score else primary_text
+    return done_response(req, best_text or primary_text or "Чем могу помочь?")

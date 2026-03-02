@@ -67,10 +67,20 @@ class LLMService(BaseService):
         self._ollama = None if self._use_local else ollama.Client(host=ollama_url)
         self._local_model = None
         self._inference_lock = threading.Lock()
+        self._inference_meta_lock = threading.Lock()
+        self._inference_meta_by_request: dict[str, dict[str, Any]] = {}
 
     async def on_run(self) -> None:
         await self._nats_logger.info(
             f"{STACK_SERVICE_NAME} service connected (mode={self.llm_mode})"
+        )
+        await self._nats_logger.info(
+            {
+                "mode": self.llm_mode,
+                "configured_model": self._configured_model(),
+                "llm_context_size": self.llm_context_size,
+            },
+            name="llm_runtime_config",
         )
         if self._use_local:
             await self._nats_logger.log("command", "status_llm", {"status": "downloading"})
@@ -198,10 +208,56 @@ class LLMService(BaseService):
             )
         if mode == "final_response":
             return (
-                "Сформируй финальный ответ пользователю на русском языке по результатам инструментов. "
+                "Сформируй финальный ответ пользователю на русском языке. "
+                "Используй релевантный контекст из dialog_context/context_artifacts/tool_results и общие знания модели. "
+                "Если есть неуверенность в фактах, явно укажи это. "
                 "Ответ должен быть понятным и без технических деталей внутренней системы."
             )
         return "Верни корректный JSON по схеме."
+
+    def _configured_model(self) -> str:
+        return self.llm_local_model if self._use_local else self.llm_remote_model
+
+    def _set_inference_meta(self, request_id: str, meta: dict[str, Any]) -> None:
+        if not request_id:
+            return
+        with self._inference_meta_lock:
+            self._inference_meta_by_request[request_id] = dict(meta)
+
+    def _pop_inference_meta(self, request_id: str) -> dict[str, Any]:
+        if not request_id:
+            return {}
+        with self._inference_meta_lock:
+            value = self._inference_meta_by_request.pop(request_id, {})
+        return value if isinstance(value, dict) else {}
+
+    def _request_debug_extra(self, raw_req: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "llm_mode": self.llm_mode,
+            "configured_model": self._configured_model(),
+            "llm_context_size": self.llm_context_size,
+        }
+
+    def _llm_result_debug(
+        self,
+        payload: Any,
+        *,
+        req_mode: str | None,
+        raw_req: dict[str, Any] | None,
+        duration_ms: int,
+    ) -> Any:
+        if not isinstance(payload, dict):
+            return payload
+        out = dict(payload)
+        request_id = ""
+        if isinstance(raw_req, dict):
+            request_id = str(raw_req.get("request_id") or "").strip()
+        inference_meta = self._pop_inference_meta(request_id)
+        out["_debug"] = {
+            "duration_ms": max(0, int(duration_ms)),
+            **inference_meta,
+        }
+        return out
 
     def _routing_decision(self, req: LlmRequest) -> RoutingDecisionData:
         inp_raw = req.input if isinstance(req.input, dict) else {}
@@ -637,6 +693,15 @@ class LLMService(BaseService):
                 think=False,
             )
 
+        self._set_inference_meta(
+            str(req.request_id),
+            {
+                "mode": req.mode,
+                "configured_model": self._configured_model(),
+                "effective_model": str(result.get("model") or model),
+                "provider": str(result.get("provider") or ("local" if self._use_local else "remote")),
+            },
+        )
         content = (result.get("message") or {}).get("content") or ""
         data = _parse_json_object(str(content))
         if not isinstance(data, dict):

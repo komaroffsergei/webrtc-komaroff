@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import signal
+import time
 from typing import Any
 
 import nats
@@ -100,11 +101,18 @@ class BaseService:
             raw_req = None
 
         if raw_req is not None:
-            await self._nats_logger.info(self._llm_request_debug(raw_req), name="llm_request_debug")
+            req_debug = self._llm_request_debug(raw_req)
+            extra = self._request_debug_extra(raw_req)
+            if isinstance(extra, dict) and extra:
+                req_debug["runtime"] = extra
+            await self._nats_logger.info(req_debug, name="llm_request_debug")
 
+        duration_ms = 0
         async with self._semaphore:
             try:
+                started_at = time.monotonic()
                 text = await asyncio.to_thread(self.on_message, msg)
+                duration_ms = int((time.monotonic() - started_at) * 1000)
             except Exception as exc:
                 logger.exception("Process message error: %s", exc)
                 await self._nats_logger.error(f"Process message error: {exc}")
@@ -114,7 +122,15 @@ class BaseService:
                 )
                 return
 
-        await self._nats_logger.info(text, name="llm_result")
+        await self._nats_logger.info(
+            self._llm_result_debug(
+                text,
+                req_mode=req_mode,
+                raw_req=raw_req,
+                duration_ms=duration_ms,
+            ),
+            name="llm_result",
+        )
         thought = self._routing_thought_from_llm_result(text, req_mode=req_mode)
         if thought:
             await self._nats_logger.log("command", "thought", thought)
@@ -128,6 +144,8 @@ class BaseService:
 
     @classmethod
     def _llm_request_debug(cls, raw_req: dict[str, Any]) -> dict[str, Any]:
+        constraints = raw_req.get("constraints") if isinstance(raw_req.get("constraints"), dict) else {}
+        requested_model = constraints.get("model")
         trace = {
             "trace_id": raw_req.get("trace_id"),
             "correlation_id": raw_req.get("correlation_id"),
@@ -138,9 +156,23 @@ class BaseService:
         return {
             "trace": trace,
             "mode": raw_req.get("mode"),
-            "constraints": cls._truncate_debug_value(raw_req.get("constraints"), depth=0),
+            "requested_model": requested_model if isinstance(requested_model, str) and requested_model.strip() else None,
+            "constraints": cls._truncate_debug_value(constraints, depth=0),
             "input": cls._truncate_debug_value(raw_req.get("input"), depth=0),
         }
+
+    def _request_debug_extra(self, raw_req: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _llm_result_debug(
+        self,
+        payload: Any,
+        *,
+        req_mode: str | None,
+        raw_req: dict[str, Any] | None,
+        duration_ms: int,
+    ) -> Any:
+        return payload
 
     @classmethod
     def _truncate_debug_value(cls, value: Any, *, depth: int) -> Any:
