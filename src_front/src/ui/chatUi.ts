@@ -12,6 +12,7 @@ type EditHandler = (turnId: string, text: string) => void | Promise<void>;
 export class ChatUI {
   private thinkingActive = false;
   private voiceBlocked = false;
+  private editInFlight = false;
   private thinkingEl: HTMLElement | null = null;
   private messageByTurn = new Map<string, HTMLElement>();
   private editHandler: EditHandler | null = null;
@@ -197,6 +198,7 @@ export class ChatUI {
     actions: HTMLElement,
   ): void {
     if (!this.editHandler) return;
+    if (this.isAgentBusy()) return;
     if (this.activeInlineEditor) return;
 
     const currentText = (textEl.textContent || "").trim();
@@ -232,10 +234,17 @@ export class ChatUI {
         closeEditor();
         return;
       }
+      save.disabled = true;
+      input.disabled = true;
+      cancel.disabled = true;
+      this.editInFlight = true;
+      this.updateBlockedState();
+      closeEditor();
       try {
         await this.editHandler?.(turnId, value);
       } finally {
-        closeEditor();
+        this.editInFlight = false;
+        this.updateBlockedState();
       }
     });
     cancel.addEventListener("click", closeEditor);
@@ -250,7 +259,7 @@ export class ChatUI {
   }
 
   private updateBlockedState(): void {
-    const blocked = this.thinkingActive || this.voiceBlocked;
+    const blocked = this.isAgentBusy();
     if (this.textInput) {
       this.textInput.disabled = blocked;
       if (blocked) {
@@ -260,6 +269,9 @@ export class ChatUI {
     if (this.micButton) {
       this.micButton.disabled = blocked;
     }
+    this.root.querySelectorAll<HTMLButtonElement>(".message-edit-btn").forEach((btn) => {
+      btn.disabled = blocked;
+    });
   }
 
   private formatThinkingMeta(meta?: ThinkingMeta): string {
@@ -282,5 +294,9 @@ export class ChatUI {
     const details = (el.querySelector(".thinking-details") as HTMLElement | null)?.textContent?.trim() ?? "";
     const meta = (el.querySelector(".thinking-meta") as HTMLElement | null)?.textContent?.trim() ?? "";
     return Boolean(details || meta);
+  }
+
+  private isAgentBusy(): boolean {
+    return this.thinkingActive || this.voiceBlocked || this.editInFlight;
   }
 }
