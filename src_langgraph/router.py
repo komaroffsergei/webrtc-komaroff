@@ -40,7 +40,7 @@ def parse_echo_payload(text: str) -> str:
     return re.sub(r"^\s*(echo|эхо)\b[:\s-]*", "", stripped, flags=re.IGNORECASE).strip()
 
 
-async def choose_scenario(req: WorkflowRunRequest, io: RuntimeIO) -> tuple[str, dict[str, Any]]:
+async def choose_scenario(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> tuple[str, dict[str, Any]]:
     """Выбирает сценарий через fast-path или LLM router и отдает routing-метаданные."""
     # Fast path for explicit local command; no LLM call needed.
     if is_explicit_echo(req.text):
@@ -49,7 +49,12 @@ async def choose_scenario(req: WorkflowRunRequest, io: RuntimeIO) -> tuple[str, 
     llm_resp = await io.call_llm(
         parent=req,
         mode="routing_decision",
-        input_data={"task": ROUTER_TASK, "text": req.text, "available_scenarios": ROUTER_SCENARIOS},
+        input_data={
+            "task": ROUTER_TASK,
+            "text": req.text,
+            "available_scenarios": ROUTER_SCENARIOS,
+            "dialog_context": dialog_context,
+        },
         constraints={"temperature": 0},
     )
     if not llm_resp.ok or not isinstance(llm_resp.data, dict):

@@ -11,7 +11,7 @@ from nats.aio.client import Client as NATS
 from nats.errors import NoRespondersError
 
 from src_agent.repositories.runtime_state import load_runtime_state, save_runtime_state
-from src_agent.utils.db import Database, create_session
+from src_agent.utils.db import Database, chat_turn_exists, create_session, persist_chat_turn
 from src_shared.contracts import (
     AgentInboundRequest,
     ErrorInfo,
@@ -63,6 +63,28 @@ class AgentRunner:
         runtime: WorkflowRuntimeState,
     ) -> WorkflowRunResponse:
         correlation_id = req.correlation_id or req.trace_id
+        edit_turn_id = self._edit_turn_id(req.edit)
+        if edit_turn_id:
+            exists = await chat_turn_exists(
+                self.db,
+                session_id=str(session_id),
+                turn_id=edit_turn_id,
+            )
+            if not exists:
+                return WorkflowRunResponse(
+                    trace_id=req.trace_id,
+                    correlation_id=correlation_id,
+                    request_id=req.request_id,
+                    session_id=session_id,
+                    ts_ms=req.ts_ms,
+                    status="FAILED",
+                    result="",
+                    errors=[ErrorInfo(code="edit_turn_not_found", message="Edited turn was not found in session history.")],
+                    next_runtime=runtime,
+                )
+            # Edits rebuild the branch from the edited user turn, so pending workflow lock must be reset.
+            runtime = runtime.model_copy(update={"active_workflow_id": None, "pending": None})
+        user_turn_id = edit_turn_id or (req.turn_id.strip() if isinstance(req.turn_id, str) and req.turn_id.strip() else str(uuid4()))
 
         last_error: Optional[Exception] = None
         for attempt in range(self.max_runtime_conflict_retries + 1):
@@ -76,6 +98,7 @@ class AgentRunner:
                 session_id=session_id,
                 ts_ms=inner_ts_ms,
                 text=req.text,
+                turn_id=user_turn_id,
                 edit=req.edit,
                 runtime=runtime,
             )
@@ -89,7 +112,42 @@ class AgentRunner:
                     expected_version=runtime.version,
                     next_state=workflow_resp.next_runtime,
                 )
-                return workflow_resp
+                assistant_turn_id = self._assistant_turn_id(workflow_resp) or str(uuid4())
+                assistant_text = self._assistant_text(workflow_resp)
+                if assistant_text:
+                    await persist_chat_turn(
+                        self.db,
+                        session_id=str(session_id),
+                        user_turn_id=user_turn_id,
+                        user_text=req.text,
+                        assistant_turn_id=assistant_turn_id,
+                        assistant_text=assistant_text,
+                        edit_from_turn_id=edit_turn_id,
+                        user_meta={"request_id": str(req.request_id)},
+                        assistant_meta={
+                            "request_id": str(workflow_resp.request_id),
+                            "status": workflow_resp.status,
+                            "user_turn_id": user_turn_id,
+                        },
+                    )
+                return self._inject_turn_ids(workflow_resp, user_turn_id=user_turn_id, assistant_turn_id=assistant_turn_id)
+            except ValueError as exc:
+                if str(exc) == "edit_turn_not_found":
+                    return WorkflowRunResponse(
+                        trace_id=req.trace_id,
+                        correlation_id=correlation_id,
+                        request_id=req.request_id,
+                        session_id=session_id,
+                        ts_ms=req.ts_ms,
+                        status="FAILED",
+                        result="",
+                        errors=[ErrorInfo(code="edit_turn_not_found", message="Edited turn was not found in session history.")],
+                        next_runtime=runtime,
+                    )
+                last_error = exc
+                if attempt >= self.max_runtime_conflict_retries:
+                    break
+                runtime = await load_runtime_state(self.db, session_id=session_id)
             except Exception as exc:
                 last_error = exc
                 if attempt >= self.max_runtime_conflict_retries:
@@ -163,3 +221,45 @@ class AgentRunner:
             f"(нет responder для NATS subject {subject_list} ~{waited_s:.0f}с). "
             "Вероятно, workflow-service еще запускается. Повторите запрос через несколько секунд."
         ) from last_exc
+
+    @staticmethod
+    def _edit_turn_id(edit: Any) -> str | None:
+        if not isinstance(edit, dict):
+            return None
+        value = edit.get("turn_id")
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        return value or None
+
+    @staticmethod
+    def _assistant_text(resp: WorkflowRunResponse) -> str:
+        if isinstance(resp.result, str) and resp.result.strip():
+            return resp.result.strip()
+        if resp.errors and isinstance(resp.errors[0].message, str):
+            return resp.errors[0].message.strip()
+        return ""
+
+    @staticmethod
+    def _assistant_turn_id(resp: WorkflowRunResponse) -> str | None:
+        if not isinstance(resp.client_handler, dict):
+            return None
+        payload = resp.client_handler.get("payload")
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get("assistant_turn_id")
+        if not isinstance(value, str):
+            return None
+        value = value.strip()
+        return value or None
+
+    @staticmethod
+    def _inject_turn_ids(resp: WorkflowRunResponse, *, user_turn_id: str, assistant_turn_id: str) -> WorkflowRunResponse:
+        handler = dict(resp.client_handler or {})
+        payload = handler.get("payload") if isinstance(handler.get("payload"), dict) else {}
+        payload = dict(payload or {})
+        payload.setdefault("user_turn_id", user_turn_id)
+        payload.setdefault("assistant_turn_id", assistant_turn_id)
+        if handler:
+            handler["payload"] = payload
+        return resp.model_copy(update={"client_handler": handler})

@@ -13,9 +13,16 @@ from nats.aio.msg import Msg
 from src_agent.agent import AgentRunner
 from src_agent.settings import STACK_SERVICE_NAME
 from src_agent.ui_events import UiEventPublisher
-from src_agent.utils.db import Database
+from src_agent.utils.db import Database, fetch_chat_history
 from src_agent.utils.nats_logger import NatsLogger
-from src_shared.contracts import AgentInboundRequest, AgentInboundResponse, ErrorInfo, now_ts_ms
+from src_shared.contracts import (
+    AgentInboundRequest,
+    AgentInboundResponse,
+    ErrorInfo,
+    HistoryGetRequest,
+    HistoryGetResponse,
+    now_ts_ms,
+)
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
@@ -35,6 +42,7 @@ class AgentServer:
         *,
         nats_url: str,
         agent_subject: str,
+        agent_history_subject: str,
         events_subject: str,
         workflow_subject: str,
         workflow_timeout_s: int,
@@ -44,6 +52,7 @@ class AgentServer:
     ) -> None:
         self.nats_url = nats_url
         self.agent_subject = agent_subject
+        self.agent_history_subject = agent_history_subject
         self.events_subject = events_subject
         self.workflow_subject = workflow_subject
         self.workflow_timeout_s = int(workflow_timeout_s)
@@ -90,8 +99,13 @@ class AgentServer:
             queue=f"{STACK_SERVICE_NAME}.q.{self.user_id}",
             cb=self.handle_request,
         )
+        await self.nc.subscribe(
+            self.agent_history_subject,
+            queue=f"{STACK_SERVICE_NAME}.history.q.{self.user_id}",
+            cb=self.handle_history_request,
+        )
         if self.nats_logger:
-            await self.nats_logger.info(f"Subscribed to {self.agent_subject}")
+            await self.nats_logger.info(f"Subscribed to {self.agent_subject} and {self.agent_history_subject}")
 
     async def handle_request(self, msg: Msg) -> None:
         try:
@@ -143,6 +157,48 @@ class AgentServer:
                 logger.exception("Failed to respond with error")
             if self.nats_logger:
                 await self.nats_logger.error(f"Processing error: {str(exc)}")
+
+    async def handle_history_request(self, msg: Msg) -> None:
+        try:
+            raw = json.loads(msg.data.decode("utf-8"))
+            req = HistoryGetRequest.model_validate(raw)
+            if req.session_id is None:
+                raise ValueError("session_id is required")
+            if self.db is None:
+                raise RuntimeError("AgentServer DB is not initialized")
+
+            items = await fetch_chat_history(
+                self.db,
+                session_id=str(req.session_id),
+                limit=req.limit,
+            )
+            resp = HistoryGetResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=True,
+                items=items,
+                error=None,
+            )
+            await msg.respond(resp.model_dump_json().encode("utf-8"))
+        except Exception as exc:
+            logger.exception("Error processing history request")
+            fallback = HistoryGetResponse(
+                trace_id=uuid4(),
+                correlation_id=None,
+                request_id=uuid4(),
+                session_id=None,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                items=[],
+                error=ErrorInfo(code="history_exception", message=str(exc)),
+            )
+            try:
+                await msg.respond(fallback.model_dump_json().encode("utf-8"))
+            except Exception:
+                logger.exception("Failed to respond with history error")
 
     def setup_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()

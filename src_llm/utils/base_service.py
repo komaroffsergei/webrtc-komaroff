@@ -88,12 +88,19 @@ class BaseService:
             return
 
         req_mode: str | None = None
+        raw_req: dict[str, Any] | None = None
         try:
-            raw_req = json.loads(msg.data.decode("utf-8"))
+            parsed = json.loads(msg.data.decode("utf-8"))
+            if isinstance(parsed, dict):
+                raw_req = parsed
             if isinstance(raw_req, dict) and isinstance(raw_req.get("mode"), str):
                 req_mode = raw_req["mode"].strip()
         except Exception:
             req_mode = None
+            raw_req = None
+
+        if raw_req is not None:
+            await self._nats_logger.info(self._llm_request_debug(raw_req), name="llm_request_debug")
 
         async with self._semaphore:
             try:
@@ -118,6 +125,43 @@ class BaseService:
         if not msg.reply or not self._nc:
             return
         await self._publisher.publish(msg.reply, payload)
+
+    @classmethod
+    def _llm_request_debug(cls, raw_req: dict[str, Any]) -> dict[str, Any]:
+        trace = {
+            "trace_id": raw_req.get("trace_id"),
+            "correlation_id": raw_req.get("correlation_id"),
+            "request_id": raw_req.get("request_id"),
+            "session_id": raw_req.get("session_id"),
+            "ts_ms": raw_req.get("ts_ms"),
+        }
+        return {
+            "trace": trace,
+            "mode": raw_req.get("mode"),
+            "constraints": cls._truncate_debug_value(raw_req.get("constraints"), depth=0),
+            "input": cls._truncate_debug_value(raw_req.get("input"), depth=0),
+        }
+
+    @classmethod
+    def _truncate_debug_value(cls, value: Any, *, depth: int) -> Any:
+        if depth >= 5:
+            return "<max_depth_reached>"
+        if isinstance(value, str):
+            return value if len(value) <= 700 else f"{value[:680]}...<truncated>"
+        if isinstance(value, list):
+            clipped = [cls._truncate_debug_value(v, depth=depth + 1) for v in value[:20]]
+            if len(value) > 20:
+                clipped.append(f"<truncated_items:{len(value) - 20}>")
+            return clipped
+        if isinstance(value, dict):
+            out: dict[str, Any] = {}
+            for i, (k, v) in enumerate(value.items()):
+                if i >= 30:
+                    out["<truncated_keys>"] = len(value) - 30
+                    break
+                out[str(k)] = cls._truncate_debug_value(v, depth=depth + 1)
+            return out
+        return value
 
     @staticmethod
     def _routing_thought_from_llm_result(payload: Any, *, req_mode: str | None) -> dict[str, Any] | None:

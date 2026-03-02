@@ -11,6 +11,7 @@ class AgentInboundRequest(TraceEnvelope):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1)
+    turn_id: Optional[str] = Field(default=None, min_length=1)
     edit: Optional[dict[str, Any]] = None
     user_id: Optional[str] = None
 
@@ -24,4 +25,3 @@ class AgentInboundResponse(TraceEnvelope):
     client_events: list[dict[str, Any]] = Field(default_factory=list)
     status: str
     errors: list[ErrorInfo] = Field(default_factory=list)
-

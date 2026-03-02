@@ -38,27 +38,30 @@ export class CommandHandler {
   //   return false;
   // }
 
-  async sendMessage(text: string): Promise<void> {
+  async sendMessage(text: string, turnId: string): Promise<string | null> {
     const resp = await fetch("/core/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, session_id: this.sessionId }),
+      body: JSON.stringify({ text, turn_id: turnId, session_id: this.sessionId }),
     });
     if (!resp.ok) throw new Error(`Server responded with ${resp.status}`);
     try {
       const data = (await resp.json()) as { session_id?: unknown };
       this.sessionId = typeof data.session_id === "string" ? data.session_id : this.sessionId;
+      return this.sessionId;
     } catch {
       // Ignore invalid/non-JSON responses.
+      return this.sessionId;
     }
   }
 
-  async sendEditedMessage(text: string, turnId: string): Promise<void> {
+  async sendEditedMessage(text: string, turnId: string): Promise<string | null> {
     const resp = await fetch("/core/message", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         text,
+        turn_id: turnId,
         session_id: this.sessionId,
         edit: { turn_id: turnId },
       }),
@@ -67,8 +70,10 @@ export class CommandHandler {
     try {
       const data = (await resp.json()) as { session_id?: unknown };
       this.sessionId = typeof data.session_id === "string" ? data.session_id : this.sessionId;
+      return this.sessionId;
     } catch {
       // Ignore invalid/non-JSON responses.
+      return this.sessionId;
     }
   }
 }

@@ -1,31 +1,70 @@
 # src_llm
 
-`src_llm` — единый gateway к модели по NATS.
+## Responsibility
+`src_llm` is a NATS request/reply gateway to the underlying language model (local or remote).
+It validates `LlmRequest`, runs mode-specific inference, and returns strict `LlmResponse` payloads.
+It does not own session persistence.
 
-## Subject
+## NATS subjects
+- Inbound requests: `nats.llm.<user_id>`
+- Outbound events/logs: `nats.events.<user_id>`
 
-- `nats.llm.<user_id>` (req-reply)
-
-## Поддерживаемые режимы
-
+## Supported modes
+Defined in `src_shared/contracts/llm.py`:
 - `routing_decision`
+- `params_extract`
+- `revise`
+- `tool_decision`
 - `tool_params`
 - `final_response`
-- дополнительные режимы из `src_shared/contracts/llm.py` при необходимости
 
-## Конфиг
+## Debug output
+For every inbound LLM request, `src_llm` emits:
+- `log/info name=llm_request_debug` with trace, mode, constraints, and truncated input payload
+- `log/info name=llm_result` with response payload
 
+This is consumed by frontend console logging for readable per-request diagnostics.
+
+## Environment
+Configured in `src_llm/settings.py` and `src_llm/env.example`.
+
+- `NATS_URL`
+- `NATS_LLM_SUBJECT` (prefix)
+- `NATS_EVENTS_SUBJECT` (prefix)
+- `USER_ID`
 - `LLM_MODE=local|remote`
 - `OLLAMA_URL`
 - `LLM_LOCAL_MODEL`
 - `LLM_REMOTE_MODEL`
+- `DEFAULT_MAX_TOKENS`
+- `LLM_CONTEXT_SIZE`
 
-## Поток вызова
+## Run/stop
+Docker:
+```bash
+cd docker
+docker compose up -d src_llm
+docker compose stop src_llm
+```
 
-`src_langgraph` -> `nats.llm.<user_id>` -> `src_llm` -> модель -> `LlmResponse`.
+Local:
+```bash
+python -m src_llm.main
+```
 
-## Где смотреть код
+## Common issues
+- `LLM_MODE must be either 'local' or 'remote'`
+  - Fix: set `LLM_MODE` to `local` or `remote`.
+- `Model did not return a JSON object`
+  - Cause: model ignored JSON-only instruction.
+  - Fix: check `llm_request_debug` and model config/temperature.
+- No response on NATS request
+  - Cause: service not subscribed to `nats.llm.<user_id>`.
+  - Fix: verify `USER_ID` and subject prefix configuration.
 
-- `src_llm/service.py`
-- `src_llm/settings.py`
-- `src_shared/contracts/llm.py`
+## Code pointers
+- Entry: `src_llm/main.py`
+- Core logic: `src_llm/service.py`
+- NATS wrapper: `src_llm/utils/base_service.py`
+- Event logger: `src_llm/utils/nats_logger.py`
+- Contracts: `src_shared/contracts/llm.py`

@@ -9,6 +9,7 @@ class Subjects:
     """
 
     AGENT_PREFIX = "nats.agent."
+    AGENT_HISTORY_PREFIX = "nats.agent.history."
     EVENTS_PREFIX = "nats.events."
     LLM_PREFIX = "nats.llm."
 

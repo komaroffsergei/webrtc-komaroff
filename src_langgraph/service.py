@@ -40,6 +40,9 @@ class WorkflowRuntimeService:
         user_id: str,
         request_timeout_s: float = 120.0,
         max_concurrency: int = 8,
+        memory_recent_messages: int = 16,
+        memory_summary_max_chars: int = 4000,
+        memory_context_max_chars: int = 5000,
     ) -> None:
         """Сохраняет настройки подключения и лимиты конкурентности обработки."""
         self.nats_url = nats_url
@@ -56,6 +59,11 @@ class WorkflowRuntimeService:
         self._semaphore = asyncio.Semaphore(max(1, int(max_concurrency)))
         self._nc: NATS | None = None
         self._engine: WorkflowEngine | None = None
+        self._memory_cfg = {
+            "memory_recent_messages": int(memory_recent_messages),
+            "memory_summary_max_chars": int(memory_summary_max_chars),
+            "memory_context_max_chars": int(memory_context_max_chars),
+        }
 
     async def run(self) -> None:
         """Подключается к NATS, регистрирует подписки и ждет сигнала остановки."""
@@ -67,7 +75,7 @@ class WorkflowRuntimeService:
             ping_interval=10,
         )
         io = RuntimeIO(nc=self._nc, **self._io_cfg)
-        self._engine = WorkflowEngine(io)
+        self._engine = WorkflowEngine(io, **self._memory_cfg)
 
         await self._nc.subscribe(self.run_subject, queue="src_langgraph.run.q", cb=self._handle_run)
         await self._nc.subscribe(self.health_subject, queue="src_langgraph.health.q", cb=self._handle_health)

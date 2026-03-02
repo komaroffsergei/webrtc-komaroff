@@ -92,7 +92,7 @@ def _normalize_route_args(extracted: dict[str, Any], pos_data: dict[str, Any], a
     return {k: out[k] for k in required} if all(k in out for k in required) else None
 
 
-async def run_find_nearest_airport(req: WorkflowRunRequest, io: RuntimeIO) -> WorkflowRunResponse:
+async def run_find_nearest_airport(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> WorkflowRunResponse:
     """Ищет ближайший аэропорт и строит маршрут через цепочку из 3 tools + 3 LLM вызовов."""
     pos_resp = await io.call_tool(parent=req, tool_name=TOOL_GET_POSITION, args={})
     if not pos_resp.ok:
@@ -102,7 +102,14 @@ async def run_find_nearest_airport(req: WorkflowRunRequest, io: RuntimeIO) -> Wo
     search_params_resp = await io.call_llm(
         parent=req,
         mode="tool_params",
-        input_data={"task": SEARCH_PARAMS_TASK, "user_message": req.text, "tool_name": TOOL_SEARCH_AIRPORTS, "tool_schema": SEARCH_TOOL_SCHEMA, "tool_results": tool_results},
+        input_data={
+            "task": SEARCH_PARAMS_TASK,
+            "user_message": req.text,
+            "tool_name": TOOL_SEARCH_AIRPORTS,
+            "tool_schema": SEARCH_TOOL_SCHEMA,
+            "tool_results": tool_results,
+            "dialog_context": dialog_context,
+        },
         constraints={"temperature": 0},
     )
     search_params = normalize_tool_params(search_params_resp).get("extracted") or {}
@@ -123,7 +130,14 @@ async def run_find_nearest_airport(req: WorkflowRunRequest, io: RuntimeIO) -> Wo
     route_params_resp = await io.call_llm(
         parent=req,
         mode="tool_params",
-        input_data={"task": ROUTE_PARAMS_TASK, "user_message": req.text, "tool_name": TOOL_BUILD_ROUTE, "tool_schema": ROUTE_TOOL_SCHEMA, "tool_results": tool_results},
+        input_data={
+            "task": ROUTE_PARAMS_TASK,
+            "user_message": req.text,
+            "tool_name": TOOL_BUILD_ROUTE,
+            "tool_schema": ROUTE_TOOL_SCHEMA,
+            "tool_results": tool_results,
+            "dialog_context": dialog_context,
+        },
         constraints={"temperature": 0},
     )
     route_params = normalize_tool_params(route_params_resp).get("extracted") or {}
@@ -140,7 +154,13 @@ async def run_find_nearest_airport(req: WorkflowRunRequest, io: RuntimeIO) -> Wo
     final_resp = await io.call_llm(
         parent=req,
         mode="final_response",
-        input_data={"task": FINAL_TASK, "user_message": req.text, "tool_results": tool_results, "scenario_context": SCENARIO_CONTEXT},
+        input_data={
+            "task": FINAL_TASK,
+            "user_message": req.text,
+            "tool_results": tool_results,
+            "scenario_context": SCENARIO_CONTEXT,
+            "dialog_context": dialog_context,
+        },
         constraints={"temperature": 0.1},
     )
     message = extract_llm_text(final_resp) or "Маршрут построен."

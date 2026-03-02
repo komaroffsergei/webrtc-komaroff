@@ -1,0 +1,83 @@
+# src_langgraph
+
+## Responsibility
+`src_langgraph` runs workflow scenarios and returns `WorkflowRunResponse` for each user turn.
+It routes requests to scenarios, calls LLM/tools, and maintains compact stateful dialog context in runtime state.
+It does not expose HTTP endpoints.
+
+## NATS API
+Subscriptions:
+- `nats.workflow.run`
+- `nats.workflow.health`
+
+Outbound req/reply calls:
+- `nats.llm.<user_id>`
+- `nats.tools.<tool_name>`
+
+## Stateful context model
+LangGraph runtime builds and updates compact context per session in `next_runtime.context`:
+- `dialog_memory.summary`: compressed text of older turns
+- `dialog_memory.recent_turns`: bounded list of latest user/assistant turns
+
+On every request:
+1. Reads existing memory from `req.runtime.context`.
+2. If `edit.turn_id` is present, rewrites memory tail from that user turn.
+3. Builds compact `dialog_context` string.
+4. Passes `dialog_context` to routing and scenario LLM calls.
+5. Appends current user+assistant turns, compacts memory again, returns updated context.
+
+All scenarios are stateful because they receive this shared `dialog_context`.
+
+## Turn IDs
+- Uses `req.turn_id` as user turn identifier.
+- Generates `assistant_turn_id` in runtime.
+- Injects both IDs into `client_handler.payload`.
+
+This keeps frontend edit/history and database storage aligned.
+
+## Environment
+Configured in `src_langgraph/settings.py` and `src_langgraph/env.example`.
+
+- `NATS_URL`
+- `NATS_WORKFLOW_RUN_SUBJECT`
+- `NATS_WORKFLOW_HEALTH_SUBJECT`
+- `NATS_LLM_SUBJECT`
+- `NATS_TOOLS_PREFIX`
+- `NATS_REQUEST_TIMEOUT_SECONDS`
+- `MAX_CONCURRENCY`
+- `MEMORY_RECENT_MESSAGES`
+- `MEMORY_SUMMARY_MAX_CHARS`
+- `MEMORY_CONTEXT_MAX_CHARS`
+- `USER_ID`
+
+## Run/stop
+Docker:
+```bash
+cd docker
+docker compose --profile langgraph up -d src_langgraph
+docker compose --profile langgraph stop src_langgraph
+```
+
+Local:
+```bash
+python -m src_langgraph.main
+```
+
+## Common issues
+- `missing_session_id`
+  - Cause: request reaches runtime without session.
+  - Fix: ensure agent always sends `session_id`.
+- `no responders available` for tools/llm
+  - Cause: downstream service is down or subject mismatch.
+  - Fix: verify `src_llm`, `src_api_gateway`, and subject prefixes.
+- Context appears lost between turns
+  - Cause: runtime state not saved in agent/postgres.
+  - Fix: verify `src_agent` DB connectivity and `runtime_state` table updates.
+
+## Code pointers
+- Entry: `src_langgraph/main.py`
+- Service/NATS handlers: `src_langgraph/service.py`
+- Graph engine: `src_langgraph/engine.py`
+- Memory helpers: `src_langgraph/memory.py`
+- Scenario routing: `src_langgraph/router.py`
+- Scenario nodes: `src_langgraph/scenarios/*`

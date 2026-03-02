@@ -29,6 +29,9 @@ cd docker
 docker compose --profile langgraph up -d --build
 ```
 
+Для Docker-сервисов используется `NATS_URL_INTERNAL` (по умолчанию `nats://nats:4222`).
+Если в `docker/.env` у вас задан `NATS_URL=nats://localhost:4222` для запуска с хоста, это больше не ломает межконтейнерное подключение.
+
 Открыть:
 - UI: `http://127.0.0.1:8080/`
 - Core: `http://127.0.0.1:8000/core`
@@ -129,6 +132,7 @@ npm run dev
 - `DOCS/QUICKSTART.md`
 - `DOCS/AGENT.md`
 - `DOCS/LLM.md`
+- `DOCS/LANGGRAPH.md`
 - `DOCS/API_GATEWAY.md`
 - `DOCS/NATS.md`
 - `DOCS/POSTGRES.md`

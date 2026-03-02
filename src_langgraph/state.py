@@ -20,6 +20,13 @@ SUPPORTED_SCENARIOS = {
 class FlowState(TypedDict, total=False):
     """Состояние исполнения графа для одного запроса."""
     req: WorkflowRunRequest
+    history: list[dict[str, Any]]
+    summary: str
+    working_history: list[dict[str, Any]]
+    dialog_context: str
+    context_extra: dict[str, Any]
+    user_turn_id: str
+    assistant_turn_id: str
     selected_scenario: str
     routing: dict[str, Any]
     response: WorkflowRunResponse

@@ -15,6 +15,7 @@ from src_agent.service import AgentServer
 from src_agent.settings import (
     DATABASE_URL,
     NATS_AGENT_SUBJECT,
+    NATS_AGENT_HISTORY_SUBJECT,
     NATS_EVENTS_SUBJECT,
     NATS_URL,
     RUNTIME_CONFLICT_RETRIES,
@@ -45,6 +46,7 @@ def main():
     server = AgentServer(
         nats_url=NATS_URL,
         agent_subject=f"{NATS_AGENT_SUBJECT}{USER_ID}",
+        agent_history_subject=f"{NATS_AGENT_HISTORY_SUBJECT}{USER_ID}",
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         workflow_subject=NATS_WORKFLOW_RUN_SUBJECT,
         workflow_timeout_s=WORKFLOW_TIMEOUT_SECONDS,

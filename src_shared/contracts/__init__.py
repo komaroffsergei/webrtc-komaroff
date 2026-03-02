@@ -17,6 +17,7 @@ from .llm import (
     ToolParamsData,
     FinalResponseData,
 )
+from .history import HistoryGetRequest, HistoryGetResponse, HistoryTurn
 from .workflow import WorkflowRunRequest, WorkflowRunResponse, WorkflowStatus, WorkflowRuntimeState
 from .subjects import Subjects
 from .tools import ToolCallRequest, ToolCallResponse
@@ -40,6 +41,9 @@ __all__ = [
     "ToolDecisionData",
     "ToolParamsData",
     "FinalResponseData",
+    "HistoryGetRequest",
+    "HistoryGetResponse",
+    "HistoryTurn",
     "Subjects",
     "ToolCallRequest",
     "ToolCallResponse",

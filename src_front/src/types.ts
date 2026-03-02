@@ -1,6 +1,16 @@
+export type ChatMessageOptions = {
+  turnId?: string;
+  linkedUserTurnId?: string;
+  editable?: boolean;
+};
+
 export type AgentCommandContext = {
   chat: {
-    addMessage(text: string, role: "user" | "server" | "status" | "thinking"): void;
+    addMessage(
+      text: string,
+      role: "user" | "server" | "status" | "thinking",
+      options?: ChatMessageOptions,
+    ): void;
   };
   warning: {
     show(payload: { message: string }): void;
@@ -42,4 +52,12 @@ export type EventArtifacts = {
 export type ClientHandlerCommand = {
   command: string;
   artifacts?: EventArtifacts;
+};
+
+export type HistoryTurn = {
+  turn_id: string;
+  role: string;
+  text: string;
+  ts_ms: number;
+  meta?: Record<string, unknown>;
 };

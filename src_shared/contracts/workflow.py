@@ -22,6 +22,7 @@ class WorkflowRunRequest(TraceEnvelope):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1)
+    turn_id: Optional[str] = Field(default=None, min_length=1)
     edit: Optional[dict[str, Any]] = None
     runtime: WorkflowRuntimeState = Field(default_factory=WorkflowRuntimeState)
 
@@ -35,4 +36,3 @@ class WorkflowRunResponse(TraceEnvelope):
     client_events: list[dict[str, Any]] = Field(default_factory=list)
     next_runtime: WorkflowRuntimeState = Field(default_factory=WorkflowRuntimeState)
     errors: list[ErrorInfo] = Field(default_factory=list)
-

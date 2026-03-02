@@ -101,6 +101,60 @@ body {
     transition: all 0.3s ease;
 }
 
+.message-text {
+    white-space: pre-wrap;
+}
+
+.message-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+.message-edit-btn {
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0.75;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 0;
+}
+
+.message-edit-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.message-edit-input {
+    flex: 1;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 13px;
+    min-width: 0;
+}
+
+.message-edit-save,
+.message-edit-cancel {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 8px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.message-edit-save {
+    background: rgba(255, 255, 255, 0.25);
+    color: inherit;
+}
+
+.message-edit-cancel {
+    background: rgba(0, 0, 0, 0.15);
+    color: inherit;
+}
+
 .chat-window.expanded .message {
     transform: translateY(0);
     opacity: 1;

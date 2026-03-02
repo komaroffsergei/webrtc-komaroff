@@ -8,6 +8,9 @@ import sys
 from src_langgraph.service import WorkflowRuntimeService
 from src_langgraph.settings import (
     MAX_CONCURRENCY,
+    MEMORY_CONTEXT_MAX_CHARS,
+    MEMORY_RECENT_MESSAGES,
+    MEMORY_SUMMARY_MAX_CHARS,
     NATS_LLM_SUBJECT_PREFIX,
     NATS_REQUEST_TIMEOUT_SECONDS,
     NATS_TOOLS_PREFIX,
@@ -44,6 +47,9 @@ def main() -> None:
         user_id=USER_ID,
         request_timeout_s=NATS_REQUEST_TIMEOUT_SECONDS,
         max_concurrency=MAX_CONCURRENCY,
+        memory_recent_messages=MEMORY_RECENT_MESSAGES,
+        memory_summary_max_chars=MEMORY_SUMMARY_MAX_CHARS,
+        memory_context_max_chars=MEMORY_CONTEXT_MAX_CHARS,
     )
 
     try:

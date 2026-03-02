@@ -5,6 +5,7 @@
 ## Основные subjects
 
 - `nats.agent.<user_id>` — вход в `src_agent` (req-reply).
+- `nats.agent.history.<user_id>` — запрос истории чата из `src_agent` (req-reply).
 - `nats.events.<user_id>` — события и команды для UI (pub-sub).
 - `nats.workflow.run` — запуск сценария (req-reply).
 - `nats.workflow.health` — health runtime (req-reply).

@@ -68,7 +68,7 @@ def _format_flight_message(tool_data: dict) -> str:
     return f"Рейс {fn} ({src} → {dst}), вылет {dep_short}, прибытие {arr_short}. Статус: {status_map.get(status, status.lower() or 'неизвестен')}."
 
 
-async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO) -> WorkflowRunResponse:
+async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> WorkflowRunResponse:
     """Обрабатывает сценарий статуса рейса с поддержкой мультитурового сбора параметров."""
     pending = req.runtime.pending if isinstance(req.runtime.pending, dict) else {}
     prev = pending.get("extracted") if isinstance(pending.get("extracted"), dict) else {}
@@ -76,7 +76,13 @@ async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO) -> Workflo
     params_resp = await io.call_llm(
         parent=req,
         mode="tool_params",
-        input_data={"task": TOOL_PARAMS_TASK, "user_message": req.text, "tool_name": TOOL_NAME, "tool_schema": TOOL_SCHEMA},
+        input_data={
+            "task": TOOL_PARAMS_TASK,
+            "user_message": req.text,
+            "tool_name": TOOL_NAME,
+            "tool_schema": TOOL_SCHEMA,
+            "dialog_context": dialog_context,
+        },
         constraints={"temperature": 0},
     )
     parsed = normalize_tool_params(params_resp)
@@ -125,6 +131,7 @@ async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO) -> Workflo
             "user_message": req.text,
             "tool_results": [{"tool_name": TOOL_NAME, "result": tool_resp.data}],
             "scenario_context": SCENARIO_CONTEXT,
+            "dialog_context": dialog_context,
         },
         constraints={"temperature": 0.1},
     )

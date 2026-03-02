@@ -34,7 +34,7 @@ def _extract_text(resp: LlmResponse) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-async def run_free_speech(req: WorkflowRunRequest, io: RuntimeIO) -> WorkflowRunResponse:
+async def run_free_speech(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_context: str = "") -> WorkflowRunResponse:
     """Выполняет свободный диалог одним вызовом mode=final_response."""
     final_resp = await io.call_llm(
         parent=req,
@@ -44,6 +44,7 @@ async def run_free_speech(req: WorkflowRunRequest, io: RuntimeIO) -> WorkflowRun
             "user_message": req.text,
             "tool_results": [],
             "scenario_context": FREE_SPEECH_CONTEXT,
+            "dialog_context": dialog_context,
         },
         constraints={"temperature": 0.4},
     )
