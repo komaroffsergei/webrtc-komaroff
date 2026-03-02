@@ -147,8 +147,26 @@ async def test_airport_followup_uses_context(nc: NATS, subject: str) -> None:
     )
     _assert_show_message(second)
     text = str((second.client_handler or {}).get("payload", {}).get("message") or "").lower()
-    _assert("нет информации" in text, "follow-up should explicitly avoid hallucinated airport founding facts")
-    _assert("аэропорт" in text, "follow-up should reference airports from previous context")
+    _assert("данных о годе" in text or "нет подтвержденной информации" in text, "follow-up should avoid hallucinated founding year")
+    _assert("шереметьево" in text, "follow-up should include airports from previous context")
+    _assert("уточните, о каком объекте" not in text, "plural follow-up must not ask for entity clarification")
+
+
+async def test_airport_followup_singular_resolves_focus(nc: NATS, subject: str) -> None:
+    first = await _agent_request(nc, subject=subject, text="найди аэропорт")
+    _assert_show_message(first)
+    _assert(first.session_id is not None, "session_id must be present for follow-up")
+
+    second = await _agent_request(
+        nc,
+        subject=subject,
+        text="в каком году он построен",
+        session_id=first.session_id,
+    )
+    _assert_show_message(second)
+    text = str((second.client_handler or {}).get("payload", {}).get("message") or "").lower()
+    _assert("шереметьево" in text, "singular follow-up should resolve to focused entity from previous answer")
+    _assert("уточните, о каком объекте" not in text, "singular follow-up should not ask clarification when focus is resolvable")
 
 
 async def main() -> None:
@@ -163,6 +181,7 @@ async def main() -> None:
         await test_where_my_flight_pending_exit(nc, env.agent_subject)
         await test_find_nearest_airport(nc, env.agent_subject)
         await test_airport_followup_uses_context(nc, env.agent_subject)
+        await test_airport_followup_singular_resolves_focus(nc, env.agent_subject)
         print("E2E OK")
     finally:
         await nc.drain()

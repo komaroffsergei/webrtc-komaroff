@@ -1,7 +1,7 @@
 import {ServerEvent} from "../types";
 
 export function logEvent(event: ServerEvent): void {
-  const title = `${event.time} [${event.service}] ${formatEventTag(event)}`;
+  const title = `[${event.service}] ${formatEventTag(event)}`;
   const method = pickConsoleMethod(event);
   const group = `${title} uid=${event.uid}`;
   console.groupCollapsed(group);
@@ -38,8 +38,8 @@ export function logError(name: string, val: any) {
 function pickConsoleMethod(event: ServerEvent): (...args: unknown[]) => void {
   if (event.type === "log" && event.kind === "error") return console.error;
   if (event.type === "log" && event.kind === "warn") return console.warn;
-  if (event.type === "command") return console.info;
-  return console.log;
+  if (isLlmEvent(event)) return console.info;
+  return console.debug;
 }
 
 
@@ -67,4 +67,9 @@ function formatEventTag(event: ServerEvent): string {
     }
   }
   return `${base}${namePart}`;
+}
+
+
+function isLlmEvent(event: ServerEvent): boolean {
+  return event.name === "llm_request_debug" || event.name === "llm_result";
 }

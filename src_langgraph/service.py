@@ -40,9 +40,9 @@ class WorkflowRuntimeService:
         user_id: str,
         request_timeout_s: float = 120.0,
         max_concurrency: int = 8,
-        memory_recent_messages: int = 16,
-        memory_summary_max_chars: int = 4000,
-        memory_context_max_chars: int = 5000,
+        memory_recent_messages: int = 32,
+        memory_summary_max_chars: int = 12000,
+        memory_context_max_chars: int = 18000,
     ) -> None:
         """Сохраняет настройки подключения и лимиты конкурентности обработки."""
         self.nats_url = nats_url

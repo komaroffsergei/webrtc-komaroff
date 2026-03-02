@@ -31,7 +31,7 @@ Purpose: stateful LangGraph/runtime memory and pending workflow state per sessio
   - Includes:
     - `dialog_memory.summary`
     - `dialog_memory.recent_turns`
-    - `artifact_memory` (latest airports/position/route for contextual follow-up questions)
+    - `artifact_memory` (latest structured entities/artifacts for contextual follow-up questions)
 - `updated_at timestamptz not null default now()`: last state update timestamp.
 
 Indexes:

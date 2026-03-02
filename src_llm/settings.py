@@ -21,8 +21,7 @@ NATS_LLM_SUBJECT = os.getenv("NATS_LLM_SUBJECT", "nats.llm.")
 NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 
 # ---- OLLAMA ----
-# OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.h100.local")
-OLLAMA_URL = os.getenv("OLLAMA_URL", "https://ollama-webui.gis-master.ru123123")
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.h100.local")
 
 
 LLM_MODE = os.getenv("LLM_MODE", "remote")

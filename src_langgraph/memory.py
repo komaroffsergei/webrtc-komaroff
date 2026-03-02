@@ -180,12 +180,12 @@ def _normalize_turns(raw: Any) -> list[dict[str, str]]:
         text = str(row.get("text") or "").strip()
         if role not in {"user", "assistant"} or not turn_id or not text:
             continue
-        out.append({"role": role, "turn_id": turn_id, "text": _single_line(text, 500)})
+        out.append({"role": role, "turn_id": turn_id, "text": _single_line(text, 1000)})
     return out
 
 
 def _merge_summary(current: str, overflow: list[dict[str, str]], summary_max_chars: int) -> str:
-    rows = [f"{_role_label(row['role'])}: {_single_line(row['text'], 200)}" for row in overflow]
+    rows = [f"{_role_label(row['role'])}: {_single_line(row['text'], 400)}" for row in overflow]
     merged = current.strip()
     chunk = " | ".join(rows).strip()
     if not chunk:
@@ -217,40 +217,76 @@ def _artifact_context_block(extra: dict[str, Any] | None) -> str:
     if not isinstance(artifact, dict):
         return ""
 
-    sections: list[str] = []
-    airports = artifact.get("last_airports")
-    if isinstance(airports, list) and airports:
-        lines: list[str] = []
-        for row in airports[:5]:
-            if not isinstance(row, dict):
+    lines: list[str] = []
+    for key, value in artifact.items():
+        summary = _artifact_value_summary(value)
+        if not summary:
+            continue
+        lines.append(f"- {key}: {summary}")
+    if not lines:
+        return ""
+    return "Context artifacts:\n" + "\n".join(lines)
+
+
+def _artifact_value_summary(value: Any) -> str:
+    if isinstance(value, list):
+        if not value:
+            return "[]"
+        items: list[str] = []
+        for row in value[:5]:
+            brief = _artifact_value_brief(row)
+            if brief:
+                items.append(brief)
+        if not items:
+            return f"list[{len(value)}]"
+        tail = "; ..." if len(value) > 5 else ""
+        return "; ".join(items) + tail
+    return _artifact_value_brief(value)
+
+
+def _artifact_value_brief(value: Any) -> str:
+    if isinstance(value, dict):
+        label = _artifact_entity_label(value)
+        if label:
+            return label
+        pairs: list[str] = []
+        for key, val in value.items():
+            scalar = _artifact_scalar(val)
+            if scalar is None:
                 continue
-            name = str(row.get("name") or "").strip()
-            code = str(row.get("code") or "").strip()
-            ident = f"{name} ({code})".strip() if name and code else (name or code)
-            if not ident:
-                continue
-            status = str(row.get("status") or "").strip()
-            lines.append(f"- {ident}{f', status={status}' if status else ''}")
-        if lines:
-            sections.append("Recent airports:\n" + "\n".join(lines))
+            pairs.append(f"{key}={scalar}")
+            if len(pairs) >= 4:
+                break
+        return ", ".join(pairs) if pairs else "object"
+    scalar = _artifact_scalar(value)
+    return str(scalar) if scalar is not None else ""
 
-    position = artifact.get("last_position")
-    if isinstance(position, dict):
-        city = str(position.get("city") or "").strip()
-        lat = position.get("lat")
-        lon = position.get("lon")
-        parts: list[str] = []
-        if city:
-            parts.append(f"city={city}")
-        if lat is not None and lon is not None:
-            parts.append(f"coords=({lat},{lon})")
-        if parts:
-            sections.append("Recent position: " + ", ".join(parts))
 
-    route = artifact.get("last_route")
-    if isinstance(route, dict):
-        distance = route.get("distance_km")
-        if distance is not None:
-            sections.append(f"Recent route distance_km={distance}")
+def _artifact_entity_label(payload: dict[str, Any]) -> str:
+    label = str(payload.get("label") or payload.get("name") or payload.get("title") or "").strip()
+    code = str(payload.get("code") or "").strip()
+    ident = str(payload.get("id") or payload.get("key") or "").strip()
+    if label and code:
+        return f"{label} ({code})"
+    if label and ident and ident != label:
+        return f"{label} ({ident})"
+    if label:
+        return label
+    if code:
+        return code
+    if ident:
+        return ident
+    return ""
 
-    return "\n".join(sections).strip()
+
+def _artifact_scalar(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        clean = _single_line(value, 80)
+        return clean if clean else None
+    return None

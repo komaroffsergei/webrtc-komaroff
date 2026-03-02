@@ -18,7 +18,7 @@ Outbound req/reply calls:
 LangGraph runtime builds and updates compact context per session in `next_runtime.context`:
 - `dialog_memory.summary`: compressed text of older turns
 - `dialog_memory.recent_turns`: bounded list of latest user/assistant turns
-- `artifact_memory`: compact structured artifacts from previous tool responses (last airports/position/route)
+- `artifact_memory`: compact structured artifacts from previous tool responses
 
 On every request:
 1. Reads existing memory from `req.runtime.context`.
@@ -33,6 +33,12 @@ All scenarios are stateful because they receive this shared `dialog_context`.
 - First turn without required params (`flight_number` or `last_name`) returns `PARTIAL + ASK_USER_INPUT`.
 - If the next user message still does not contain required params, runtime exits pending state and reroutes this same message through normal scenario selection (excluding `where_my_flight`).
 - This prevents infinite `ASK_USER_INPUT` loops and lets user switch topic immediately.
+
+### Reference resolution in `free_speech`
+- Runtime resolves references like `он/этот` and `они/эти` against structured entities from `artifact_memory`.
+- For plural references, assistant answers against all resolved entities.
+- For singular references, runtime first tries to resolve focus from the latest assistant turn; clarification is used only if focus is ambiguous.
+- `free_speech` uses both compact dialog context and model general knowledge; when confidence is low, it should state uncertainty explicitly.
 
 ## Turn IDs
 - Uses `req.turn_id` as user turn identifier.

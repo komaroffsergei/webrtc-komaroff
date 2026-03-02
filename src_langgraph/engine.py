@@ -40,9 +40,9 @@ class WorkflowEngine:
         self,
         io: RuntimeIO,
         *,
-        memory_recent_messages: int = 16,
-        memory_summary_max_chars: int = 4000,
-        memory_context_max_chars: int = 5000,
+        memory_recent_messages: int = 32,
+        memory_summary_max_chars: int = 12000,
+        memory_context_max_chars: int = 18000,
     ) -> None:
         self.io = io
         self.memory_recent_messages = max(2, int(memory_recent_messages))
