@@ -1,3 +1,5 @@
+import type { ChatMessageOptions, HistoryTurn } from "../types";
+
 export type ChatRole = "user" | "server" | "status" | "thinking";
 
 export type ThinkingMeta = {
@@ -5,10 +7,16 @@ export type ThinkingMeta = {
   tools?: string[];
 };
 
+type EditHandler = (turnId: string, text: string) => void | Promise<void>;
+
 export class ChatUI {
   private thinkingActive = false;
   private voiceBlocked = false;
+  private editInFlight = false;
   private thinkingEl: HTMLElement | null = null;
+  private messageByTurn = new Map<string, HTMLElement>();
+  private editHandler: EditHandler | null = null;
+  private activeInlineEditor: HTMLElement | null = null;
 
   constructor(
     private root: HTMLElement,
@@ -16,12 +24,90 @@ export class ChatUI {
     private micButton?: HTMLButtonElement | null,
   ) {}
 
-  addMessage(text: string, role: ChatRole): void {
+  setEditHandler(handler: EditHandler): void {
+    this.editHandler = handler;
+  }
+
+  addMessage(text: string, role: ChatRole, options?: ChatMessageOptions): void {
     const div = document.createElement("div");
     div.className = `message ${role}-message`;
-    div.textContent = text;
+    div.dataset.role = role;
+    if (options?.turnId) {
+      div.dataset.turnId = options.turnId;
+      this.messageByTurn.set(options.turnId, div);
+    }
+    if (options?.linkedUserTurnId) {
+      div.dataset.linkedUserTurnId = options.linkedUserTurnId;
+    }
+
+    const textEl = document.createElement("div");
+    textEl.className = "message-text";
+    textEl.textContent = text;
+    div.appendChild(textEl);
+
+    if (role === "user" && options?.turnId && options?.editable) {
+      const actions = document.createElement("div");
+      actions.className = "message-actions";
+
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "message-edit-btn";
+      editBtn.textContent = "Edit";
+      editBtn.addEventListener("click", () => {
+        this.openInlineEditor(div, options.turnId as string, textEl, actions);
+      });
+
+      actions.appendChild(editBtn);
+      div.appendChild(actions);
+    }
+
     this.root.appendChild(div);
     this.root.scrollTop = this.root.scrollHeight;
+  }
+
+  restoreHistory(turns: HistoryTurn[]): void {
+    for (const turn of turns) {
+      if (!turn?.turn_id || typeof turn.turn_id !== "string") continue;
+      if (this.messageByTurn.has(turn.turn_id)) continue;
+      if (turn.role === "user") {
+        this.addMessage(turn.text, "user", {
+          turnId: turn.turn_id,
+          editable: true,
+        });
+      } else if (turn.role === "assistant") {
+        const linkedUserTurnId = typeof turn.meta?.user_turn_id === "string" ? turn.meta.user_turn_id : undefined;
+        this.addMessage(turn.text, "server", {
+          turnId: turn.turn_id,
+          linkedUserTurnId,
+        });
+      }
+    }
+  }
+
+  rewriteFromUserTurn(turnId: string, newText: string): boolean {
+    const target = this.messageByTurn.get(turnId);
+    if (!target || target.dataset.role !== "user") {
+      return false;
+    }
+
+    const textEl = target.querySelector(".message-text");
+    if (textEl) {
+      textEl.textContent = newText;
+    }
+
+    let node = target.nextElementSibling as HTMLElement | null;
+    while (node) {
+      const next = node.nextElementSibling as HTMLElement | null;
+      const nodeTurnId = node.dataset.turnId;
+      if (nodeTurnId) {
+        this.messageByTurn.delete(nodeTurnId);
+      }
+      node.remove();
+      node = next;
+    }
+    this.clearThinking();
+    this.root.scrollTop = this.root.scrollHeight;
+    return true;
   }
 
   setThinking(summaryText: string, fullText?: string, meta?: ThinkingMeta): void {
@@ -105,8 +191,75 @@ export class ChatUI {
     this.updateBlockedState();
   }
 
+  private openInlineEditor(
+    wrapper: HTMLElement,
+    turnId: string,
+    textEl: Element,
+    actions: HTMLElement,
+  ): void {
+    if (!this.editHandler) return;
+    if (this.isAgentBusy()) return;
+    if (this.activeInlineEditor) return;
+
+    const currentText = (textEl.textContent || "").trim();
+    actions.style.display = "none";
+
+    const editor = document.createElement("div");
+    editor.className = "message-edit-row";
+
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "message-edit-input";
+    input.value = currentText;
+
+    const save = document.createElement("button");
+    save.type = "button";
+    save.className = "message-edit-save";
+    save.textContent = "Save";
+
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "message-edit-cancel";
+    cancel.textContent = "Cancel";
+
+    const closeEditor = () => {
+      editor.remove();
+      actions.style.display = "";
+      this.activeInlineEditor = null;
+    };
+
+    save.addEventListener("click", async () => {
+      const value = input.value.trim();
+      if (!value || value === currentText) {
+        closeEditor();
+        return;
+      }
+      save.disabled = true;
+      input.disabled = true;
+      cancel.disabled = true;
+      this.editInFlight = true;
+      this.updateBlockedState();
+      closeEditor();
+      try {
+        await this.editHandler?.(turnId, value);
+      } finally {
+        this.editInFlight = false;
+        this.updateBlockedState();
+      }
+    });
+    cancel.addEventListener("click", closeEditor);
+
+    editor.appendChild(input);
+    editor.appendChild(save);
+    editor.appendChild(cancel);
+    wrapper.appendChild(editor);
+    this.activeInlineEditor = editor;
+    input.focus();
+    input.select();
+  }
+
   private updateBlockedState(): void {
-    const blocked = this.thinkingActive || this.voiceBlocked;
+    const blocked = this.isAgentBusy();
     if (this.textInput) {
       this.textInput.disabled = blocked;
       if (blocked) {
@@ -116,6 +269,9 @@ export class ChatUI {
     if (this.micButton) {
       this.micButton.disabled = blocked;
     }
+    this.root.querySelectorAll<HTMLButtonElement>(".message-edit-btn").forEach((btn) => {
+      btn.disabled = blocked;
+    });
   }
 
   private formatThinkingMeta(meta?: ThinkingMeta): string {
@@ -138,5 +294,9 @@ export class ChatUI {
     const details = (el.querySelector(".thinking-details") as HTMLElement | null)?.textContent?.trim() ?? "";
     const meta = (el.querySelector(".thinking-meta") as HTMLElement | null)?.textContent?.trim() ?? "";
     return Boolean(details || meta);
+  }
+
+  private isAgentBusy(): boolean {
+    return this.thinkingActive || this.voiceBlocked || this.editInFlight;
   }
 }

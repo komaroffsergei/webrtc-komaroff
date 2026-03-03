@@ -1,6 +1,6 @@
 # E2E проверки
 
-В репозитории есть небольшой dockerized E2E runner, который проверяет демо-workflows через NATS.
+В репозитории есть небольшой dockerized E2E runner, который проверяет сценарии через NATS.
 
 Запуск:
 
@@ -10,7 +10,15 @@ docker compose -f docker/docker-compose.yml --profile test run --rm --build src_
 
 Что проверяется:
 
-- `echo@1.0.0`: DONE + SHOW_MESSAGE
-- `collect_name@1.0.0`: RUNNING -> DONE (user-in-the-loop)
-- `airports_and_weather@1.0.0`: RUNNING -> DONE + SHOW_AIRPORTS
-- идемпотентность по `request_id`: повторный запрос возвращает тот же ответ и статус в `runtime_requests`
+- LLM debug stream содержит `configured_model` в `llm_request_debug` для реального запроса
+- `echo`: DONE + SHOW_MESSAGE
+- `free_speech`: DONE + SHOW_MESSAGE
+- `where_my_flight`: DONE + SHOW_MESSAGE (по запросу с номером рейса)
+- `find_nearest_airport`: DONE + map events (`SET_POSITION`, `SET_AIRPORTS`, `BUILD_ROUTE`)
+- `free_speech` follow-up после инструментального контекста:
+  - не должен отвечать шаблоном "нет данных в текущем контексте" для факт-вопроса
+  - должен использовать контекст сущностей и выдавать содержательный факт-ответ
+- `edit`-ветка:
+  - после редактирования исходного user-turn история ветвится заново
+  - факт-вопрос в новой ветке не должен деградировать в "нет данных в контексте"
+  - ответ должен использовать знания модели и содержать конкретный факт (например, год)

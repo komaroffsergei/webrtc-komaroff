@@ -13,15 +13,23 @@ import {
 } from "../webrtc/session";
 import {FrontendNatsClient} from "../net/natsClient";
 import {CommandHandler} from "../core/commandHandler";
-import {logError, logEvent} from "../core/logging";
+import {logError, logEvent, logReplayBundle} from "../core/logging";
+import {DialogReplayCollector} from "../core/dialogReplayCollector";
 import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
-import {ClientHandlerCommand, ServerEvent} from "../types";
+import {
+  ClientHandlerCommand,
+  CommandRequestTelemetryEvent,
+  HistoryTurn,
+  ServerEvent,
+} from "../types";
 import { MapController } from "../map/mapController";
 
 /* ===========================
    AssistantApp
    =========================== */
 export class AssistantApp {
+  private static readonly SESSION_STORAGE_KEY = "assistant.session_id";
+
   private el = getAssistantElements();
 
   private chat: ChatUI;
@@ -36,8 +44,16 @@ export class AssistantApp {
 
   private agentCommands: AgentCommandHandler;
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
+  private replayCollector: DialogReplayCollector;
 
   constructor(private config: AppConfig) {
+    this.replayCollector = new DialogReplayCollector({
+      maxItems: 10,
+    });
+    if (this.config.ui.debug) {
+      this.commands.setTelemetryHook((event) => this.onCommandTelemetry(event));
+    }
+
     this.map.init("mapRoot");
     /* ---------- CHAT ---------- */
     if (!this.el.messageLog) throw new Error("messageLog element not found");
@@ -46,6 +62,7 @@ export class AssistantApp {
       this.el.textInput,
       this.el.micButton,
     );
+    this.chat.setEditHandler((turnId, text) => this.handleEdit(turnId, text));
 
     /* ---------- WARNING ---------- */
     const warningRoot =
@@ -73,6 +90,8 @@ export class AssistantApp {
      =========================== */
 
   start(): void {
+    this.restoreSessionIdFromStorage();
+    void this.restoreChatHistory();
     void this.connectNats();
   }
 
@@ -88,12 +107,15 @@ export class AssistantApp {
       if (!text) return;
 
       this.el.textInput!.value = "";
-      this.chat.addMessage(text, "user");
+      const turnId = crypto.randomUUID();
+      this.chat.addMessage(text, "user", { turnId, editable: true });
 
       this.chat.clearThinking();
       this.chat.setThinking("Thinking…");
 
-      void this.commands.sendMessage(text).catch((err) => {
+      void this.commands.sendMessage(text, turnId).then((sessionId) => {
+        this.persistSessionId(sessionId);
+      }).catch((err) => {
         this.chat.clearThinking();
         this.warning.show({message: String(err)});
       });
@@ -116,7 +138,10 @@ export class AssistantApp {
       const sessionId = await connectSession(this.config, this.el, this.audio, (t) => {
         if (this.el.vadLevel) this.el.vadLevel.textContent = t;
       }, { sessionId: this.commands.getSessionId() });
-      if (sessionId) this.commands.setSessionId(sessionId);
+      if (sessionId) {
+        this.commands.setSessionId(sessionId);
+        this.persistSessionId(sessionId);
+      }
 
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
@@ -192,8 +217,16 @@ export class AssistantApp {
   private handleNatsPayload(payload: string): void {
     try {
       const event = JSON.parse(payload) as ServerEvent;
+      if (this.config.ui.debug) {
+        this.emitReplayBundle(this.replayCollector.onNatsEvent(event));
+      }
       void this.handleServerEvent(event);
     } catch (err) {
+      if (this.config.ui.debug) {
+        this.emitReplayBundle(
+          this.replayCollector.onClientError("nats.parse", err),
+        );
+      }
       logError("nats", err);
     }
   }
@@ -213,7 +246,6 @@ export class AssistantApp {
     if (event.type === "log") {
       const txt = typeof event.data.text === "string" ? event.data.text : null;
       if (event.kind === "error" && txt) {
-        console.log(event)
         // this.chat.addMessage(txt, "status");
       }
       return;
@@ -237,12 +269,13 @@ export class AssistantApp {
       }
       case "transcription": {
         const text = typeof event.data.text === "string" ? event.data.text : null;
+        const turnId = typeof event.data.turn_id === "string" ? event.data.turn_id : crypto.randomUUID();
         if (!text) {
           console.warn("[nats] Invalid transcription payload", event);
           return;
         }
         this.chat.clearThinking();
-        this.chat.addMessage(text, "user");
+        this.chat.addMessage(text, "user", { turnId, editable: true });
         this.chat.setThinking("Thinking…");
         return;
       }
@@ -341,5 +374,73 @@ export class AssistantApp {
     if (!Array.isArray(raw)) return undefined;
     const tools = raw.filter((x) => typeof x === "string");
     return tools.length ? tools : undefined;
+  }
+
+  private async handleEdit(turnId: string, text: string): Promise<void> {
+    const ok = this.chat.rewriteFromUserTurn(turnId, text);
+    if (!ok) {
+      this.warning.show({message: "Не удалось найти сообщение для редактирования"});
+      return;
+    }
+    this.chat.setThinking("Thinking…");
+    try {
+      const sessionId = await this.commands.sendEditedMessage(text, turnId);
+      this.persistSessionId(sessionId);
+    } catch (err) {
+      this.chat.clearThinking();
+      this.warning.show({message: `Edit failed: ${String(err)}`});
+    }
+  }
+
+  private restoreSessionIdFromStorage(): void {
+    const sid = sessionStorage.getItem(AssistantApp.SESSION_STORAGE_KEY);
+    if (sid && typeof sid === "string") {
+      this.commands.setSessionId(sid);
+      this.replayCollector.setSessionId(sid);
+    }
+  }
+
+  private persistSessionId(sessionId: string | null): void {
+    if (!sessionId) return;
+    this.commands.setSessionId(sessionId);
+    this.replayCollector.setSessionId(sessionId);
+    sessionStorage.setItem(AssistantApp.SESSION_STORAGE_KEY, sessionId);
+  }
+
+  private onCommandTelemetry(event: CommandRequestTelemetryEvent): void {
+    if (!this.config.ui.debug) return;
+    this.emitReplayBundle(this.replayCollector.onHttpTelemetry(event));
+  }
+
+  private emitReplayBundle(bundle: unknown): void {
+    if (!this.config.ui.debug) return;
+    logReplayBundle(bundle);
+  }
+
+  private async restoreChatHistory(): Promise<void> {
+    const sid = this.commands.getSessionId();
+    if (!sid) return;
+    try {
+      const qs = new URLSearchParams({ session_id: sid, limit: "200" });
+      const resp = await fetch(`/core/history?${qs.toString()}`);
+      if (!resp.ok) {
+        throw new Error(`History request failed: ${resp.status}`);
+      }
+      const data = (await resp.json()) as { ok?: unknown; items?: unknown };
+      if (data.ok !== true || !Array.isArray(data.items)) return;
+      const turns = data.items.filter((x): x is HistoryTurn => {
+        if (!x || typeof x !== "object") return false;
+        const rec = x as Record<string, unknown>;
+        return (
+          typeof rec.turn_id === "string"
+          && typeof rec.role === "string"
+          && typeof rec.text === "string"
+          && typeof rec.ts_ms === "number"
+        );
+      });
+      this.chat.restoreHistory(turns);
+    } catch (err) {
+      logError("history", err);
+    }
   }
 }

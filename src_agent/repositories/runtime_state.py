@@ -5,7 +5,7 @@ from typing import Any
 from uuid import UUID
 
 from src_agent.utils.db import Database
-from src_shared.contracts import N8nRuntimeState
+from src_shared.contracts import WorkflowRuntimeState
 
 
 def _jsonb(value: Any) -> str | None:
@@ -22,7 +22,7 @@ def _decode_jsonb(value: Any) -> Any:
     return value
 
 
-async def load_runtime_state(db: Database, *, session_id: UUID) -> N8nRuntimeState:
+async def load_runtime_state(db: Database, *, session_id: UUID) -> WorkflowRuntimeState:
     row = await db.fetchrow(
         """
         select version, active_workflow_id, pending, context
@@ -40,9 +40,9 @@ async def load_runtime_state(db: Database, *, session_id: UUID) -> N8nRuntimeSta
             """,
             session_id,
         )
-        return N8nRuntimeState(version=1)
+        return WorkflowRuntimeState(version=1)
 
-    return N8nRuntimeState(
+    return WorkflowRuntimeState(
         version=int(row["version"]),
         active_workflow_id=row["active_workflow_id"],
         pending=_decode_jsonb(row["pending"]),
@@ -55,7 +55,7 @@ async def save_runtime_state(
     *,
     session_id: UUID,
     expected_version: int,
-    next_state: N8nRuntimeState,
+    next_state: WorkflowRuntimeState,
 ) -> int:
     new_version = await db.fetchval(
         """

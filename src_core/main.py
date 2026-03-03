@@ -18,6 +18,7 @@ from src_core.handlers.handle_index import handle_index
 from src_core.handlers.handle_offer import handle_offer
 from src_core.handlers.handle_message import message_handler
 from src_core.handlers.handle_init_map import init_map_handler
+from src_core.handlers.handle_history import history_handler
 from src_core.handlers.handle_shutdown import handle_shutdown
 from src_core.handlers.handle_startup import handle_startup
 
@@ -29,6 +30,7 @@ from src_core.settings import (
     USER_ID,
     NATS_EVENTS_SUBJECT,
     NATS_AGENT_SUBJECT,
+    NATS_AGENT_HISTORY_SUBJECT,
     ASR_IN_PREFIX,
     ASR_OUT_PREFIX,
     OTEL_EXPORTER_OTLP_ENDPOINT,
@@ -44,6 +46,7 @@ def setup_routes(app: web.Application) -> None:
     app.router.add_get("/core", handle_index)
     app.router.add_post("/core/offer", handle_offer)
     app.router.add_post("/core/message", message_handler)
+    app.router.add_get("/core/history", history_handler)
     app.router.add_post("/core/init_map", init_map_handler)
 
     app.on_startup.append(handle_startup)
@@ -77,6 +80,7 @@ if __name__ == "__main__":
         "STACK_SERVICE_NAME": STACK_SERVICE_NAME,
         "NATS_EVENTS_SUBJECT": f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         "NATS_AGENT_SUBJECT": f"{NATS_AGENT_SUBJECT}{USER_ID}",
+        "NATS_AGENT_HISTORY_SUBJECT": f"{NATS_AGENT_HISTORY_SUBJECT}{USER_ID}",
         "ASR_IN_PREFIX": ASR_IN_PREFIX,
         "ASR_OUT_PREFIX": ASR_OUT_PREFIX,
         "USER_ID": USER_ID,

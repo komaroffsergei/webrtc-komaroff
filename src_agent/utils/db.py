@@ -1,25 +1,17 @@
 from __future__ import annotations
 
 import json
-import logging
 from dataclasses import dataclass
-from typing import Any, Optional, Dict
+from typing import Any, Optional
 from uuid import uuid4
 
 import asyncpg
 
-logger = logging.getLogger("src_agent.db")
-
 
 @dataclass
 class Database:
-    """
-    Minimal asyncpg pool wrapper.
+    """Minimal asyncpg pool wrapper."""
 
-    In `src_agent` Postgres is used for:
-    - `sessions` table (create/update status)
-    - `intents/events` tables (best-effort audit)
-    """
     db_url: str
     _pool: Optional[asyncpg.Pool] = None
 
@@ -55,20 +47,14 @@ class Database:
             return await conn.fetchval(query, *args)
 
 
-def _to_jsonb(value: Any) -> Optional[str]:
+def _to_jsonb(value: Any) -> str | None:
     if value is None:
         return None
-    # Keep JSON ASCII-safe in logs/events; payloads may still contain UTF-8 text.
     return json.dumps(value, ensure_ascii=True)
 
 
-# ----------------------------
-# sessions
-# ----------------------------
-
 async def create_session(db: Database, *, user_id: str, session_id: Optional[str] = None) -> str:
     sid = session_id or str(uuid4())
-    # External services may provide session_id; use upsert so later FK inserts do not fail.
     await db.execute(
         """
         insert into sessions (session_id, user_id, status)
@@ -79,7 +65,7 @@ async def create_session(db: Database, *, user_id: str, session_id: Optional[str
         sid,
         user_id,
     )
-    return sid
+    return str(sid)
 
 
 async def update_session_status(db: Database, *, session_id: str, status: str) -> None:
@@ -95,92 +81,143 @@ async def update_session_status(db: Database, *, session_id: str, status: str) -
     )
 
 
-# ----------------------------
-# events
-# ----------------------------
+async def chat_turn_exists(db: Database, *, session_id: str, turn_id: str) -> bool:
+    exists = await db.fetchval(
+        """
+        select exists(
+          select 1
+          from events
+          where session_id = $1
+            and turn_id = $2
+            and lower(role) = 'user'
+          limit 1
+        )
+        """,
+        session_id,
+        turn_id,
+    )
+    return bool(exists)
 
-def _attach_trace(payload: Optional[Dict[str, Any]], request_id: str) -> Dict[str, Any]:
-    if payload is None:
-        return {"trace": {"request_id": request_id}}
-    if not isinstance(payload, dict):
-        return {"trace": {"request_id": request_id}, "value": payload}
-    trace = payload.get("trace")
-    if isinstance(trace, dict) and trace.get("request_id") == request_id:
-        return payload
-    merged = dict(payload)
-    merged_trace: Dict[str, Any] = dict(trace) if isinstance(trace, dict) else {}
-    merged_trace.setdefault("request_id", request_id)
-    merged["trace"] = merged_trace
-    return merged
 
-
-async def log_event(
+async def persist_chat_turn(
     db: Database,
     *,
     session_id: str,
-    request_id: Optional[str],
-    role: str,
-    event_type: str,
-    name: Optional[str] = None,
-    input: Optional[Dict[str, Any]] = None,
-    output: Optional[Dict[str, Any]] = None,
+    user_turn_id: str,
+    user_text: str,
+    assistant_turn_id: str,
+    assistant_text: str,
+    edit_from_turn_id: str | None = None,
+    user_meta: dict[str, Any] | None = None,
+    assistant_meta: dict[str, Any] | None = None,
 ) -> None:
-    # Events are best-effort:
-    # - if intents upsert fails (e.g. schema mismatch), still try to write the event row;
-    #   also attach request_id into JSONB for later debugging.
-    intent_id = request_id
-    db_input = input
-    db_output = output
-
     if db._pool is None:
         raise RuntimeError("Database pool is not connected")
 
     async with db._pool.acquire() as conn:
-        if request_id:
-            try:
+        async with conn.transaction():
+            if edit_from_turn_id:
+                anchor = await conn.fetchval(
+                    """
+                    select event_id
+                    from events
+                    where session_id = $1
+                      and turn_id = $2
+                      and lower(role) = 'user'
+                    order by event_id
+                    limit 1
+                    """,
+                    session_id,
+                    edit_from_turn_id,
+                )
+                if anchor is None:
+                    raise ValueError("edit_turn_not_found")
+
                 await conn.execute(
                     """
-                    insert into intents (intent_id, session_id, intent_type, status)
-                    values ($1, $2, 'request', 'RUNNING')
-                    on conflict (intent_id) do update
-                    set updated_at = now()
+                    delete from events
+                    where session_id = $1
+                      and event_id >= $2
                     """,
-                    request_id,
                     session_id,
+                    anchor,
                 )
-            except asyncpg.PostgresError as exc:
-                logger.warning(
-                    "Failed to upsert request trace row into intents; events.intent_id will be NULL. error=%s",
-                    str(exc),
-                )
-                intent_id = None
-                db_input = _attach_trace(input, request_id)
-                db_output = _attach_trace(output, request_id)
 
-        try:
             await conn.execute(
                 """
-                insert into events (
-                  session_id, intent_id,
-                  role, event_type, name,
-                  input, output
-                )
-                values (
-                  $1, $2,
-                  $3, $4, $5,
-                  $6::jsonb, $7::jsonb
-                )
+                insert into events (session_id, turn_id, role, text, meta)
+                values ($1, $2, 'user', $3, $4::jsonb)
+                on conflict (session_id, turn_id) do update
+                set role = excluded.role,
+                    text = excluded.text,
+                    meta = excluded.meta,
+                    created_at = now()
                 """,
                 session_id,
-                intent_id,
-                role,
-                event_type,
-                name,
-                _to_jsonb(db_input),
-                _to_jsonb(db_output),
+                user_turn_id,
+                user_text,
+                _to_jsonb(user_meta),
             )
-        except asyncpg.PostgresError as exc:
-            logger.warning(
-                "Failed to insert event row; skipped. error=%s",
-                str(exc),
+
+            await conn.execute(
+                """
+                insert into events (session_id, turn_id, role, text, meta)
+                values ($1, $2, 'assistant', $3, $4::jsonb)
+                on conflict (session_id, turn_id) do update
+                set role = excluded.role,
+                    text = excluded.text,
+                    meta = excluded.meta,
+                    created_at = now()
+                """,
+                session_id,
+                assistant_turn_id,
+                assistant_text,
+                _to_jsonb(assistant_meta),
             )
+
+
+async def fetch_chat_history(
+    db: Database,
+    *,
+    session_id: str,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    if db._pool is None:
+        raise RuntimeError("Database pool is not connected")
+
+    safe_limit = max(1, min(int(limit), 1000))
+    async with db._pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            with last_events as (
+              select event_id, turn_id, role, text, coalesce(meta, '{}'::jsonb) as meta, created_at
+              from events
+              where session_id = $1
+              order by event_id desc
+              limit $2
+            )
+            select
+              turn_id::text as turn_id,
+              role,
+              text,
+              meta,
+              (extract(epoch from created_at) * 1000)::bigint as ts_ms
+            from last_events
+            order by event_id asc
+            """,
+            session_id,
+            safe_limit,
+        )
+
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        out.append(
+            {
+                "turn_id": str(row["turn_id"]),
+                "role": str(row["role"]),
+                "text": str(row["text"]),
+                "meta": dict(row["meta"]) if isinstance(row["meta"], dict) else {},
+                "ts_ms": int(row["ts_ms"]),
+            }
+        )
+    return out

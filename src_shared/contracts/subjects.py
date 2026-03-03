@@ -9,11 +9,11 @@ class Subjects:
     """
 
     AGENT_PREFIX = "nats.agent."
+    AGENT_HISTORY_PREFIX = "nats.agent.history."
     EVENTS_PREFIX = "nats.events."
     LLM_PREFIX = "nats.llm."
 
-    N8N_RUN = "nats.n8n.run"
-    N8N_HEALTH = "nats.n8n.health"
+    WORKFLOW_RUN = "nats.workflow.run"
+    WORKFLOW_HEALTH = "nats.workflow.health"
 
     TOOLS_PREFIX = "nats.tools."
-

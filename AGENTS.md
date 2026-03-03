@@ -43,7 +43,7 @@ This file contains coding guidelines and architectural principles for microservi
 
 ## Documentation Standards (Required)
 
-- **Service Docs Are Mandatory**: Keep `DOCS/<SERVICE>.md` up to date for every service you touch (e.g. `DOCS/CORE.md`, `DOCS/FRONT.md`, `DOCS/AGENT.md`, `DOCS/N8N_BRIDGE.md`).
+- **Service Docs Are Mandatory**: Keep `DOCS/<SERVICE>.md` up to date for every service you touch (e.g. `DOCS/CORE.md`, `DOCS/FRONT.md`, `DOCS/AGENT.md`, `DOCS/LLM.md`).
 - **What Every Service Doc Must Contain**:
   - What the service does (responsibility + what it does *not* do)
   - How to start/stop it (Docker and, if applicable, local/IDE)

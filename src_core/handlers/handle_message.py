@@ -34,7 +34,8 @@ async def _parse_json(request: web.Request):
     attributes_from_result=lambda r: {
         "message.text.length": len(r[1]),
         "message.session_id.present": bool(r[2]),
-        "message.edit.present": bool(r[3]),
+        "message.turn_id.present": bool(r[3]),
+        "message.edit.present": bool(r[4]),
     },
     status_from_result=lambda r: StatusCode.ERROR if not r[0] else None,
 )
@@ -43,9 +44,10 @@ def _validate_payload(data):
     text = text.strip() if isinstance(text, str) else ""
 
     session_id = data.get("session_id")
+    turn_id = data.get("turn_id")
     edit = data.get("edit")
     ok = bool(text)
-    return ok, text, session_id, edit
+    return ok, text, session_id, turn_id, edit
 
 
 @OTelBootstrap.span(
@@ -87,7 +89,7 @@ async def message_handler(request: web.Request):
                 content_type="application/json",
             ) from exc
 
-        ok, text, session_id, edit = _validate_payload(data)
+        ok, text, session_id, turn_id, edit = _validate_payload(data)
         if not ok:
             raise web.HTTPBadRequest(
                 text=json.dumps({"error": "text field is required"}),
@@ -99,6 +101,8 @@ async def message_handler(request: web.Request):
         payload = {"text": text}
         if session_id:
             payload["session_id"] = session_id
+        if turn_id:
+            payload["turn_id"] = turn_id
         if edit:
             payload["edit"] = edit
 

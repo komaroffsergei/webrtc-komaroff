@@ -1,64 +1,70 @@
-# src_core (WebRTC + HTTP ingress)
+# src_core
 
-## Что это
+## Responsibility
+`src_core` is the HTTP/WebRTC ingress for the browser UI.
+It validates user input, forwards requests to `src_agent` over NATS, and exposes history/init endpoints for UI bootstrap.
+It does not execute workflow logic.
 
-`src_core` предоставляет:
+## Endpoints
+- `GET /core`: basic index endpoint.
+- `POST /core/offer`: WebRTC signaling offer handling.
+- `POST /core/message`: send user text to agent.
+- `GET /core/history?session_id=<uuid>&limit=<n>`: restore chat history from agent storage.
+- `POST /core/init_map`: fetch initial map payload for UI.
 
-- HTTP endpoints для UI:
-  - `GET /core` (index)
-  - `POST /core/offer` (WebRTC offer)
-  - `POST /core/message` (вход текста пользователя)
-  - `POST /core/init_map` (данные для инициализации UI)
-- Мост от HTTP-сообщения пользователя к `src_agent` через NATS (req-reply).
-- Публикацию UI событий в `nats.events.<user_id>` через общий event bus.
+## Message flow
+1. Browser calls `POST /core/message` with `{ text, session_id?, turn_id?, edit? }`.
+2. `src_core` publishes transcription + voice lock events to `nats.events.<user_id>`.
+3. `turn_id` is normalized to UUID before forwarding to agent.
+4. `src_core` sends req/reply to `nats.agent.<user_id>`.
+5. Returns `{ status: "ok", session_id }` to browser.
 
-## Как работает `POST /core/message`
+History flow:
+1. Browser calls `GET /core/history`.
+2. `src_core` sends req/reply to `nats.agent.history.<user_id>`.
+3. Returns normalized history payload to browser.
 
-1) Валидирует JSON и поле `text`.
-2) Вызывает `handle_transcription()`, который делает NATS request в `nats.agent.<user_id>`.
-3) Возвращает в браузер `{ status: "ok", session_id }`.
+## NATS subjects
+- Request: `nats.agent.<user_id>`
+- History request: `nats.agent.history.<user_id>`
+- UI events stream: `nats.events.<user_id>`
 
-Пользовательский ответ отображается не через HTTP ответ, а через события в `nats.events.<user_id>`, которые UI
-подпиской получает и рисует.
-
-## Частая проблема: порт 8000 уже занят
-
-Если запущен docker-compose, то `src_core` внутри Docker уже занимает порт `8000` на хосте.
-Если вы запускаете `src_core` локально, получите ошибку:
-
-- `address already in use`
-
-Решение:
-
-- остановить Docker контейнер `src_core`: `docker compose -f docker/docker-compose.yml stop src_core`, или
-- запустить локально на другом порту: `CORE_PORT=8002` (или любой свободный).
-
-## Частые ошибки
-
-### `ConnectionRefusedError ... ('127.0.0.1', 4222)`
-
-Причина: NATS не запущен на хосте.
-
-Решение:
-
-- `docker compose -f docker/docker-compose.yml up -d nats`
-
-### `3 validation errors for AgentInboundRequest ... Field required`
-
-Причина: в запрос, который `src_core` отправляет в `src_agent`, не попали trace-поля (`trace_id`, `request_id`, `ts_ms`).
-
-Где смотреть в коде:
-
-- формирование payload: `src_core/handlers/handle_transcription.py`
-- отправка NATS req-reply: `src_core/nats_client.py` (или аналогичный клиент)
-
-## Конфигурация
-
-Смотрите `src_core/settings.py` и `src_core/env.example`.
-
-Ключевые env vars:
+## Environment
+Configured in `src_core/settings.py` and `src_core/env.example`.
 
 - `CORE_HOST`, `CORE_PORT`
-- `NATS_URL` (TCP для req-reply в агент)
-- `NATS_EVENTS_SUBJECT`, `NATS_AGENT_SUBJECT` (prefix-ы)
-- `API_URL` (для вызовов HTTP mock API из `init_map`)
+- `NATS_URL`
+- `NATS_EVENTS_SUBJECT` (prefix)
+- `NATS_AGENT_SUBJECT` (prefix)
+- `NATS_AGENT_HISTORY_SUBJECT` (prefix)
+- `NATS_REQUEST_TIMEOUT`
+- `API_URL`
+- `USER_ID`
+
+## Run/stop
+Docker:
+```bash
+cd docker
+docker compose up -d src_core
+docker compose stop src_core
+```
+
+Local:
+```bash
+python -m src_core.main
+```
+
+## Common issues
+- `address already in use` on `CORE_PORT`
+  - Fix: stop Docker `src_core` container or set a free `CORE_PORT`.
+- `ConnectionRefusedError` to NATS
+  - Fix: start NATS (`docker compose up -d nats`) and verify `NATS_URL`.
+- `session_id must be a valid UUID` for `/core/history`
+  - Fix: pass the exact session UUID returned by `/core/message`.
+
+## Code pointers
+- Entry: `src_core/main.py`
+- Message handler: `src_core/handlers/handle_message.py`
+- Agent bridge: `src_core/handlers/handle_transcription.py`
+- History handler: `src_core/handlers/handle_history.py`
+- Settings: `src_core/settings.py`

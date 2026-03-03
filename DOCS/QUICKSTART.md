@@ -1,137 +1,118 @@
-# Быстрый старт (локальная разработка)
+# QUICKSTART
 
-Этот документ отвечает на вопросы "как быстро поднять стек" и "как запускать два репозитория без override/cat/env-хака".
-
-## 0) Ключевые порты (хост-машина)
-
-- NATS TCP: `nats://127.0.0.1:14222`
-- NATS WebSocket: `ws://127.0.0.1:9222`
-- Postgres: `127.0.0.1:5432` (db `mcp`, user `mcp`, pass `mcp_pass`)
-- Front: `http://127.0.0.1:8080/`
-- n8n UI: `http://127.0.0.1:5679/`
-
-Важно: n8n-стек и bridge вынесены в отдельный репозиторий `~/dev/monitorsoft/voice-chat/n8n`.
-В этом репо (`webrtc-komaroff-dev`) n8n bridge подключается как образ в `stack/webrtc.drs`.
-
-## 1) Рекомендуемый запуск в 2 терминала (Docker + Docker)
-
-Порядок: сначала поднимите `webrtc-komaroff-dev` (он дает NATS/Postgres), потом `voice-chat/n8n`.
-
-### Терминал 1 (в `~/dev/monitorsoft/webrtc-komaroff-dev`)
+## Docker (рекомендуется)
 
 ```bash
-docker compose -f docker/docker-compose.yml down -v --remove-orphans
-docker compose -f docker/docker-compose.yml up -d --build
-```
-
-### Терминал 2 (в `~/dev/monitorsoft/voice-chat/n8n`)
-
-```bash
-docker compose -f docker/docker-compose.yml down -v --remove-orphans
-docker compose -f docker/docker-compose.yml up -d --build
+cd docker
+docker compose --profile langgraph up -d --build
 ```
 
 Проверка:
+- Front: `http://127.0.0.1:8080/`
+- Core: `http://127.0.0.1:8000/core`
+- API: `http://127.0.0.1:8101/api`
+- NATS WS: `ws://127.0.0.1:9222`
 
-- `http://127.0.0.1:8080/` (front)
-- `http://127.0.0.1:5679/` (n8n UI)
-- `docker compose -f docker/docker-compose.yml ps` в каждой директории
+NATS2Ollama endpoint (без auth):
+```bash
+cd docker
+export OLLAMA_URL=https://nats2ollama.gis-master.ru
+docker compose --profile langgraph up -d --build
+```
+Важно: указывай базовый URL без `/api/chat`.
 
-В этом режиме ничего менять не нужно:
+## Docker + debug (PyCharm)
 
-- `REGISTRY_HOST` / `CI_COMMIT_BRANCH` уже имеют defaults в compose.
-- `voice-chat/n8n` по умолчанию подключается к `host.docker.internal:14222/5432`.
-- `webrtc` теперь публикует `4222` и `5432` на хост, чтобы второй проект подключался без override.
-
-## 2) Локальный n8n внутри webrtc (legacy-режим)
-
-Если нужен старый режим (runtime n8n внутри этого репо), он теперь вынесен в профиль `local-n8n`:
+1. Подготовить debug-env:
 
 ```bash
-docker compose -f docker/docker-compose.yml --profile local-n8n up -d --build
+cd docker
+cp .env.debug.example .env.debug
+# обязательно задай абсолютный путь к корню репозитория:
+# PYCHARM_PROJECT_ROOT=/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff
 ```
 
-По умолчанию (`up` без профиля) локальные `src_n8n/n8n/n8n_webhook/n8n_worker` в этом репо не стартуют.
-
-## 3) Вариант IDE: часть сервисов запускать локально
-
-### 3.1 Поднять инфраструктуру
+2. Запустить stack в debug-режиме:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d nats src_postgres
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml up -d --build
+docker compose --env-file .env --env-file .env.debug \
+  -f docker-compose.yml -f docker-compose.debug.yml \
+  --profile langgraph up -d --build
 ```
 
-Если вам нужны демо-tools:
+Важно: для долгой debug-сессии используй именно `-d`. Если запускать `up` без `-d`, завершение/прерывание этой команды останавливает контейнеры и все attach-сессии в PyCharm.
+
+3. Debug-порты сервисов:
+- `src_core`: `5671`
+- `src_agent`: `5672`
+- `src_api_gateway`: `5673`
+- `src_langgraph`: `5674`
+- `src_llm`: `5675`
+- Эти порты должны быть свободны на хосте (их слушает PyCharm `Python Remote Debug`).
+
+4. PyCharm attach:
+- Конфигурация: `Python Remote Debug` (по одному на сервис/порт).
+- Host: `127.0.0.1`.
+- Port: из списка выше.
+- Готовые shared-конфиги уже лежат в `.run/Attach_*.run.xml`.
+- Для одновременной отладки нескольких сервисов запускай несколько `Attach ...` конфигов параллельно (в shared-конфигах это уже разрешено).
+- Path mappings:
+  - `src_core` -> `/app/src_core`
+  - `src_agent` -> `/app/src_agent`
+  - `src_api_gateway` -> `/app`
+  - `src_langgraph` -> `/app/src_langgraph`
+  - `src_llm` -> `/app/src_llm`
+  - `src_shared` -> `/app/src_shared`
+
+5. Если нужен стоп на старте до attach, поставь `DEBUGPY_WAIT_FOR_CLIENT=1` в `docker/.env.debug`.
+   До attach сервисы не поднимают свои порты, поэтому `502` на `/core/*` в этот момент — ожидаемое поведение.
+   При `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach можно включить позже (подключение в фоне).
+   Для стабильного переподключения оставь `PYCHARM_REDIRECT_OUTPUT=0` (логи смотри через `docker compose logs`).
+   Для стабильного attach оставь `PYCHARM_PATCH_MULTIPROCESSING=0` (по умолчанию). Значение `1` включай только если нужен дебаг дочерних `multiprocessing` процессов.
+
+## Локально через IDE (гибрид)
+
+1. Поднять инфраструктуру:
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d src_api_gateway
+cd docker
+docker compose up -d nats src_postgres
 ```
 
-### 3.2 Локальный Python env
-
-Из корня репо:
+2. Установить зависимости:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
-pip install -r src_agent/requirements.txt -r src_llm/requirements.txt -r src_api_gateway/requirements.txt
+pip install -r src_agent/requirements.txt \
+  -r src_langgraph/requirements.txt \
+  -r src_llm/requirements.txt \
+  -r src_api_gateway/requirements.txt \
+  -r src_core/requirements.txt
 ```
 
-### 3.3 Какие env выставить
-
-Минимальный набор для запуска локально (в шелле или в `.env` файлов сервиса):
-
-- `NATS_URL=nats://127.0.0.1:14222`
-- `DATABASE_URL=postgresql://mcp:mcp_pass@127.0.0.1:5432/mcp`
-- `USER_ID=user123` (должен совпадать с UI/stack)
-
-### 3.4 Как запускать сервисы напрямую
+3. Запустить сервисы:
 
 ```bash
 python src_api_gateway/main.py
 python -m src_llm.main
+python -m src_langgraph.main
 python -m src_agent.main
+python -m src_core.main
 ```
 
-Если используете UI (`src_front`), обычно также нужен `src_core` в Docker или локально (см. `DOCS/CORE.md`).
-
-## 4) Когда нужно перезапускать контейнеры
-
-- Поменяли `N8N_BLOCK_ENV_ACCESS_IN_NODE` -> пересоздавайте `n8n`, `n8n_webhook`, `n8n_worker`.
-- Поменяли `N8N_WEBHOOK_BASE_URL` в `src_n8n` (локальный режим) -> перезапустите `src_n8n`.
-- Поменяли `NATS_URL`/`DATABASE_URL` -> перезапустите соответствующий сервис.
-
-## 5) Импорт/обновление workflows
-
-Workflows лежат в `~/dev/monitorsoft/voice-chat/n8n/docker/n8n/workflows/*.json`.
-
-Импорт:
+4. Для UI:
 
 ```bash
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm n8n_import
+cd src_front
+npm install
+npm run dev
 ```
 
-Важно: CLI импорт деактивирует workflows. Чтобы включить обратно, запустите activation jobs:
+## Smoke-фразы
 
-```bash
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_router
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_echo
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_collect_name
-cd ~/dev/monitorsoft/voice-chat/n8n && docker compose -f docker/docker-compose.yml run --rm --no-deps n8n_activate_airports_weather
-```
-
-## 6) Быстрый smoke / E2E
-
-Dockerized E2E runner:
-
-```bash
-docker compose -f docker/docker-compose.yml --profile test run --rm --build src_e2e
-```
-
-## 7) Пример end-to-end (как устроено под капотом)
-
-Подробный разбор сценария "найди ближайший аэропорт" (LLM routing + tools + user-in-the-loop):
-
-- `DOCS/example.md`
+1. `где мой рейс`
+2. `SU123`
+3. `найди аэропорт`
+4. `как дела`

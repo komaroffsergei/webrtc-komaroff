@@ -9,7 +9,6 @@ services:
       dockerfile: ../docker/postgres/Dockerfile
     image: ${REGISTRY_HOST}/gis/webrtc-komaroff/postgres/${CI_COMMIT_BRANCH}
     ports:
-      # Publish on host so external project stacks (for example voice-chat/n8n) can reuse this DB.
       - "5432:5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-mcp}
@@ -35,7 +34,7 @@ services:
     environment:
       API_HOST: 0.0.0.0
       API_PORT: 8100
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
       NATS_TOOLS_PREFIX: nats.tools.
     depends_on:
       - nats
@@ -54,7 +53,8 @@ services:
       - src_api_gateway
     environment:
       API_URL: http://src_api_gateway:8100/api
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
+      NATS_AGENT_HISTORY_SUBJECT: nats.agent.history.
 
   src_agent:
     build:
@@ -71,8 +71,9 @@ services:
       src_postgres:
         condition: service_healthy
     environment:
-      NATS_URL: nats://nats:4222
-      NATS_N8N_RUN_SUBJECT: ${NATS_N8N_RUN_SUBJECT:-nats.n8n.run}
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
+      NATS_WORKFLOW_RUN_SUBJECT: ${NATS_WORKFLOW_RUN_SUBJECT:-nats.workflow.run}
+      NATS_AGENT_HISTORY_SUBJECT: nats.agent.history.
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
 
   src_llm:
@@ -85,10 +86,12 @@ services:
     depends_on:
       - nats
     environment:
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
       USER_ID: ${USER_ID:-user123}
       LLM_MODE: remote
-      OLLAMA_URL: http://ollama.h100.local # https://ollama-webui.gis-master.ru
+      LLM_REMOTE_MODEL: qwen3:30b
+      LLM_CONTEXT_SIZE: 16384
+      OLLAMA_URL: ${OLLAMA_URL:-https://nats2ollama.gis-master.ru}
 
   src_langgraph:
     profiles: ["langgraph"]
@@ -103,14 +106,17 @@ services:
       - src_llm
       - src_api_gateway
     environment:
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
       USER_ID: ${USER_ID:-user123}
-      NATS_LANGGRAPH_RUN_SUBJECT: nats.langgraph.run
-      NATS_LANGGRAPH_HEALTH_SUBJECT: nats.langgraph.health
+      NATS_WORKFLOW_RUN_SUBJECT: nats.workflow.run
+      NATS_WORKFLOW_HEALTH_SUBJECT: nats.workflow.health
       NATS_LLM_SUBJECT: nats.llm.
       NATS_TOOLS_PREFIX: nats.tools.
       NATS_REQUEST_TIMEOUT_SECONDS: 120
       MAX_CONCURRENCY: 8
+      MEMORY_RECENT_MESSAGES: 32
+      MEMORY_SUMMARY_MAX_CHARS: 12000
+      MEMORY_CONTEXT_MAX_CHARS: 18000
 
   src_front:
     build:
@@ -122,7 +128,7 @@ services:
     ports:
       - "8080:8000"
     environment:
-      FRONT_NATS_WS_UPSTREAM: nats
+      FRONT_NATS_WS_UPSTREAM: ${FRONT_NATS_WS_UPSTREAM:-nats}
     depends_on:
       - src_core
       - nats
@@ -143,18 +149,18 @@ services:
       - src_agent
     environment:
       USER_ID: ${USER_ID:-user123}
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
       DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
       NATS_AGENT_SUBJECT: nats.agent.
-      NATS_N8N_HEALTH_SUBJECT: nats.n8n.health
+      NATS_WORKFLOW_HEALTH_SUBJECT: nats.workflow.health
     restart: "no"
 
   nats:
     image: nats:2.11
     command: ["-c", "/etc/nats/nats.conf"]
     ports:
-      - "14222:4222"  # NATS TCP (host)
-      - "9222:9222"  # NATS WebSocket
+      - "14222:4222"
+      - "9222:9222"
     volumes:
       - ./nats/nats.conf:/etc/nats/nats.conf:ro
 

@@ -6,10 +6,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .common import ErrorInfo, TraceEnvelope
 
-N8nStatus = Literal["RUNNING", "PARTIAL", "DONE", "FAILED"]
+WorkflowStatus = Literal["RUNNING", "PARTIAL", "DONE", "FAILED"]
 
 
-class N8nRuntimeState(BaseModel):
+class WorkflowRuntimeState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     active_workflow_id: Optional[str] = None
@@ -18,20 +18,21 @@ class N8nRuntimeState(BaseModel):
     version: int = Field(ge=1, default=1)
 
 
-class N8nRunRequest(TraceEnvelope):
+class WorkflowRunRequest(TraceEnvelope):
     model_config = ConfigDict(extra="forbid")
 
     text: str = Field(min_length=1)
+    turn_id: Optional[str] = Field(default=None, min_length=1)
     edit: Optional[dict[str, Any]] = None
-    runtime: N8nRuntimeState = Field(default_factory=N8nRuntimeState)
+    runtime: WorkflowRuntimeState = Field(default_factory=WorkflowRuntimeState)
 
 
-class N8nRunResponse(TraceEnvelope):
+class WorkflowRunResponse(TraceEnvelope):
     model_config = ConfigDict(extra="forbid")
 
-    status: N8nStatus
+    status: WorkflowStatus
     result: str = ""
     client_handler: dict[str, Any] = Field(default_factory=dict)
     client_events: list[dict[str, Any]] = Field(default_factory=list)
-    next_runtime: N8nRuntimeState = Field(default_factory=N8nRuntimeState)
+    next_runtime: WorkflowRuntimeState = Field(default_factory=WorkflowRuntimeState)
     errors: list[ErrorInfo] = Field(default_factory=list)

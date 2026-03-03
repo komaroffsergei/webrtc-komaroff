@@ -1,0 +1,21 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" singleton="false" name="Attach src_core (pycharm 5671)" type="PyRemoteDebugConfigurationType" factoryName="Python Remote Debug">
+    <module name="webrtc-komaroff" />
+    <option name="HOST" value="127.0.0.1" />
+    <option name="PORT" value="5671" />
+    <option name="REDIRECT_OUTPUT" value="true" />
+    <option name="SUSPEND_AFTER_CONNECT" value="false" />
+    <option name="USE_MAPPING" value="true" />
+    <option name="LOCAL_ROOT" value="$PROJECT_DIR$/src_core" />
+    <option name="REMOTE_ROOT" value="/app/src_core" />
+    <PathMappingSettings>
+      <option name="pathMappings">
+        <list>
+          <mapping local-root="$PROJECT_DIR$/src_core" remote-root="/app/src_core" />
+          <mapping local-root="$PROJECT_DIR$/src_shared" remote-root="/app/src_shared" />
+        </list>
+      </option>
+    </PathMappingSettings>
+    <method v="2" />
+  </configuration>
+</component>

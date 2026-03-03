@@ -12,6 +12,8 @@ export function handleShowMessage(
     typeof summary === "string"
       ? summary
       : "Message received.";
+  const assistantTurnId = typeof payload.assistant_turn_id === "string" ? payload.assistant_turn_id : undefined;
+  const userTurnId = typeof payload.user_turn_id === "string" ? payload.user_turn_id : undefined;
 
-  ctx.chat.addMessage(text, "server");
+  ctx.chat.addMessage(text, "server", { turnId: assistantTurnId, linkedUserTurnId: userTurnId });
 }

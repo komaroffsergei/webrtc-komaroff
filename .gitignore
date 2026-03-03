@@ -1,4 +1,5 @@
 .env.local
+docker/.env.debug
 docker-compose.dev.yml
 dev/**
 __pycache__/

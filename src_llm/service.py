@@ -67,10 +67,20 @@ class LLMService(BaseService):
         self._ollama = None if self._use_local else ollama.Client(host=ollama_url)
         self._local_model = None
         self._inference_lock = threading.Lock()
+        self._inference_meta_lock = threading.Lock()
+        self._inference_meta_by_request: dict[str, dict[str, Any]] = {}
 
     async def on_run(self) -> None:
         await self._nats_logger.info(
             f"{STACK_SERVICE_NAME} service connected (mode={self.llm_mode})"
+        )
+        await self._nats_logger.info(
+            {
+                "mode": self.llm_mode,
+                "configured_model": self._configured_model(),
+                "llm_context_size": self.llm_context_size,
+            },
+            name="llm_runtime_config",
         )
         if self._use_local:
             await self._nats_logger.log("command", "status_llm", {"status": "downloading"})
@@ -198,10 +208,56 @@ class LLMService(BaseService):
             )
         if mode == "final_response":
             return (
-                "Сформируй финальный ответ пользователю на русском языке по результатам инструментов. "
+                "Сформируй финальный ответ пользователю на русском языке. "
+                "Используй релевантный контекст из dialog_context/context_artifacts/tool_results и общие знания модели. "
+                "Если есть неуверенность в фактах, явно укажи это. "
                 "Ответ должен быть понятным и без технических деталей внутренней системы."
             )
         return "Верни корректный JSON по схеме."
+
+    def _configured_model(self) -> str:
+        return self.llm_local_model if self._use_local else self.llm_remote_model
+
+    def _set_inference_meta(self, request_id: str, meta: dict[str, Any]) -> None:
+        if not request_id:
+            return
+        with self._inference_meta_lock:
+            self._inference_meta_by_request[request_id] = dict(meta)
+
+    def _pop_inference_meta(self, request_id: str) -> dict[str, Any]:
+        if not request_id:
+            return {}
+        with self._inference_meta_lock:
+            value = self._inference_meta_by_request.pop(request_id, {})
+        return value if isinstance(value, dict) else {}
+
+    def _request_debug_extra(self, raw_req: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "llm_mode": self.llm_mode,
+            "configured_model": self._configured_model(),
+            "llm_context_size": self.llm_context_size,
+        }
+
+    def _llm_result_debug(
+        self,
+        payload: Any,
+        *,
+        req_mode: str | None,
+        raw_req: dict[str, Any] | None,
+        duration_ms: int,
+    ) -> Any:
+        if not isinstance(payload, dict):
+            return payload
+        out = dict(payload)
+        request_id = ""
+        if isinstance(raw_req, dict):
+            request_id = str(raw_req.get("request_id") or "").strip()
+        inference_meta = self._pop_inference_meta(request_id)
+        out["_debug"] = {
+            "duration_ms": max(0, int(duration_ms)),
+            **inference_meta,
+        }
+        return out
 
     def _routing_decision(self, req: LlmRequest) -> RoutingDecisionData:
         inp_raw = req.input if isinstance(req.input, dict) else {}
@@ -478,6 +534,30 @@ class LLMService(BaseService):
         if tool_name == "get_flight_status":
             # Try to recover common cases even if the model returned an empty object.
             text = user_message
+            surname_stopwords = {
+                "где",
+                "мой",
+                "моя",
+                "мое",
+                "мои",
+                "рейс",
+                "статус",
+                "покажи",
+                "найди",
+                "please",
+                "flight",
+                "status",
+                "по",
+                "номер",
+                "номеру",
+                "фамилия",
+                "фамилию",
+                "фамилией",
+                "фамилии",
+                "пассажир",
+                "пассажира",
+                "это",
+            }
             flight_match = re.search(r"\b([A-Za-zА-Яа-яЁё]{2,3}\s?\d{1,4})\b", text)
             if flight_match and "flight_number" not in extracted:
                 flight_number = flight_match.group(1).replace(" ", "").upper()
@@ -494,12 +574,23 @@ class LLMService(BaseService):
                         extracted.pop("last_name", None)
 
             if "last_name" not in extracted and "flight_number" not in extracted:
+                # Explicit "surname" patterns from user text.
+                surname_patterns = [
+                    r"\bфамили(?:я|ю|ей|и)\s*(?:[:\-]\s*)?([A-Za-zА-Яа-яЁё-]{2,})\b",
+                    r"\b([A-Za-zА-Яа-яЁё-]{2,})\b\s+(?:это\s+)?(?:моя\s+)?фамили(?:я|ю|ей|и)\b",
+                ]
+                for pattern in surname_patterns:
+                    match = re.search(pattern, text, flags=re.IGNORECASE)
+                    if not match:
+                        continue
+                    candidate = str(match.group(1) or "").strip()
+                    if candidate and candidate.lower() not in surname_stopwords:
+                        extracted["last_name"] = candidate
+                        break
+
+            if "last_name" not in extracted and "flight_number" not in extracted:
                 words = re.findall(r"[A-Za-zА-Яа-яЁё]{2,}", text)
-                stopwords = {
-                    "где", "мой", "рейс", "статус", "покажи", "найди", "please",
-                    "flight", "status", "мой", "по", "номер", "номеру",
-                }
-                candidates = [w for w in words if w.lower() not in stopwords]
+                candidates = [w for w in words if w.lower() not in surname_stopwords]
                 if len(candidates) == 1:
                     extracted["last_name"] = candidates[0]
 
@@ -637,6 +728,15 @@ class LLMService(BaseService):
                 think=False,
             )
 
+        self._set_inference_meta(
+            str(req.request_id),
+            {
+                "mode": req.mode,
+                "configured_model": self._configured_model(),
+                "effective_model": str(result.get("model") or model),
+                "provider": str(result.get("provider") or ("local" if self._use_local else "remote")),
+            },
+        )
         content = (result.get("message") or {}).get("content") or ""
         data = _parse_json_object(str(content))
         if not isinstance(data, dict):

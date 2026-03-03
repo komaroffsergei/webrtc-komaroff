@@ -14,8 +14,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
+ARG INSTALL_DEBUGPY=0
+
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install -U --force-reinstall -r requirements.txt
+RUN if [ "$INSTALL_DEBUGPY" = "1" ]; then pip install --no-cache-dir debugpy==1.8.13 pydevd-pycharm~=252.26830.0; fi
 
 COPY . /app/src_core
 COPY --from=shared . /app/src_shared
@@ -39,4 +42,3 @@ WORKDIR /app/src_core
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["python", "-m", "src_core.main"]
-

@@ -1,0 +1,155 @@
+services:
+  src_api_gateway:
+    build:
+      args:
+        INSTALL_DEBUGPY: ${INSTALL_DEBUGPY:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NATS_URL: ${DEBUG_NATS_URL:-nats://nats:4222}
+      PYCHARM_DEBUG_HOST: ${PYCHARM_DEBUG_HOST:-host.docker.internal}
+      PYCHARM_REDIRECT_OUTPUT: "0"
+      PYCHARM_PATCH_MULTIPROCESSING: "0"
+      PYCHARM_RETRY_SECONDS: ${PYCHARM_RETRY_SECONDS:-2}
+      PYCHARM_ATTACH_TIMEOUT_SECONDS: ${PYCHARM_ATTACH_TIMEOUT_SECONDS:-180}
+      PYCHARM_PROJECT_ROOT: ${PYCHARM_PROJECT_ROOT:-}
+      PYCHARM_SOURCE_SUBDIR: src_api_gateway
+      PYCHARM_REMOTE_ROOT: /app
+      PYCHARM_REMOTE_SHARED_ROOT: /app/src_shared
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+      API_GATEWAY_DEBUG_PORT: ${API_GATEWAY_DEBUG_PORT:-5673}
+    volumes:
+      - ../src_api_gateway:/app
+      - ../src_shared:/app/src_shared
+      - ${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:ro
+    command:
+      - sh
+      - -c
+      - |
+        exec python -Xfrozen_modules=off /app/src_shared/debug/pycharm_bootstrap.py \
+          --script /app/main.py \
+          --port "$${API_GATEWAY_DEBUG_PORT}"
+
+  src_core:
+    build:
+      args:
+        INSTALL_DEBUGPY: ${INSTALL_DEBUGPY:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NATS_URL: ${DEBUG_NATS_URL:-nats://nats:4222}
+      PYCHARM_DEBUG_HOST: ${PYCHARM_DEBUG_HOST:-host.docker.internal}
+      PYCHARM_REDIRECT_OUTPUT: "0"
+      PYCHARM_PATCH_MULTIPROCESSING: "0"
+      PYCHARM_RETRY_SECONDS: ${PYCHARM_RETRY_SECONDS:-2}
+      PYCHARM_ATTACH_TIMEOUT_SECONDS: ${PYCHARM_ATTACH_TIMEOUT_SECONDS:-180}
+      PYCHARM_PROJECT_ROOT: ${PYCHARM_PROJECT_ROOT:-}
+      PYCHARM_SOURCE_SUBDIR: src_core
+      PYCHARM_REMOTE_ROOT: /app/src_core
+      PYCHARM_REMOTE_SHARED_ROOT: /app/src_shared
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+      CORE_DEBUG_PORT: ${CORE_DEBUG_PORT:-5671}
+    volumes:
+      - ../src_core:/app/src_core
+      - ../src_shared:/app/src_shared
+      - ${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:ro
+    command:
+      - sh
+      - -c
+      - |
+        exec python -Xfrozen_modules=off /app/src_shared/debug/pycharm_bootstrap.py \
+          --module src_core.main \
+          --port "$${CORE_DEBUG_PORT}"
+
+  src_agent:
+    build:
+      args:
+        INSTALL_DEBUGPY: ${INSTALL_DEBUGPY:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NATS_URL: ${DEBUG_NATS_URL:-nats://nats:4222}
+      PYCHARM_DEBUG_HOST: ${PYCHARM_DEBUG_HOST:-host.docker.internal}
+      PYCHARM_REDIRECT_OUTPUT: "0"
+      PYCHARM_PATCH_MULTIPROCESSING: "0"
+      PYCHARM_RETRY_SECONDS: ${PYCHARM_RETRY_SECONDS:-2}
+      PYCHARM_ATTACH_TIMEOUT_SECONDS: ${PYCHARM_ATTACH_TIMEOUT_SECONDS:-180}
+      PYCHARM_PROJECT_ROOT: ${PYCHARM_PROJECT_ROOT:-}
+      PYCHARM_SOURCE_SUBDIR: src_agent
+      PYCHARM_REMOTE_ROOT: /app/src_agent
+      PYCHARM_REMOTE_SHARED_ROOT: /app/src_shared
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+      AGENT_DEBUG_PORT: ${AGENT_DEBUG_PORT:-5672}
+    volumes:
+      - ../src_agent:/app/src_agent
+      - ../src_shared:/app/src_shared
+      - ${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:ro
+    command:
+      - sh
+      - -c
+      - |
+        exec python -Xfrozen_modules=off /app/src_shared/debug/pycharm_bootstrap.py \
+          --module src_agent.main \
+          --port "$${AGENT_DEBUG_PORT}"
+
+  src_langgraph:
+    build:
+      args:
+        INSTALL_DEBUGPY: ${INSTALL_DEBUGPY:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NATS_URL: ${DEBUG_NATS_URL:-nats://nats:4222}
+      PYCHARM_DEBUG_HOST: ${PYCHARM_DEBUG_HOST:-host.docker.internal}
+      PYCHARM_REDIRECT_OUTPUT: "0"
+      PYCHARM_PATCH_MULTIPROCESSING: "0"
+      PYCHARM_RETRY_SECONDS: ${PYCHARM_RETRY_SECONDS:-2}
+      PYCHARM_ATTACH_TIMEOUT_SECONDS: ${PYCHARM_ATTACH_TIMEOUT_SECONDS:-180}
+      PYCHARM_PROJECT_ROOT: ${PYCHARM_PROJECT_ROOT:-}
+      PYCHARM_SOURCE_SUBDIR: src_langgraph
+      PYCHARM_REMOTE_ROOT: /app/src_langgraph
+      PYCHARM_REMOTE_SHARED_ROOT: /app/src_shared
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+      LANGGRAPH_DEBUG_PORT: ${LANGGRAPH_DEBUG_PORT:-5674}
+    volumes:
+      - ../src_langgraph:/app/src_langgraph
+      - ../src_shared:/app/src_shared
+      - ${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:ro
+    command:
+      - sh
+      - -c
+      - |
+        exec python -Xfrozen_modules=off /app/src_shared/debug/pycharm_bootstrap.py \
+          --module src_langgraph.main \
+          --port "$${LANGGRAPH_DEBUG_PORT}"
+
+  src_llm:
+    build:
+      args:
+        INSTALL_DEBUGPY: ${INSTALL_DEBUGPY:-1}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      NATS_URL: ${DEBUG_NATS_URL:-nats://nats:4222}
+      PYCHARM_DEBUG_HOST: ${PYCHARM_DEBUG_HOST:-host.docker.internal}
+      PYCHARM_REDIRECT_OUTPUT: "0"
+      PYCHARM_PATCH_MULTIPROCESSING: "0"
+      PYCHARM_RETRY_SECONDS: ${PYCHARM_RETRY_SECONDS:-2}
+      PYCHARM_ATTACH_TIMEOUT_SECONDS: ${PYCHARM_ATTACH_TIMEOUT_SECONDS:-180}
+      PYCHARM_PROJECT_ROOT: ${PYCHARM_PROJECT_ROOT:-}
+      PYCHARM_SOURCE_SUBDIR: src_llm
+      PYCHARM_REMOTE_ROOT: /app/src_llm
+      PYCHARM_REMOTE_SHARED_ROOT: /app/src_shared
+      DEBUGPY_WAIT_FOR_CLIENT: ${DEBUGPY_WAIT_FOR_CLIENT:-0}
+      LLM_DEBUG_PORT: ${LLM_DEBUG_PORT:-5675}
+    volumes:
+      - ../src_llm:/app/src_llm
+      - ../src_shared:/app/src_shared
+      - ${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:${PYCHARM_PROJECT_ROOT:-/tmp/pycharm_project_root}:ro
+    command:
+      - sh
+      - -c
+      - |
+        exec python -Xfrozen_modules=off /app/src_shared/debug/pycharm_bootstrap.py \
+          --module src_llm.main \
+          --port "$${LLM_DEBUG_PORT}"

@@ -13,29 +13,19 @@ ASR_OUT_PREFIX = "inference.whisper.text."
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
-N8N_UI_PATH = '/n8n'
-N8N_UI_PATH_REWRITE = '^/n8n(.*)'
-N8N_PUBLIC_BASE_URL = 'https://webrtc-komaroff.gis-master.ru'
-N8N_EDITOR_BASE_URL = "#{N8N_PUBLIC_BASE_URL}#{N8N_UI_PATH}/"
-N8N_PROXY_HOPS = '1'
-N8N_ENCRYPTION_KEY = 'n8n_encryption_key_dev_only_change_me'
-N8N_DB_SCHEMA = 'n8n'
 POSTGRES_HOST = 'web-rtc-komaroff_src_postgres'
 POSTGRES_PORT = '5432'
 POSTGRES_DB = 'mcp'
 POSTGRES_USER = 'mcp'
 POSTGRES_PASSWORD = 'mcp_pass'
 DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}?sslmode=disable"
-N8N_WEBHOOK_BASE_URL = 'http://web-rtc-komaroff_n8n:5678/webhook'
 NATS_TOOLS_PREFIX = 'nats.tools.'
 NATS_REQUEST_TIMEOUT = '600'
 AGENT_MAX_STEPS = '10'
 MAX_STEPS = '10'
 TIMEOUT_SECONDS = '600'
-NATS_N8N_RUN_SUBJECT = 'nats.n8n.run'
-NATS_N8N_HEALTH_SUBJECT = 'nats.n8n.health'
-N8N_HTTP_TIMEOUT_SECONDS = '120'
-TOOL_PROXY_PORT = '9000'
+NATS_WORKFLOW_RUN_SUBJECT = 'nats.workflow.run'
+NATS_WORKFLOW_HEALTH_SUBJECT = 'nats.workflow.health'
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
@@ -81,6 +71,7 @@ Service :src_agent, image: webrtc_registry['agent'] do
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+      NATS_WORKFLOW_RUN_SUBJECT: NATS_WORKFLOW_RUN_SUBJECT,
       AGENT_MAX_STEPS: AGENT_MAX_STEPS,
       MAX_STEPS: MAX_STEPS,
       TIMEOUT_SECONDS: TIMEOUT_SECONDS,
@@ -100,7 +91,7 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      OLLAMA_URL: 'http://ollama.h100.local',
+      OLLAMA_URL: 'https://nats2ollama.gis-master.ru',
       LLM_MODE: 'remote',
       LLM_LOCAL_MODEL: 'Qwen/Qwen3-1.7B-GGUF',
       LLM_REMOTE_MODEL: 'qwen3:30b',
@@ -108,6 +99,18 @@ Service :src_llm, image: webrtc_registry['llm'] do
       OLLAMA_MODEL_FILE: '',
       LLM_CONTEXT_SIZE: '8192'
   volume name: 'LLM_MODELS', target: '/app/models/llm'
+end
+
+Service :src_langgraph, image: webrtc_registry['langgraph'] do
+  env STACK_SERVICE_NAME: 'src_langgraph',
+      USER_ID: USER_ID,
+      NATS_URL: NATS_URL,
+      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+      NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
+      NATS_WORKFLOW_RUN_SUBJECT: NATS_WORKFLOW_RUN_SUBJECT,
+      NATS_WORKFLOW_HEALTH_SUBJECT: NATS_WORKFLOW_HEALTH_SUBJECT,
+      NATS_REQUEST_TIMEOUT_SECONDS: '120',
+      MAX_CONCURRENCY: '8'
 end
 
 Service :src_front, image: webrtc_registry['front'] do

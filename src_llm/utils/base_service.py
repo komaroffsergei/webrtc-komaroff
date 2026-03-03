@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import signal
+import time
 from typing import Any
 
 import nats
@@ -88,16 +89,30 @@ class BaseService:
             return
 
         req_mode: str | None = None
+        raw_req: dict[str, Any] | None = None
         try:
-            raw_req = json.loads(msg.data.decode("utf-8"))
+            parsed = json.loads(msg.data.decode("utf-8"))
+            if isinstance(parsed, dict):
+                raw_req = parsed
             if isinstance(raw_req, dict) and isinstance(raw_req.get("mode"), str):
                 req_mode = raw_req["mode"].strip()
         except Exception:
             req_mode = None
+            raw_req = None
 
+        if raw_req is not None:
+            req_debug = self._llm_request_debug(raw_req)
+            extra = self._request_debug_extra(raw_req)
+            if isinstance(extra, dict) and extra:
+                req_debug["runtime"] = extra
+            await self._nats_logger.info(req_debug, name="llm_request_debug")
+
+        duration_ms = 0
         async with self._semaphore:
             try:
+                started_at = time.monotonic()
                 text = await asyncio.to_thread(self.on_message, msg)
+                duration_ms = int((time.monotonic() - started_at) * 1000)
             except Exception as exc:
                 logger.exception("Process message error: %s", exc)
                 await self._nats_logger.error(f"Process message error: {exc}")
@@ -107,7 +122,15 @@ class BaseService:
                 )
                 return
 
-        await self._nats_logger.info(text, name="llm_result")
+        await self._nats_logger.info(
+            self._llm_result_debug(
+                text,
+                req_mode=req_mode,
+                raw_req=raw_req,
+                duration_ms=duration_ms,
+            ),
+            name="llm_result",
+        )
         thought = self._routing_thought_from_llm_result(text, req_mode=req_mode)
         if thought:
             await self._nats_logger.log("command", "thought", thought)
@@ -118,6 +141,59 @@ class BaseService:
         if not msg.reply or not self._nc:
             return
         await self._publisher.publish(msg.reply, payload)
+
+    @classmethod
+    def _llm_request_debug(cls, raw_req: dict[str, Any]) -> dict[str, Any]:
+        constraints = raw_req.get("constraints") if isinstance(raw_req.get("constraints"), dict) else {}
+        requested_model = constraints.get("model")
+        trace = {
+            "trace_id": raw_req.get("trace_id"),
+            "correlation_id": raw_req.get("correlation_id"),
+            "request_id": raw_req.get("request_id"),
+            "session_id": raw_req.get("session_id"),
+            "ts_ms": raw_req.get("ts_ms"),
+        }
+        return {
+            "trace": trace,
+            "mode": raw_req.get("mode"),
+            "requested_model": requested_model if isinstance(requested_model, str) and requested_model.strip() else None,
+            "constraints": cls._truncate_debug_value(constraints, depth=0),
+            "input": cls._truncate_debug_value(raw_req.get("input"), depth=0),
+        }
+
+    def _request_debug_extra(self, raw_req: dict[str, Any]) -> dict[str, Any]:
+        return {}
+
+    def _llm_result_debug(
+        self,
+        payload: Any,
+        *,
+        req_mode: str | None,
+        raw_req: dict[str, Any] | None,
+        duration_ms: int,
+    ) -> Any:
+        return payload
+
+    @classmethod
+    def _truncate_debug_value(cls, value: Any, *, depth: int) -> Any:
+        if depth >= 5:
+            return "<max_depth_reached>"
+        if isinstance(value, str):
+            return value if len(value) <= 700 else f"{value[:680]}...<truncated>"
+        if isinstance(value, list):
+            clipped = [cls._truncate_debug_value(v, depth=depth + 1) for v in value[:20]]
+            if len(value) > 20:
+                clipped.append(f"<truncated_items:{len(value) - 20}>")
+            return clipped
+        if isinstance(value, dict):
+            out: dict[str, Any] = {}
+            for i, (k, v) in enumerate(value.items()):
+                if i >= 30:
+                    out["<truncated_keys>"] = len(value) - 30
+                    break
+                out[str(k)] = cls._truncate_debug_value(v, depth=depth + 1)
+            return out
+        return value
 
     @staticmethod
     def _routing_thought_from_llm_result(payload: Any, *, req_mode: str | None) -> dict[str, Any] | None:

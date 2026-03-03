@@ -1,94 +1,67 @@
-# src_front (Web UI)
+# src_front
 
-## Что это
+## Responsibility
+`src_front` is the browser UI for chat, voice controls, and map rendering.
+It sends user messages to `src_core`, subscribes to backend events over NATS WS, and renders commands/artifacts.
+It does not run workflow logic.
 
-`src_front` — браузерный UI:
+## Session and history behavior
+- Session ID is stored in `sessionStorage` under `assistant.session_id`.
+- Each browser tab has its own `sessionStorage`, so each tab has an independent chat session.
+- On page reload, the app restores `session_id` from `sessionStorage` and requests `GET /core/history`.
+- History is rendered with stable `turn_id` values, enabling inline user message editing.
 
-- Поднимает WebRTC сессию с `src_core` (signaling endpoints под `/core/*`).
-- Подключается к NATS по WebSocket и подписывается на `nats.events.<user_id>`.
-- Отправляет текст пользователя в `src_core` через `POST /core/message`.
-- Отрисовывает UI-команды, которые приходят через NATS events.
+## Edit behavior
+- User message edit sends `POST /core/message` with:
+  - `turn_id` = edited user turn ID
+  - `edit.turn_id` = same turn ID
+  - existing `session_id`
+- UI rewrites local history tail from edited message immediately, then waits for regenerated assistant response.
 
-## Как запустить и открыть
+## Network flow
+Outgoing:
+- `POST /core/message`
+- `GET /core/history`
+- `POST /core/init_map`
 
-- Docker UI: `http://127.0.0.1:8080/`
-- Dev mode (Vite): из `src_front/` запустите `npm run dev` (см. `README.md`)
+Incoming:
+- NATS WS subscription to `nats.events.<user_id>`
+- Handles `command/client`, `command/thought`, status, transcription and voice lock events
 
-## Какой трафик и куда
+## Debug logging
+- Events are logged in grouped format via `src_front/src/core/logging.ts`.
+- LLM debug events (`name=llm_request_debug`) and LLM responses (`name=llm_result`) are printed with structured payloads for easier inspection.
+- Replay snapshot is printed as one compact expandable object on each telemetry/event tick:
+  - prefix: `[dialog.replay.bundle]`
+  - payload: compact object (`schema=dialog_replay@2`) without timestamp noise and trace/request ids
+  - includes last 10 compact flow steps with edit context.
 
-### Docker runtime (nginx)
+## Run/stop
+Docker UI:
+```bash
+cd docker
+docker compose up -d src_front
+docker compose stop src_front
+```
 
-- `GET /` -> статика `src_front`
-- `POST /core/*` -> proxy на `src_core:8000`
-- `WS /ws` -> proxy на `${FRONT_NATS_WS_UPSTREAM}:9222` (по умолчанию `nats` в docker-compose)
+Local dev:
+```bash
+cd src_front
+npm install
+npm run dev
+```
 
-### Исходящий (пользователь -> backend)
+## Common issues
+- No events in UI after connect
+  - Fix: verify NATS WS endpoint (`/ws`) and matching `user_id` subject suffix.
+- Edit returns `edit_turn_not_found`
+  - Fix: session mismatch or stale UI history; reload page to restore history from backend.
+- History not restored after reload
+  - Fix: ensure `/core/history` is reachable and `assistant.session_id` exists in tab `sessionStorage`.
 
-- HTTP: `POST /core/message` (в `src_core`)
-- Payload: `{ text, session_id?, edit? }`
-
-### Входящий (backend -> пользователь)
-
-- NATS WS subscription: `nats.events.<user_id>`
-- UI ожидает JSON-события (строка/utf-8).
-- В Docker по умолчанию используется `ws(s)://<host>/ws` (через nginx proxy).
-- В Dev (Vite) по умолчанию используется `ws://localhost:9222`.
-- Если NATS требует auth, фронт берет `NATS_USER`/`NATS_PASS`/`NATS_TOKEN` из `window.SETTINGS`
-  (прокидываются как `FRONT_NATS_USER`/`FRONT_NATS_PASS`/`FRONT_NATS_TOKEN`).
-- Upstream для nginx websocket proxy задается через `FRONT_NATS_WS_UPSTREAM`.
-
-## UI-команды
-
-Хендлеры UI-команд зарегистрированы в `src_front/src/agentCommands/commands/index.ts`.
-Демо-workflows используют:
-
-- `SHOW_MESSAGE`
-- `ASK_USER_INPUT`
-- `SHOW_AIRPORTS`
-- `SHOW_ERROR_MESSAGE`
-
-## Привязка к пользователю (subjects)
-
-Сейчас subjects в UI захардкожены на `user123`:
-
-- events: `nats.events.user123`
-- agent: `nats.agent.user123`
-
-Если нужна изоляция по пользователям, конфиг надо брать из runtime settings (например, из `window.SETTINGS` или env),
-а subjects формировать на основе реального `user_id`.
-
-## Код (куда смотреть)
-
-- NATS WS клиент и подписки: `src_front/src/net/natsClient.ts`
-- Роутинг UI-команд: `src_front/src/agentCommands/commands/index.ts`
-- Логирование событий в консоли: `src_front/src/net/logging.ts`
-
-## Частые ошибки
-
-### UI не получает ответы (пусто после отправки текста)
-
-Проверьте:
-
-- открыт ли UI: `http://127.0.0.1:8080/`
-- доступен ли NATS WebSocket через фронт: `ws://127.0.0.1:8080/ws`
-- для прямой проверки NATS также доступен `ws://127.0.0.1:9222`
-- совпадает ли `user_id` в subjects (сейчас захардкожено `user123`)
-
-### В консоли `NatsError: 'Authorization Violation'`
-
-Проверьте:
-
-- в stack-конфиге для пользователя NATS разрешен `WEBSOCKET` в `allowed_connection_types`
-- у `src_front` прокинуты `FRONT_NATS_USER` и `FRONT_NATS_PASS` (или `FRONT_NATS_TOKEN`)
-- фронт подключается к правильному endpoint (`/ws` через ingress/nginx)
-
-### Дубли команд (одно и то же сообщение показывается 2+ раза)
-
-Причины:
-
-- одновременно запущены 2 экземпляра backend-сервиса (контейнер + локально), или
-- UI подписался на один и тот же subject несколько раз (обычно после реконнекта).
-
-Что делать:
-
-- убедиться, что запущен только один инстанс каждого сервиса (`docker compose ps` + не запускать локально тот же сервис)
+## Code pointers
+- App entry and flow: `src_front/src/assistant/assistantApp.ts`
+- Chat UI/edit controls: `src_front/src/ui/chatUi.ts`
+- HTTP message sender: `src_front/src/core/commandHandler.ts`
+- Event logging: `src_front/src/core/logging.ts`
+- Agent command rendering: `src_front/src/agentCommands/*`

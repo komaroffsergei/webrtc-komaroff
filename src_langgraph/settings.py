@@ -16,21 +16,14 @@ USER_ID = os.getenv("USER_ID", "user123")
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_langgraph")
 
 NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
-NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", Subjects.EVENTS_PREFIX)
 NATS_LLM_SUBJECT_PREFIX = os.getenv("NATS_LLM_SUBJECT", Subjects.LLM_PREFIX)
 NATS_TOOLS_PREFIX = os.getenv("NATS_TOOLS_PREFIX", Subjects.TOOLS_PREFIX)
 
-# Default to separate subjects so the service can run in parallel with src_n8n.
-# For drop-in replacement, point src_agent NATS_N8N_RUN_SUBJECT to this value.
-NATS_LANGGRAPH_RUN_SUBJECT = os.getenv(
-    "NATS_LANGGRAPH_RUN_SUBJECT",
-    os.getenv("NATS_N8N_RUN_SUBJECT", "nats.langgraph.run"),
-)
-NATS_LANGGRAPH_HEALTH_SUBJECT = os.getenv(
-    "NATS_LANGGRAPH_HEALTH_SUBJECT",
-    os.getenv("NATS_N8N_HEALTH_SUBJECT", "nats.langgraph.health"),
-)
+NATS_WORKFLOW_RUN_SUBJECT = os.getenv("NATS_WORKFLOW_RUN_SUBJECT", "nats.workflow.run")
+NATS_WORKFLOW_HEALTH_SUBJECT = os.getenv("NATS_WORKFLOW_HEALTH_SUBJECT", "nats.workflow.health")
 
 NATS_REQUEST_TIMEOUT_SECONDS = float(os.getenv("NATS_REQUEST_TIMEOUT_SECONDS", "120"))
 MAX_CONCURRENCY = int(os.getenv("MAX_CONCURRENCY", "8"))
-
+MEMORY_RECENT_MESSAGES = int(os.getenv("MEMORY_RECENT_MESSAGES", "32"))
+MEMORY_SUMMARY_MAX_CHARS = int(os.getenv("MEMORY_SUMMARY_MAX_CHARS", "12000"))
+MEMORY_CONTEXT_MAX_CHARS = int(os.getenv("MEMORY_CONTEXT_MAX_CHARS", "18000"))

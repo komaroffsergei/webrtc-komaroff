@@ -5,8 +5,6 @@ import json
 import logging
 import signal
 import sys
-from hashlib import sha256
-from typing import Any
 from uuid import uuid4
 
 from nats.aio.client import Client as NATS
@@ -14,13 +12,15 @@ from nats.aio.msg import Msg
 
 from src_agent.agent import AgentRunner
 from src_agent.settings import STACK_SERVICE_NAME
-from src_agent.utils.db import Database
+from src_agent.ui_events import UiEventPublisher
+from src_agent.utils.db import Database, fetch_chat_history
 from src_agent.utils.nats_logger import NatsLogger
 from src_shared.contracts import (
     AgentInboundRequest,
     AgentInboundResponse,
     ErrorInfo,
-    N8nRunResponse,
+    HistoryGetRequest,
+    HistoryGetResponse,
     now_ts_ms,
 )
 
@@ -31,10 +31,10 @@ class AgentServer:
     """
     Thin NATS runner:
     - validates inbound requests
-    - ensures a DB session/runtime_state row
-    - calls n8n via NATS bridge (req-reply)
-    - persists next runtime state (optimistic lock)
-    - publishes UI commands/events over NATS
+    - ensures DB session/runtime rows
+    - calls workflow runtime via NATS
+    - persists updated runtime state
+    - publishes UI commands/events
     """
 
     def __init__(
@@ -42,20 +42,21 @@ class AgentServer:
         *,
         nats_url: str,
         agent_subject: str,
+        agent_history_subject: str,
         events_subject: str,
-        n8n_subject: str,
-        n8n_timeout_s: int,
+        workflow_subject: str,
+        workflow_timeout_s: int,
         db_url: str,
         user_id: str,
         runtime_conflict_retries: int,
     ) -> None:
         self.nats_url = nats_url
         self.agent_subject = agent_subject
+        self.agent_history_subject = agent_history_subject
         self.events_subject = events_subject
-        self.n8n_subject = n8n_subject
-        self.n8n_timeout_s = int(n8n_timeout_s)
+        self.workflow_subject = workflow_subject
+        self.workflow_timeout_s = int(workflow_timeout_s)
         self.runtime_conflict_retries = int(runtime_conflict_retries)
-
         self.db_url = db_url
         self.user_id = user_id
 
@@ -63,7 +64,7 @@ class AgentServer:
         self.db: Database | None = None
         self.nats_logger: NatsLogger | None = None
         self.runner: AgentRunner | None = None
-
+        self.ui_publisher: UiEventPublisher | None = None
         self.stop_event = asyncio.Event()
 
     async def connect(self) -> None:
@@ -75,34 +76,36 @@ class AgentServer:
             reconnect_time_wait=2,
             ping_interval=10,
         )
-
         self.nats_logger = NatsLogger(self.nc, self.events_subject, STACK_SERVICE_NAME)
+        self.ui_publisher = UiEventPublisher(self.nats_logger)
 
         self.db = Database(db_url=self.db_url)
         await self.db.connect()
-
         self.runner = AgentRunner(
             nc=self.nc,
             db=self.db,
-            n8n_subject=self.n8n_subject,
+            workflow_subject=self.workflow_subject,
             user_id=self.user_id,
-            n8n_timeout_s=self.n8n_timeout_s,
+            workflow_timeout_s=self.workflow_timeout_s,
             max_runtime_conflict_retries=self.runtime_conflict_retries,
         )
-
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected (nats={self.nats_url})")
 
     async def subscribe(self) -> None:
         if not self.nc:
             raise RuntimeError("NATS is not connected")
-        # Queue group prevents duplicate processing if multiple agent instances are running.
         await self.nc.subscribe(
             self.agent_subject,
             queue=f"{STACK_SERVICE_NAME}.q.{self.user_id}",
             cb=self.handle_request,
         )
+        await self.nc.subscribe(
+            self.agent_history_subject,
+            queue=f"{STACK_SERVICE_NAME}.history.q.{self.user_id}",
+            cb=self.handle_history_request,
+        )
         if self.nats_logger:
-            await self.nats_logger.info(f"Subscribed to {self.agent_subject}")
+            await self.nats_logger.info(f"Subscribed to {self.agent_subject} and {self.agent_history_subject}")
 
     async def handle_request(self, msg: Msg) -> None:
         try:
@@ -110,11 +113,13 @@ class AgentServer:
             if isinstance(raw, dict) and isinstance(raw.get("text"), str):
                 raw["text"] = raw["text"].strip()
             req = AgentInboundRequest.model_validate(raw)
-            if not self.runner or not self.nats_logger:
+
+            if not self.runner:
                 raise RuntimeError("AgentServer is not initialized")
 
             rr = await self.runner.run(req)
-            await self._publish_ui_events(req, rr.n8n)
+            if self.ui_publisher:
+                await self.ui_publisher.publish(req, rr.workflow)
 
             resp = AgentInboundResponse(
                 trace_id=req.trace_id,
@@ -122,18 +127,17 @@ class AgentServer:
                 request_id=req.request_id,
                 session_id=rr.session_id,
                 ts_ms=now_ts_ms(),
-                ok=rr.n8n.status != "FAILED",
-                status=rr.n8n.status,
-                result=rr.n8n.result,
-                client_handler=rr.n8n.client_handler,
-                client_events=rr.n8n.client_events,
-                errors=rr.n8n.errors,
+                ok=rr.workflow.status != "FAILED",
+                status=rr.workflow.status,
+                result=rr.workflow.result,
+                client_handler=rr.workflow.client_handler,
+                client_events=rr.workflow.client_events,
+                errors=rr.workflow.errors,
             )
             await msg.respond(resp.model_dump_json().encode("utf-8"))
 
         except Exception as exc:
             logger.exception("Error processing request")
-            err = ErrorInfo(code="agent_exception", message=str(exc))
             fallback = AgentInboundResponse(
                 trace_id=uuid4(),
                 correlation_id=None,
@@ -145,7 +149,7 @@ class AgentServer:
                 result="",
                 client_handler={},
                 client_events=[],
-                errors=[err],
+                errors=[ErrorInfo(code="agent_exception", message=str(exc))],
             )
             try:
                 await msg.respond(fallback.model_dump_json().encode("utf-8"))
@@ -153,6 +157,48 @@ class AgentServer:
                 logger.exception("Failed to respond with error")
             if self.nats_logger:
                 await self.nats_logger.error(f"Processing error: {str(exc)}")
+
+    async def handle_history_request(self, msg: Msg) -> None:
+        try:
+            raw = json.loads(msg.data.decode("utf-8"))
+            req = HistoryGetRequest.model_validate(raw)
+            if req.session_id is None:
+                raise ValueError("session_id is required")
+            if self.db is None:
+                raise RuntimeError("AgentServer DB is not initialized")
+
+            items = await fetch_chat_history(
+                self.db,
+                session_id=str(req.session_id),
+                limit=req.limit,
+            )
+            resp = HistoryGetResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=True,
+                items=items,
+                error=None,
+            )
+            await msg.respond(resp.model_dump_json().encode("utf-8"))
+        except Exception as exc:
+            logger.exception("Error processing history request")
+            fallback = HistoryGetResponse(
+                trace_id=uuid4(),
+                correlation_id=None,
+                request_id=uuid4(),
+                session_id=None,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                items=[],
+                error=ErrorInfo(code="history_exception", message=str(exc)),
+            )
+            try:
+                await msg.respond(fallback.model_dump_json().encode("utf-8"))
+            except Exception:
+                logger.exception("Failed to respond with history error")
 
     def setup_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()
@@ -191,207 +237,3 @@ class AgentServer:
             sys.exit(1)
         finally:
             await self.shutdown()
-
-    async def _publish_ui_events(self, req: AgentInboundRequest, resp: N8nRunResponse) -> None:
-        if not self.nats_logger:
-            return
-
-        trace = {
-            "trace_id": str(req.trace_id),
-            "correlation_id": str(req.correlation_id or req.trace_id),
-            "request_id": str(req.request_id),
-            "session_id": str(resp.session_id) if resp.session_id else None,
-        }
-
-        sent: set[str] = set()
-        thought_handlers: list[dict[str, Any]] = []
-        regular_handlers: list[dict[str, Any]] = []
-
-        for ev in _normalize_client_events(resp.client_events):
-            (thought_handlers if _is_thought_handler(ev) else regular_handlers).append(ev)
-
-        if resp.client_handler:
-            (thought_handlers if _is_thought_handler(resp.client_handler) else regular_handlers).append(resp.client_handler)
-
-        for handler in thought_handlers:
-            await self._publish_client_command(handler, trace, sent)
-
-        msg_text = _extract_result_message(resp)
-        if msg_text and not _has_duplicate_client_message(resp, msg_text):
-            await self.nats_logger.log(
-                "command",
-                "message",
-                {
-                    "type": "answer" if resp.status != "FAILED" else "system",
-                    "text": msg_text,
-                    "trace": trace,
-                },
-            )
-
-        for handler in regular_handlers:
-            await self._publish_client_command(handler, trace, sent)
-
-        if resp.status == "FAILED" and resp.errors and not _has_explicit_error_command(resp):
-            await self._publish_client_command(
-                {
-                    "command": "SHOW_ERROR_MESSAGE",
-                    "payload": {"message": resp.errors[0].message, "code": resp.errors[0].code},
-                },
-                trace,
-                sent,
-            )
-
-    async def _publish_client_command(
-        self,
-        handler: dict[str, Any],
-        trace: dict[str, Any],
-        sent: set[str],
-    ) -> None:
-        if not self.nats_logger:
-            return
-
-        fp = _fingerprint_client_command(handler)
-        if fp in sent:
-            return
-        sent.add(fp)
-
-        command = handler.get("command")
-        if not isinstance(command, str) or not command.strip():
-            return
-        command_name = command.strip()
-
-        if _is_thought_command(command_name):
-            data = _thought_event_data(handler.get("payload"), trace)
-            if data:
-                await self.nats_logger.log("command", "thought", data)
-            return
-
-        artifacts = _payload_to_artifacts(handler.get("payload"))
-        data: dict[str, Any] = {"command": command_name, "trace": trace}
-        if artifacts:
-            data["artifacts"] = artifacts
-
-        await self.nats_logger.log("command", "client", data)
-
-
-def _extract_result_message(resp: N8nRunResponse) -> str | None:
-    if isinstance(resp.result, str) and resp.result.strip():
-        return resp.result.strip()
-    if resp.errors:
-        first = resp.errors[0]
-        if isinstance(first.message, str) and first.message.strip():
-            return first.message.strip()
-    return None
-
-
-def _normalize_client_events(events: Any) -> list[dict[str, Any]]:
-    if not isinstance(events, list):
-        return []
-    return [e for e in events if isinstance(e, dict)]
-
-
-def _has_duplicate_client_message(resp: N8nRunResponse, msg_text: str) -> bool:
-    target = msg_text.strip()
-    if not target:
-        return False
-
-    if _client_command_message_text(resp.client_handler) == target:
-        return True
-
-    for ev in _normalize_client_events(resp.client_events):
-        if _client_command_message_text(ev) == target:
-            return True
-    return False
-
-
-def _client_command_message_text(handler: Any) -> str | None:
-    if not isinstance(handler, dict):
-        return None
-
-    command = handler.get("command")
-    if not isinstance(command, str):
-        return None
-    if command.strip().upper() not in {"SHOW_MESSAGE", "ASK_USER_INPUT", "SHOW_ERROR_MESSAGE"}:
-        return None
-
-    payload = handler.get("payload")
-    if not isinstance(payload, dict):
-        return None
-
-    for key in ("summary", "prompt", "message"):
-        value = payload.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
-
-
-def _has_explicit_error_command(resp: N8nRunResponse) -> bool:
-    def _is_error_cmd(cmd: Any) -> bool:
-        if not isinstance(cmd, str):
-            return False
-        c = cmd.strip().upper()
-        return c.startswith("SHOW_ERROR")
-
-    if resp.client_handler and _is_error_cmd(resp.client_handler.get("command")):
-        return True
-    for ev in _normalize_client_events(resp.client_events):
-        if _is_error_cmd(ev.get("command")):
-            return True
-    return False
-
-
-def _is_thought_command(command: str) -> bool:
-    return command.strip().upper() in {"SHOW_THOUGHT", "EMIT_THOUGHT"}
-
-
-def _is_thought_handler(handler: Any) -> bool:
-    if not isinstance(handler, dict):
-        return False
-    command = handler.get("command")
-    return isinstance(command, str) and _is_thought_command(command)
-
-
-def _thought_event_data(payload: Any, trace: dict[str, Any]) -> dict[str, Any] | None:
-    if not isinstance(payload, dict):
-        return None
-
-    summary = payload.get("summary")
-    content = payload.get("content")
-    scenario = payload.get("scenario")
-    tools = payload.get("tools")
-
-    data: dict[str, Any] = {"summary": "Thinking…", "trace": trace}
-    if isinstance(summary, str) and summary.strip():
-        data["summary"] = summary.strip()
-    if isinstance(content, str) and content.strip():
-        data["content"] = content.strip()
-    if isinstance(scenario, dict):
-        sid = scenario.get("id")
-        reason = scenario.get("reason")
-        out_scenario: dict[str, Any] = {}
-        if isinstance(sid, str) and sid.strip():
-            out_scenario["id"] = sid.strip()
-        if isinstance(reason, str) and reason.strip():
-            out_scenario["reason"] = reason.strip()
-        if out_scenario:
-            data["scenario"] = out_scenario
-    if isinstance(tools, list):
-        tool_names = [t.strip() for t in tools if isinstance(t, str) and t.strip()]
-        if tool_names:
-            data["tools"] = tool_names
-    return data
-
-
-def _fingerprint_client_command(handler: dict[str, Any]) -> str:
-    try:
-        raw = json.dumps(handler, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
-    except Exception:
-        raw = repr(handler)
-    return sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _payload_to_artifacts(payload: Any) -> dict[str, Any] | None:
-    if not isinstance(payload, dict) or not payload:
-        return None
-    key = "ui"
-    return {"all": [key], "last": key, "payload": {key: payload}}
