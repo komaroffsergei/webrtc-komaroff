@@ -1,8 +1,8 @@
 -- 005_chat_schema_cleanup.sql
 -- Consolidate schema to sessions + runtime_state + events.
 
-drop table if exists artifacts;
-drop table if exists intents;
+drop table if exists artifacts cascade;
+drop table if exists intents cascade;
 
 do $$
 begin
