@@ -32,6 +32,14 @@ docker compose --profile langgraph up -d --build
 Для Docker-сервисов используется `NATS_URL_INTERNAL` (по умолчанию `nats://nats:4222`).
 Если в `docker/.env` у вас задан `NATS_URL=nats://localhost:4222` для запуска с хоста, это больше не ломает межконтейнерное подключение.
 
+Для NATS2Ollama endpoint без auth:
+```bash
+cd docker
+export OLLAMA_URL=https://nats2ollama.gis-master.ru
+docker compose --profile langgraph up -d --build
+```
+Важно: base URL не должен содержать `/api/chat`, иначе `src_llm` получит `405 Method Not Allowed`.
+
 Открыть:
 - UI: `http://127.0.0.1:8080/`
 - Core: `http://127.0.0.1:8000/core`

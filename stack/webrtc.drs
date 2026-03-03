@@ -91,7 +91,7 @@ Service :src_llm, image: webrtc_registry['llm'] do
       NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
-      OLLAMA_URL: 'http://ollama.h100.local',
+      OLLAMA_URL: 'https://nats2ollama.gis-master.ru',
       LLM_MODE: 'remote',
       LLM_LOCAL_MODEL: 'Qwen/Qwen3-1.7B-GGUF',
       LLM_REMOTE_MODEL: 'qwen3:30b',

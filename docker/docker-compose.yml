@@ -91,7 +91,7 @@ services:
       LLM_MODE: remote
       LLM_REMOTE_MODEL: qwen3:30b
       LLM_CONTEXT_SIZE: 16384
-      OLLAMA_URL: http://ollama.h100.local
+      OLLAMA_URL: ${OLLAMA_URL:-https://nats2ollama.gis-master.ru}
 
   src_langgraph:
     profiles: ["langgraph"]

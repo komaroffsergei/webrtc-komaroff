@@ -13,6 +13,14 @@ docker compose --profile langgraph up -d --build
 - API: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
+NATS2Ollama endpoint (без auth):
+```bash
+cd docker
+export OLLAMA_URL=https://nats2ollama.gis-master.ru
+docker compose --profile langgraph up -d --build
+```
+Важно: указывай базовый URL без `/api/chat`.
+
 ## Docker + debug (PyCharm)
 
 1. Подготовить debug-env:

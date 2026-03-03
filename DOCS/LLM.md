@@ -34,11 +34,15 @@ Configured in `src_llm/settings.py` and `src_llm/env.example`.
 - `NATS_EVENTS_SUBJECT` (prefix)
 - `USER_ID`
 - `LLM_MODE=local|remote`
-- `OLLAMA_URL`
+- `OLLAMA_URL` (for `nats2ollama` use `https://nats2ollama.gis-master.ru`)
 - `LLM_LOCAL_MODEL`
 - `LLM_REMOTE_MODEL`
 - `DEFAULT_MAX_TOKENS`
 - `LLM_CONTEXT_SIZE`
+
+NATS2Ollama endpoint mode:
+- Service uses plain endpoint access (no auth headers/tokens/cookies).
+- Base URL must not include `/api/chat` path because Ollama client calls `/api/*` relative to `OLLAMA_URL`.
 
 ## Run/stop
 Docker:
@@ -59,6 +63,9 @@ python -m src_llm.main
 - `Model did not return a JSON object`
   - Cause: model ignored JSON-only instruction.
   - Fix: check `llm_request_debug` and model config/temperature.
+- `405 Method Not Allowed` from remote model call
+  - Cause: wrong base URL (using `/api/chat` as host path).
+  - Fix: set `OLLAMA_URL=https://nats2ollama.gis-master.ru`.
 - No response on NATS request
   - Cause: service not subscribed to `nats.llm.<user_id>`.
   - Fix: verify `USER_ID` and subject prefix configuration.

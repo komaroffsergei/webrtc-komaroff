@@ -534,6 +534,30 @@ class LLMService(BaseService):
         if tool_name == "get_flight_status":
             # Try to recover common cases even if the model returned an empty object.
             text = user_message
+            surname_stopwords = {
+                "где",
+                "мой",
+                "моя",
+                "мое",
+                "мои",
+                "рейс",
+                "статус",
+                "покажи",
+                "найди",
+                "please",
+                "flight",
+                "status",
+                "по",
+                "номер",
+                "номеру",
+                "фамилия",
+                "фамилию",
+                "фамилией",
+                "фамилии",
+                "пассажир",
+                "пассажира",
+                "это",
+            }
             flight_match = re.search(r"\b([A-Za-zА-Яа-яЁё]{2,3}\s?\d{1,4})\b", text)
             if flight_match and "flight_number" not in extracted:
                 flight_number = flight_match.group(1).replace(" ", "").upper()
@@ -550,12 +574,23 @@ class LLMService(BaseService):
                         extracted.pop("last_name", None)
 
             if "last_name" not in extracted and "flight_number" not in extracted:
+                # Explicit "surname" patterns from user text.
+                surname_patterns = [
+                    r"\bфамили(?:я|ю|ей|и)\s*(?:[:\-]\s*)?([A-Za-zА-Яа-яЁё-]{2,})\b",
+                    r"\b([A-Za-zА-Яа-яЁё-]{2,})\b\s+(?:это\s+)?(?:моя\s+)?фамили(?:я|ю|ей|и)\b",
+                ]
+                for pattern in surname_patterns:
+                    match = re.search(pattern, text, flags=re.IGNORECASE)
+                    if not match:
+                        continue
+                    candidate = str(match.group(1) or "").strip()
+                    if candidate and candidate.lower() not in surname_stopwords:
+                        extracted["last_name"] = candidate
+                        break
+
+            if "last_name" not in extracted and "flight_number" not in extracted:
                 words = re.findall(r"[A-Za-zА-Яа-яЁё]{2,}", text)
-                stopwords = {
-                    "где", "мой", "рейс", "статус", "покажи", "найди", "please",
-                    "flight", "status", "мой", "по", "номер", "номеру",
-                }
-                candidates = [w for w in words if w.lower() not in stopwords]
+                candidates = [w for w in words if w.lower() not in surname_stopwords]
                 if len(candidates) == 1:
                     extracted["last_name"] = candidates[0]
 
