@@ -5,7 +5,7 @@ import logging
 
 from src_llm.settings import (
     NATS_URL,
-    STACK_SERVICE_NAME, OLLAMA_URL,
+    STACK_SERVICE_NAME, OLLAMA_URL, OLLAMA_TIMEOUT_SECONDS,
     DEFAULT_MAX_TOKENS, NATS_LLM_SUBJECT, USER_ID, NATS_EVENTS_SUBJECT, LLM_MODE,
     LLM_MODELS, OLLAMA_MODEL_FILE, LLM_CONTEXT_SIZE,
     LLM_LOCAL_MODEL, LLM_REMOTE_MODEL,
@@ -27,6 +27,7 @@ async def _run_service() -> None:
         llm_subject=f"{NATS_LLM_SUBJECT}{USER_ID}",
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         ollama_url=OLLAMA_URL,
+        ollama_timeout_s=OLLAMA_TIMEOUT_SECONDS,
         llm_local_model=LLM_LOCAL_MODEL,
         llm_remote_model=LLM_REMOTE_MODEL,
         default_max_tokens=DEFAULT_MAX_TOKENS,

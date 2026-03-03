@@ -3,6 +3,7 @@ import json
 import logging
 import re
 import threading
+import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -40,6 +41,7 @@ class LLMService(BaseService):
         llm_subject: str,
         events_subject: str,
         ollama_url: str,
+        ollama_timeout_s: float,
         llm_local_model: str,
         llm_remote_model: str,
         default_max_tokens: int,
@@ -63,8 +65,9 @@ class LLMService(BaseService):
         self.llm_models_dir = llm_models_dir
         self.ollama_model_file = (ollama_model_file or "").strip() or None
         self.llm_context_size = int(llm_context_size)
+        self.ollama_timeout_s = float(ollama_timeout_s)
         self._use_local = self.llm_mode == "local"
-        self._ollama = None if self._use_local else ollama.Client(host=ollama_url)
+        self._ollama = None if self._use_local else ollama.Client(host=ollama_url, timeout=self.ollama_timeout_s)
         self._local_model = None
         self._inference_lock = threading.Lock()
         self._inference_meta_lock = threading.Lock()
@@ -236,6 +239,7 @@ class LLMService(BaseService):
             "llm_mode": self.llm_mode,
             "configured_model": self._configured_model(),
             "llm_context_size": self.llm_context_size,
+            "ollama_timeout_s": self.ollama_timeout_s,
         }
 
     def _llm_result_debug(
@@ -708,25 +712,54 @@ class LLMService(BaseService):
             {"role": "user", "content": user},
         ]
 
-        if self._use_local:
-            with self._inference_lock:
-                result = local_chat(
-                    self._ensure_local_model(),
+        started_at = time.monotonic()
+        logger.info(
+            "infer_json start mode=%s request_id=%s session_id=%s provider=%s model=%s",
+            req.mode,
+            str(req.request_id),
+            str(req.session_id) if req.session_id else "<none>",
+            "local" if self._use_local else "remote",
+            str(model),
+        )
+        try:
+            if self._use_local:
+                with self._inference_lock:
+                    result = local_chat(
+                        self._ensure_local_model(),
+                        model=model,
+                        messages=messages,
+                        tools=[],
+                        options=options,
+                        max_tokens=max_tokens,
+                    )
+            else:
+                result = ollama_chat(
+                    self._ollama,
                     model=model,
                     messages=messages,
                     tools=[],
                     options=options,
-                    max_tokens=max_tokens,
+                    think=False,
                 )
-        else:
-            result = ollama_chat(
-                self._ollama,
-                model=model,
-                messages=messages,
-                tools=[],
-                options=options,
-                think=False,
+        except Exception:
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.exception(
+                "infer_json failed mode=%s request_id=%s session_id=%s duration_ms=%s",
+                req.mode,
+                str(req.request_id),
+                str(req.session_id) if req.session_id else "<none>",
+                duration_ms,
             )
+            raise
+        duration_ms = int((time.monotonic() - started_at) * 1000)
+        logger.info(
+            "infer_json done mode=%s request_id=%s duration_ms=%s effective_model=%s provider=%s",
+            req.mode,
+            str(req.request_id),
+            duration_ms,
+            str(result.get("model") or model),
+            str(result.get("provider") or ("local" if self._use_local else "remote")),
+        )
 
         self._set_inference_meta(
             str(req.request_id),

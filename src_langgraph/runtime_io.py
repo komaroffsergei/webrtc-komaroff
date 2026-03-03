@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,6 +19,8 @@ from src_shared.contracts import (
     WorkflowRunRequest,
     now_ts_ms,
 )
+
+logger = logging.getLogger("src_langgraph.runtime_io")
 
 
 def _child_trace(parent: WorkflowRunRequest, *, request_id: UUID | None = None) -> dict[str, Any]:
@@ -57,10 +61,37 @@ class RuntimeIO:
             constraints=constraints or {},
         )
         subject = f"{self.llm_subject_prefix}{self.user_id}"
+        started_at = time.monotonic()
+        logger.info(
+            "call_llm start subject=%s mode=%s request_id=%s session_id=%s",
+            subject,
+            mode,
+            str(req.request_id),
+            str(req.session_id) if req.session_id else "<none>",
+        )
         try:
             raw = await self._request_json(subject, req.model_dump_json().encode("utf-8"))
-            return LlmResponse.model_validate(raw)
+            resp = LlmResponse.model_validate(raw)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.info(
+                "call_llm done subject=%s mode=%s request_id=%s ok=%s duration_ms=%s",
+                subject,
+                mode,
+                str(req.request_id),
+                resp.ok,
+                duration_ms,
+            )
+            return resp
         except nats_errors.TimeoutError:
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.warning(
+                "call_llm timeout subject=%s mode=%s request_id=%s timeout_s=%s duration_ms=%s",
+                subject,
+                mode,
+                str(req.request_id),
+                self.request_timeout_s,
+                duration_ms,
+            )
             return LlmResponse(
                 trace_id=req.trace_id,
                 correlation_id=req.correlation_id,
@@ -75,6 +106,14 @@ class RuntimeIO:
                 ),
             )
         except Exception as exc:
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.exception(
+                "call_llm transport error subject=%s mode=%s request_id=%s duration_ms=%s",
+                subject,
+                mode,
+                str(req.request_id),
+                duration_ms,
+            )
             return LlmResponse(
                 trace_id=req.trace_id,
                 correlation_id=req.correlation_id,
@@ -103,10 +142,37 @@ class RuntimeIO:
             args=args,
         )
         subject = f"{self.tools_subject_prefix}{tool_name}"
+        started_at = time.monotonic()
+        logger.info(
+            "call_tool start subject=%s tool=%s request_id=%s session_id=%s",
+            subject,
+            tool_name,
+            str(req.request_id),
+            str(req.session_id) if req.session_id else "<none>",
+        )
         try:
             raw = await self._request_json(subject, req.model_dump_json().encode("utf-8"))
-            return ToolCallResponse.model_validate(raw)
+            resp = ToolCallResponse.model_validate(raw)
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.info(
+                "call_tool done subject=%s tool=%s request_id=%s ok=%s duration_ms=%s",
+                subject,
+                tool_name,
+                str(req.request_id),
+                resp.ok,
+                duration_ms,
+            )
+            return resp
         except nats_errors.TimeoutError:
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.warning(
+                "call_tool timeout subject=%s tool=%s request_id=%s timeout_s=%s duration_ms=%s",
+                subject,
+                tool_name,
+                str(req.request_id),
+                self.request_timeout_s,
+                duration_ms,
+            )
             return ToolCallResponse(
                 trace_id=req.trace_id,
                 correlation_id=req.correlation_id,
@@ -122,6 +188,14 @@ class RuntimeIO:
                 ),
             )
         except Exception as exc:
+            duration_ms = int((time.monotonic() - started_at) * 1000)
+            logger.exception(
+                "call_tool transport error subject=%s tool=%s request_id=%s duration_ms=%s",
+                subject,
+                tool_name,
+                str(req.request_id),
+                duration_ms,
+            )
             return ToolCallResponse(
                 trace_id=req.trace_id,
                 correlation_id=req.correlation_id,

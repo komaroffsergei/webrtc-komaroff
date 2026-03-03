@@ -22,6 +22,7 @@ NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 
 # ---- OLLAMA ----
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://ollama.h100.local")
+OLLAMA_TIMEOUT_SECONDS = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "90"))
 
 
 LLM_MODE = os.getenv("LLM_MODE", "remote")

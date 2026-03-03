@@ -44,6 +44,7 @@ class BaseService:
                 logger.debug("Signal handlers are not supported on this platform")
 
     async def _connect(self) -> None:
+        logger.info("Connecting to NATS: service=%s url=%s", self._service_name, self._nats_url)
         self._nc = await nats.connect(
             servers=[self._nats_url],
             name=self._service_name,
@@ -58,6 +59,7 @@ class BaseService:
         # Queue group prevents duplicate processing if multiple llm instances are running.
         await self._nc.subscribe(self._llm_subject, queue=f"{self._service_name}.q", cb=self._handle_message)
         await self._nats_logger.info(f"Subscribed to {self._llm_subject}")
+        logger.info("Subscribed to subject=%s queue=%s.q", self._llm_subject, self._service_name)
 
     async def run(self) -> None:
         await self._connect()
@@ -108,6 +110,14 @@ class BaseService:
             await self._nats_logger.info(req_debug, name="llm_request_debug")
 
         duration_ms = 0
+        request_id = ""
+        if isinstance(raw_req, dict):
+            request_id = str(raw_req.get("request_id") or "").strip()
+        logger.info(
+            "LLM request start request_id=%s mode=%s",
+            request_id or "<unknown>",
+            req_mode or "<unknown>",
+        )
         async with self._semaphore:
             try:
                 started_at = time.monotonic()
@@ -121,6 +131,13 @@ class BaseService:
                     {"error": "process_message", "details": str(exc)},
                 )
                 return
+
+        logger.info(
+            "LLM request done request_id=%s mode=%s duration_ms=%s",
+            request_id or "<unknown>",
+            req_mode or "<unknown>",
+            duration_ms,
+        )
 
         await self._nats_logger.info(
             self._llm_result_debug(

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import signal
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -133,12 +134,38 @@ class WorkflowRuntimeService:
                 await self._safe_respond(msg, resp.model_dump_json().encode("utf-8"))
                 return
 
+            started_at = time.monotonic()
+            logger.info(
+                "workflow run start trace_id=%s request_id=%s session_id=%s text_len=%s",
+                str(req.trace_id),
+                str(req.request_id),
+                str(req.session_id),
+                len(req.text or ""),
+            )
             try:
                 if self._engine is None:
                     raise RuntimeError("workflow engine is not initialized")
                 resp = await self._engine.run(req)
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                err_codes = [err.code for err in (resp.errors or [])]
+                logger.info(
+                    "workflow run done trace_id=%s request_id=%s session_id=%s status=%s duration_ms=%s errors=%s",
+                    str(req.trace_id),
+                    str(req.request_id),
+                    str(req.session_id),
+                    resp.status,
+                    duration_ms,
+                    err_codes,
+                )
             except Exception as exc:
-                logger.exception("Workflow execution failed")
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                logger.exception(
+                    "Workflow execution failed trace_id=%s request_id=%s session_id=%s duration_ms=%s",
+                    str(req.trace_id),
+                    str(req.request_id),
+                    str(req.session_id),
+                    duration_ms,
+                )
                 resp = failed_response(req, code="workflow_failed", message=str(exc), runtime=req.runtime)
 
             await self._safe_respond(msg, resp.model_dump_json().encode("utf-8"))

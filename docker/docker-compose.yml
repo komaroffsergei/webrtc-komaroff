@@ -92,6 +92,7 @@ services:
       LLM_REMOTE_MODEL: qwen3:30b
       LLM_CONTEXT_SIZE: 16384
       OLLAMA_URL: ${OLLAMA_URL:-https://nats2ollama.gis-master.ru}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-90}
 
   src_langgraph:
     profiles: ["langgraph"]
