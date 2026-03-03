@@ -397,6 +397,8 @@ async def run_free_speech(
         input_data=primary_input,
         constraints={"temperature": 0.4},
     )
+    if not primary_resp.ok:
+        return done_response(req, "Сервис ответов временно недоступен. Попробуйте повторить запрос.")
     primary_text = _extract_text(primary_resp) or ""
     fact_query = _is_fact_query(req.text or "")
     needs_retry = _needs_knowledge_retry(

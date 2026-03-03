@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID, uuid4
 
+from nats import errors as nats_errors
 from nats.aio.client import Client as NATS
 
 from src_shared.contracts import (
+    ErrorInfo,
     LlmRequest,
     LlmResponse,
     ToolCallRequest,
@@ -54,11 +56,38 @@ class RuntimeIO:
             input=input_data,
             constraints=constraints or {},
         )
-        raw = await self._request_json(
-            f"{self.llm_subject_prefix}{self.user_id}",
-            req.model_dump_json().encode("utf-8"),
-        )
-        return LlmResponse.model_validate(raw)
+        subject = f"{self.llm_subject_prefix}{self.user_id}"
+        try:
+            raw = await self._request_json(subject, req.model_dump_json().encode("utf-8"))
+            return LlmResponse.model_validate(raw)
+        except nats_errors.TimeoutError:
+            return LlmResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                data=None,
+                error=ErrorInfo(
+                    code="nats_timeout",
+                    message=f"Timeout waiting for LLM response from '{subject}'",
+                ),
+            )
+        except Exception as exc:
+            return LlmResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                data=None,
+                error=ErrorInfo(
+                    code="llm_transport_error",
+                    message=f"LLM request failed for '{subject}': {exc}",
+                ),
+            )
 
     async def call_tool(
         self,
@@ -73,11 +102,40 @@ class RuntimeIO:
             tool_name=tool_name,
             args=args,
         )
-        raw = await self._request_json(
-            f"{self.tools_subject_prefix}{tool_name}",
-            req.model_dump_json().encode("utf-8"),
-        )
-        return ToolCallResponse.model_validate(raw)
+        subject = f"{self.tools_subject_prefix}{tool_name}"
+        try:
+            raw = await self._request_json(subject, req.model_dump_json().encode("utf-8"))
+            return ToolCallResponse.model_validate(raw)
+        except nats_errors.TimeoutError:
+            return ToolCallResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                artifact_key=None,
+                data=None,
+                error=ErrorInfo(
+                    code="nats_timeout",
+                    message=f"Timeout waiting for tool response from '{subject}'",
+                ),
+            )
+        except Exception as exc:
+            return ToolCallResponse(
+                trace_id=req.trace_id,
+                correlation_id=req.correlation_id,
+                request_id=req.request_id,
+                session_id=req.session_id,
+                ts_ms=now_ts_ms(),
+                ok=False,
+                artifact_key=None,
+                data=None,
+                error=ErrorInfo(
+                    code="tool_transport_error",
+                    message=f"Tool request failed for '{subject}': {exc}",
+                ),
+            )
 
     async def _request_json(self, subject: str, payload: bytes) -> dict[str, Any]:
         """Базовый request/reply helper: отправляет payload и требует JSON object в ответе."""
