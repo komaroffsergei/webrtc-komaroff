@@ -7,6 +7,7 @@ export function createEnergyVad(
   config: AppConfig,
   getThresholdDb: () => number,
   onThresholdText?: (value: number) => void,
+  onSpeechActivityChange?: (active: boolean) => void,
 ): VadInstance {
   const ctx = new AudioContext();
   const src = ctx.createMediaStreamSource(new MediaStream([sourceTrack]));
@@ -24,6 +25,7 @@ export function createEnergyVad(
 
   const data = new Float32Array(analyser.fftSize);
   let stopped = false;
+  let lastActive: boolean | null = null;
 
   const tick = () => {
     if (stopped) return;
@@ -39,6 +41,13 @@ export function createEnergyVad(
     onThresholdText?.(Math.round(gate));
 
     const active = db > gate;
+    if (lastActive === null) {
+      lastActive = active;
+    } else if (lastActive !== active) {
+      lastActive = active;
+      onSpeechActivityChange?.(active);
+    }
+
     const target = active ? 1.0 : 0.0;
     const T = active ? config.audio.vad.attackSeconds : config.audio.vad.releaseSeconds;
 

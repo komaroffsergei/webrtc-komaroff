@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from src_shared.contracts import WorkflowRunRequest, WorkflowRunResponse
 
 from src_langgraph.config_loader import dict_value, load_config, text_block
@@ -53,6 +55,14 @@ TOOL_SCHEMA = dict_value(
         }
     },
 )
+_FLIGHT_FOLLOWUP_RE = re.compile(
+    r"\b(рейс|flight|номер|фамил|пассажир|su\d|[A-Za-zА-Яа-яЁё]{2,3}\s?\d{1,4})\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _looks_like_flight_followup(text: str) -> bool:
+    return bool(_FLIGHT_FOLLOWUP_RE.search(str(text or "")))
 
 
 def _format_flight_message(tool_data: dict) -> str:
@@ -99,6 +109,17 @@ async def run_where_my_flight(req: WorkflowRunRequest, io: RuntimeIO, *, dialog_
     has_last = isinstance(merged.get("last_name"), str) and bool(str(merged["last_name"]).strip())
     if not (has_flight or has_last):
         if had_pending:
+            if _looks_like_flight_followup(req.text or ""):
+                prompt = str(parsed.get("prompt") or ASK_INPUT_DEFAULT).strip() or ASK_INPUT_DEFAULT
+                pending_state = {
+                    "type": "tool_params",
+                    "scenario_id": SC_WHERE_MY_FLIGHT,
+                    "tool_name": TOOL_NAME,
+                    "extracted": merged,
+                    "missing": ["flight_number_or_last_name"],
+                    "prompt": prompt,
+                }
+                return partial_response(req, prompt, active_workflow_id=SC_WHERE_MY_FLIGHT, pending=pending_state)
             _summary, _recent, context_extra = memory_from_context(req.runtime.context if isinstance(req.runtime.context, dict) else None)
             context_artifacts = context_extra.get("artifact_memory")
             context_artifacts = context_artifacts if isinstance(context_artifacts, dict) else {}

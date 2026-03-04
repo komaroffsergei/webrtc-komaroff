@@ -59,6 +59,7 @@ async def history_handler(request: web.Request) -> web.Response:
         {
             "ok": resp.ok,
             "items": [item.model_dump() for item in resp.items],
+            "runtime_context": resp.runtime_context,
             "error": resp.error.model_dump() if resp.error else None,
             "session_id": str(resp.session_id) if resp.session_id else None,
         },

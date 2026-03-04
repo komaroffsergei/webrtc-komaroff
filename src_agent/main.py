@@ -21,6 +21,8 @@ from src_agent.settings import (
     RUNTIME_CONFLICT_RETRIES,
     STACK_SERVICE_NAME,
     USER_ID,
+    WORKFLOW_NO_RESPONDERS_RETRIES,
+    WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS,
     WORKFLOW_TIMEOUT_SECONDS,
     NATS_WORKFLOW_RUN_SUBJECT,
 )
@@ -42,6 +44,12 @@ def main():
     logger = logging.getLogger(STACK_SERVICE_NAME)
 
     logger.info(f"Starting {STACK_SERVICE_NAME} service...")
+    logger.info(
+        "workflow timeout=%ss no_responders_retries=%s no_responders_retry_delay=%ss",
+        WORKFLOW_TIMEOUT_SECONDS,
+        WORKFLOW_NO_RESPONDERS_RETRIES,
+        WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS,
+    )
 
     server = AgentServer(
         nats_url=NATS_URL,
@@ -50,6 +58,8 @@ def main():
         events_subject=f"{NATS_EVENTS_SUBJECT}{USER_ID}",
         workflow_subject=NATS_WORKFLOW_RUN_SUBJECT,
         workflow_timeout_s=WORKFLOW_TIMEOUT_SECONDS,
+        workflow_no_responders_retries=WORKFLOW_NO_RESPONDERS_RETRIES,
+        workflow_no_responders_retry_delay_s=WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS,
         db_url=DATABASE_URL,
         user_id=USER_ID,
         runtime_conflict_retries=RUNTIME_CONFLICT_RETRIES,

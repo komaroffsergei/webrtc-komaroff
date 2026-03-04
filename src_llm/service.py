@@ -581,7 +581,8 @@ class LLMService(BaseService):
                 # Explicit "surname" patterns from user text.
                 surname_patterns = [
                     r"\bфамили(?:я|ю|ей|и)\s*(?:[:\-]\s*)?([A-Za-zА-Яа-яЁё-]{2,})\b",
-                    r"\b([A-Za-zА-Яа-яЁё-]{2,})\b\s+(?:это\s+)?(?:моя\s+)?фамили(?:я|ю|ей|и)\b",
+                    r"\b([A-Za-zА-Яа-яЁё-]{2,})\b(?:\s|,\s*)(?:это\s+)?(?:моя\s+)?фамили(?:я|ю|ей|и)\b",
+                    r"\b(?:моя\s+)?фамили(?:я|ю|ей|и)\s*(?:[:\-]\s*)?([A-Za-zА-Яа-яЁё-]{2,})\b",
                 ]
                 for pattern in surname_patterns:
                     match = re.search(pattern, text, flags=re.IGNORECASE)

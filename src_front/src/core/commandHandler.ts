@@ -1,6 +1,7 @@
 import type { CommandRequestTelemetryEvent, MessageRequestPayload } from "../types";
 
 type CommandHandlerFn = (params: unknown, uid?: string) => void | Promise<void>;
+const DEFAULT_MESSAGE_TIMEOUT_MS = 70000;
 
 export class CommandHandler {
   private handlers = new Map<string, CommandHandlerFn>();
@@ -70,20 +71,27 @@ export class CommandHandler {
     });
 
     let resp: Response;
+    const timeoutMs = resolveMessageTimeoutMs();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
     try {
       resp = await fetch("/core/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(request),
+        signal: controller.signal,
       });
     } catch (err) {
+      const normalizedError = normalizeTransportError(err, timeoutMs);
       this.emitTelemetry({
         phase: "error",
         endpoint: "/core/message",
         request: copyRequest(request),
-        error: errorMessage(err),
+        error: errorMessage(normalizedError),
       });
-      throw err;
+      throw normalizedError;
+    } finally {
+      window.clearTimeout(timeoutId);
     }
 
     let data: unknown = null;
@@ -154,4 +162,20 @@ function copyRequest(request: MessageRequestPayload): MessageRequestPayload {
     session_id: request.session_id,
     ...(request.edit ? { edit: { turn_id: request.edit.turn_id } } : {}),
   };
+}
+
+function resolveMessageTimeoutMs(): number {
+  const raw = (window as any)?.SETTINGS?.MESSAGE_REQUEST_TIMEOUT_MS;
+  const numeric = typeof raw === "string" ? Number(raw) : (typeof raw === "number" ? raw : NaN);
+  if (!Number.isFinite(numeric)) return DEFAULT_MESSAGE_TIMEOUT_MS;
+  const bounded = Math.max(5000, Math.min(300000, Math.round(numeric)));
+  return bounded;
+}
+
+function normalizeTransportError(error: unknown, timeoutMs: number): Error {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return new Error(`Request timeout after ${timeoutMs}ms`);
+  }
+  if (error instanceof Error) return error;
+  return new Error(errorMessage(error));
 }

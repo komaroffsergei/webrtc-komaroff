@@ -11,7 +11,7 @@ import {
   isConnected,
   setMicEnabled,
 } from "../webrtc/session";
-import {FrontendNatsClient} from "../net/natsClient";
+import {FrontendNatsClient, type NatsStatus} from "../net/natsClient";
 import {CommandHandler} from "../core/commandHandler";
 import {logError, logEvent, logReplayBundle} from "../core/logging";
 import {DialogReplayCollector} from "../core/dialogReplayCollector";
@@ -19,6 +19,7 @@ import {AgentCommandHandler} from "../agentCommands/agentCommandHandler";
 import {
   ClientHandlerCommand,
   CommandRequestTelemetryEvent,
+  HistorySnapshotResponse,
   HistoryTurn,
   ServerEvent,
 } from "../types";
@@ -29,6 +30,10 @@ import { MapController } from "../map/mapController";
    =========================== */
 export class AssistantApp {
   private static readonly SESSION_STORAGE_KEY = "assistant.session_id";
+  private static readonly CHAT_ROUTE_PREFIX = "/chat";
+  private static readonly TRANSCRIPTION_FLASH_TEXT = "Транскрипция...";
+  private static readonly UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   private el = getAssistantElements();
 
@@ -41,10 +46,15 @@ export class AssistantApp {
 
   private nats = new FrontendNatsClient();
   private natsReconnectTimer: number | null = null;
+  private natsReconnectAttempt = 0;
+  private natsStatusBound = false;
 
   private agentCommands: AgentCommandHandler;
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
   private replayCollector: DialogReplayCollector;
+  private vadSpeechActive = false;
+  private vadSpeechDetected = false;
+  private transcriptionPending = false;
 
   constructor(private config: AppConfig) {
     this.replayCollector = new DialogReplayCollector({
@@ -90,7 +100,8 @@ export class AssistantApp {
      =========================== */
 
   start(): void {
-    this.restoreSessionIdFromStorage();
+    this.initializeSessionId();
+    window.addEventListener("popstate", () => this.handlePopState());
     void this.restoreChatHistory();
     void this.connectNats();
   }
@@ -109,6 +120,7 @@ export class AssistantApp {
       this.el.textInput!.value = "";
       const turnId = crypto.randomUUID();
       this.chat.addMessage(text, "user", { turnId, editable: true });
+      this.resolveTranscriptionPending();
 
       this.chat.clearThinking();
       this.chat.setThinking("Thinking…");
@@ -116,6 +128,7 @@ export class AssistantApp {
       void this.commands.sendMessage(text, turnId).then((sessionId) => {
         this.persistSessionId(sessionId);
       }).catch((err) => {
+        this.resolveTranscriptionPending();
         this.chat.clearThinking();
         this.warning.show({message: String(err)});
       });
@@ -129,15 +142,23 @@ export class AssistantApp {
   private async toggleConnection(): Promise<void> {
     if (isConnected()) {
       disconnectSession();
+      this.resetTranscriptionTracking();
       setStatus(this.el, "Отключено");
       this.chat.addMessage("Отключено", "status");
       return;
     }
 
     try {
-      const sessionId = await connectSession(this.config, this.el, this.audio, (t) => {
-        if (this.el.vadLevel) this.el.vadLevel.textContent = t;
-      }, { sessionId: this.commands.getSessionId() });
+      const sessionId = await connectSession(
+        this.config,
+        this.el,
+        this.audio,
+        (t) => {
+          if (this.el.vadLevel) this.el.vadLevel.textContent = t;
+        },
+        (active) => this.handleVadSpeechActivity(active),
+        { sessionId: this.commands.getSessionId() },
+      );
       if (sessionId) {
         this.commands.setSessionId(sessionId);
         this.persistSessionId(sessionId);
@@ -168,22 +189,10 @@ export class AssistantApp {
      =========================== */
 
   private async connectNats(): Promise<void> {
-    this.nats.onStatus((s) => {
-      if (s.type === "connected") {
-        setStatus(this.el, "События подключены");
-      }
-
-      if (s.type === "closed") {
-        setStatus(this.el, "NATS отключено, переподключение…");
-        this.scheduleNatsReconnect();
-      }
-
-      if (s.type === "error") {
-        logError("nats", s.error);
-        setStatus(this.el, "NATS: ошибка, переподключение…");
-        this.scheduleNatsReconnect();
-      }
-    });
+    if (!this.natsStatusBound) {
+      this.nats.onStatus((s) => this.handleNatsStatus(s));
+      this.natsStatusBound = true;
+    }
 
     try {
       await this.nats.connect({
@@ -205,13 +214,47 @@ export class AssistantApp {
     }
   }
 
+  private handleNatsStatus(status: NatsStatus): void {
+    if (status.type === "connected") {
+      this.clearNatsReconnectTimer();
+      this.natsReconnectAttempt = 0;
+      setStatus(this.el, "События подключены");
+      return;
+    }
+
+    if (status.type === "error") {
+      this.resolveTranscriptionPending();
+      logError("nats", status.error);
+      setStatus(this.el, "NATS: ошибка, переподключение…");
+      this.scheduleNatsReconnect();
+      return;
+    }
+
+    this.resolveTranscriptionPending();
+    setStatus(this.el, "NATS отключено, переподключение…");
+    this.scheduleNatsReconnect();
+  }
+
   private scheduleNatsReconnect(): void {
     if (this.natsReconnectTimer !== null) return;
+    const delayMs = Math.min(15000, 1000 * 2 ** Math.min(this.natsReconnectAttempt, 4));
+    this.natsReconnectAttempt += 1;
 
     this.natsReconnectTimer = window.setTimeout(() => {
       this.natsReconnectTimer = null;
-      void this.connectNats();
-    }, 3000);
+      void this.reconnectNats();
+    }, delayMs);
+  }
+
+  private clearNatsReconnectTimer(): void {
+    if (this.natsReconnectTimer === null) return;
+    window.clearTimeout(this.natsReconnectTimer);
+    this.natsReconnectTimer = null;
+  }
+
+  private async reconnectNats(): Promise<void> {
+    await this.nats.disconnect();
+    await this.connectNats();
   }
 
   private handleNatsPayload(payload: string): void {
@@ -274,9 +317,14 @@ export class AssistantApp {
           console.warn("[nats] Invalid transcription payload", event);
           return;
         }
+        this.resolveTranscriptionPending();
         this.chat.clearThinking();
         this.chat.addMessage(text, "user", { turnId, editable: true });
         this.chat.setThinking("Thinking…");
+        return;
+      }
+      case "transcription_pending": {
+        this.handleTranscriptionPendingEvent(event.data);
         return;
       }
       case "thought": {
@@ -309,6 +357,9 @@ export class AssistantApp {
         setMicEnabled(!blocked);
         if (this.el.micWaveform) this.el.micWaveform.style.display = blocked ? "none" : "";
         if (this.el.waveBackground) this.el.waveBackground.style.display = blocked ? "none" : "";
+        if (!blocked) {
+          this.resolveTranscriptionPending();
+        }
         return;
       }
       case "client": {
@@ -382,29 +433,120 @@ export class AssistantApp {
       this.warning.show({message: "Не удалось найти сообщение для редактирования"});
       return;
     }
+    this.resolveTranscriptionPending();
     this.chat.setThinking("Thinking…");
     try {
       const sessionId = await this.commands.sendEditedMessage(text, turnId);
       this.persistSessionId(sessionId);
     } catch (err) {
+      this.resolveTranscriptionPending();
       this.chat.clearThinking();
       this.warning.show({message: `Edit failed: ${String(err)}`});
     }
   }
 
-  private restoreSessionIdFromStorage(): void {
-    const sid = sessionStorage.getItem(AssistantApp.SESSION_STORAGE_KEY);
-    if (sid && typeof sid === "string") {
-      this.commands.setSessionId(sid);
-      this.replayCollector.setSessionId(sid);
+  private handleVadSpeechActivity(active: boolean): void {
+    this.vadSpeechActive = active;
+    if (active) {
+      this.vadSpeechDetected = true;
+      if (this.transcriptionPending) {
+        this.transcriptionPending = false;
+        this.chat.hideTranscriptionFlash();
+      }
+      return;
+    }
+    if (!this.vadSpeechDetected) return;
+    this.transcriptionPending = true;
+    this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
+  }
+
+  private handleTranscriptionPendingEvent(data: Record<string, unknown>): void {
+    const pending = typeof data.pending === "boolean" ? data.pending : true;
+    if (!pending) {
+      this.resolveTranscriptionPending();
+      return;
+    }
+    this.transcriptionPending = true;
+    if (!this.vadSpeechActive) {
+      this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
     }
   }
 
-  private persistSessionId(sessionId: string | null): void {
-    if (!sessionId) return;
+  private resolveTranscriptionPending(): void {
+    if (!this.transcriptionPending) {
+      this.chat.hideTranscriptionFlash();
+      return;
+    }
+    this.transcriptionPending = false;
+    this.vadSpeechDetected = false;
+    this.chat.hideTranscriptionFlash();
+  }
+
+  private resetTranscriptionTracking(): void {
+    this.vadSpeechActive = false;
+    this.vadSpeechDetected = false;
+    this.transcriptionPending = false;
+    this.chat.hideTranscriptionFlash();
+  }
+
+  private initializeSessionId(): void {
+    const fromRoute = this.readSessionIdFromRoute();
+    if (fromRoute) {
+      this.persistSessionId(fromRoute, { syncRoute: false });
+      return;
+    }
+
+    const created = crypto.randomUUID();
+    this.persistSessionId(created, { syncRoute: true, historyMode: "replace" });
+  }
+
+  private handlePopState(): void {
+    const routeSessionId = this.readSessionIdFromRoute();
+    if (!routeSessionId) {
+      window.location.reload();
+      return;
+    }
+    const currentSessionId = this.commands.getSessionId();
+    if (!currentSessionId) return;
+    if (routeSessionId === currentSessionId) return;
+    window.location.reload();
+  }
+
+  private readSessionIdFromRoute(): string | null {
+    const path = window.location.pathname || "";
+    const routeRe = /^\/chat\/([^/]+)\/?$/;
+    const match = path.match(routeRe);
+    if (!match || !match[1]) return null;
+    const decoded = decodeURIComponent(match[1]).trim();
+    return this.isValidSessionId(decoded) ? decoded : null;
+  }
+
+  private setRouteSessionId(sessionId: string, historyMode: "replace" | "push"): void {
+    const targetPath = `${AssistantApp.CHAT_ROUTE_PREFIX}/${encodeURIComponent(sessionId)}`;
+    if (window.location.pathname === targetPath) return;
+    const targetUrl = `${targetPath}${window.location.search}${window.location.hash}`;
+    if (historyMode === "push") {
+      window.history.pushState({}, "", targetUrl);
+      return;
+    }
+    window.history.replaceState({}, "", targetUrl);
+  }
+
+  private isValidSessionId(value: string): boolean {
+    return AssistantApp.UUID_RE.test(value.trim());
+  }
+
+  private persistSessionId(
+    sessionId: string | null,
+    options: { syncRoute?: boolean; historyMode?: "replace" | "push" } = {},
+  ): void {
+    if (!sessionId || !this.isValidSessionId(sessionId)) return;
     this.commands.setSessionId(sessionId);
     this.replayCollector.setSessionId(sessionId);
     sessionStorage.setItem(AssistantApp.SESSION_STORAGE_KEY, sessionId);
+    if (options.syncRoute !== false) {
+      this.setRouteSessionId(sessionId, options.historyMode ?? "replace");
+    }
   }
 
   private onCommandTelemetry(event: CommandRequestTelemetryEvent): void {
@@ -426,7 +568,7 @@ export class AssistantApp {
       if (!resp.ok) {
         throw new Error(`History request failed: ${resp.status}`);
       }
-      const data = (await resp.json()) as { ok?: unknown; items?: unknown };
+      const data = (await resp.json()) as HistorySnapshotResponse;
       if (data.ok !== true || !Array.isArray(data.items)) return;
       const turns = data.items.filter((x): x is HistoryTurn => {
         if (!x || typeof x !== "object") return false;
@@ -439,8 +581,82 @@ export class AssistantApp {
         );
       });
       this.chat.restoreHistory(turns);
+      this.restoreArtifactsFromRuntimeContext(data.runtime_context);
     } catch (err) {
       logError("history", err);
     }
+  }
+
+  private restoreArtifactsFromRuntimeContext(runtimeContext: unknown): void {
+    const context = this.toRecord(runtimeContext);
+    if (!context) return;
+    const artifact = this.toRecord(context["artifact_memory"]);
+    if (!artifact) return;
+
+    const airportsRaw = artifact["last_airports"];
+    if (Array.isArray(airportsRaw)) {
+      const airports: Array<{ lat: number; lon: number; id?: string; code?: string; name?: string; status?: string }> = [];
+      for (const rowRaw of airportsRaw) {
+        const row = this.toRecord(rowRaw);
+        if (!row) continue;
+        const lat = this.toNumber(row["lat"]);
+        const lon = this.toNumber(row["lon"]);
+        if (lat === null || lon === null) continue;
+        airports.push({
+          id: typeof row["id"] === "string" ? row["id"] : undefined,
+          code: typeof row["code"] === "string" ? row["code"] : undefined,
+          name: typeof row["name"] === "string" ? row["name"] : undefined,
+          status: typeof row["status"] === "string" ? row["status"] : undefined,
+          lat,
+          lon,
+        });
+      }
+      if (airports.length) this.map.setAirports(airports);
+    }
+
+    const positionRaw = this.toRecord(artifact["last_position"]);
+    if (positionRaw) {
+      const lat = this.toNumber(positionRaw["lat"]);
+      const lon = this.toNumber(positionRaw["lon"]);
+      if (lat !== null && lon !== null) {
+        this.map.setCurrentPosition(lat, lon);
+      }
+    }
+
+    const routeRaw = this.toRecord(artifact["last_route"]);
+    if (routeRaw) {
+      const geometryRaw = Array.isArray(routeRaw["geometry"]) ? routeRaw["geometry"] : [];
+      const geometry = geometryRaw
+        .map((point) => Array.isArray(point) ? point : null)
+        .filter((point): point is unknown[] => Array.isArray(point) && point.length === 2)
+        .map((point) => {
+          const lon = this.toNumber(point[0]);
+          const lat = this.toNumber(point[1]);
+          if (lon === null || lat === null) return null;
+          return [lon, lat] as [number, number];
+        })
+        .filter((point): point is [number, number] => Boolean(point));
+      if (geometry.length) {
+        const distanceKm = this.toNumber(routeRaw["distance_km"]);
+        this.map.drawRoute({
+          geometry,
+          distance_km: distanceKm === null ? undefined : distanceKm,
+        });
+      }
+    }
+  }
+
+  private toRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+  }
+
+  private toNumber(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const parsed = Number(value.trim());
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return null;
   }
 }

@@ -28,4 +28,5 @@ class HistoryGetResponse(TraceEnvelope):
 
     ok: bool
     items: list[HistoryTurn] = Field(default_factory=list)
+    runtime_context: dict[str, Any] | None = None
     error: ErrorInfo | None = None

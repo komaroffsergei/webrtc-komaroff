@@ -12,7 +12,7 @@ NATS_URL = os.getenv("NATS_URL", "nats://localhost:4222")
 NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_AGENT_HISTORY_SUBJECT = os.getenv("NATS_AGENT_HISTORY_SUBJECT", "nats.agent.history.")
-NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "600"))
+NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "90"))
 
 ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."

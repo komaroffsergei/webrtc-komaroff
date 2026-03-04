@@ -1,4 +1,4 @@
-"""Configuration helpers for src_core service."""
+"""Configuration helpers for src_llm service."""
 
 from __future__ import annotations
 

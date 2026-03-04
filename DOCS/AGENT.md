@@ -8,7 +8,7 @@ It does not contain scenario business logic.
 ## NATS API
 Subscriptions:
 - `nats.agent.<user_id>`: main user message requests (`AgentInboundRequest`).
-- `nats.agent.history.<user_id>`: history requests (`HistoryGetRequest`).
+- `nats.agent.history.<user_id>`: history/snapshot requests (`HistoryGetRequest`).
 
 Outbound req/reply:
 - `nats.workflow.run`: workflow execution requests (`WorkflowRunRequest`).
@@ -21,6 +21,10 @@ Outbound events:
 - `sessions`: session lifecycle.
 - `runtime_state`: optimistic-locked workflow state + compact dialog context.
 - `events`: chat history (`turn_id`, `role`, `text`, `meta`).
+
+History API returns both:
+- chat `items` from `events`,
+- `runtime_context` snapshot from `runtime_state.context` (used by frontend to restore artifacts/context on shared links).
 
 Edit flow:
 - if `edit.turn_id` is provided, history tail is deleted from edited user turn onward,
@@ -36,6 +40,8 @@ Configured in `src_agent/settings.py` and `src_agent/env.example`.
 - `NATS_EVENTS_SUBJECT` (prefix)
 - `NATS_WORKFLOW_RUN_SUBJECT`
 - `WORKFLOW_TIMEOUT_SECONDS`
+- `WORKFLOW_NO_RESPONDERS_RETRIES`
+- `WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS`
 - `RUNTIME_CONFLICT_RETRIES`
 - `DATABASE_URL`
 - `USER_ID`
@@ -60,6 +66,7 @@ python -m src_agent.main
 - `no responders available` for workflow subject
   - Cause: `src_langgraph` is down or wrong `NATS_WORKFLOW_RUN_SUBJECT`.
   - Fix: start `src_langgraph` and verify subject config.
+  - Note: retries are bounded by `WORKFLOW_NO_RESPONDERS_RETRIES` and `WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS` to fail fast instead of hanging for minutes.
 - `edit_turn_not_found`
   - Cause: frontend sends edit for a turn that does not exist in DB session history.
   - Fix: refresh history and retry edit from an existing user turn.

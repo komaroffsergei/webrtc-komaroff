@@ -22,6 +22,7 @@ export async function connectSession(
   el: AssistantElements,
   audio: AudioState,
   onVadText: (t: string) => void,
+  onSpeechActivityChange?: (active: boolean) => void,
   opts?: { sessionId?: string | null },
 ): Promise<string | null> {
   if (session) return null;
@@ -38,7 +39,13 @@ export async function connectSession(
 
   let vad: VadInstance | null = null;
   if (audio.vadEnabled) {
-    vad = createEnergyVad(track, config, () => audio.vadThreshold, (v) => onVadText(`${v} dBFS`));
+    vad = createEnergyVad(
+      track,
+      config,
+      () => audio.vadThreshold,
+      (v) => onVadText(`${v} dBFS`),
+      onSpeechActivityChange,
+    );
     await sender.replaceTrack(vad.track);
   }
 

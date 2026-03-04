@@ -246,9 +246,25 @@ class WorkflowEngine:
                 route = data.get("route")
                 if isinstance(route, dict):
                     route_data = route.get("data") if isinstance(route.get("data"), dict) else route
+                    geometry_raw = route_data.get("geometry")
+                    geometry: list[list[float]] = []
+                    if isinstance(geometry_raw, list):
+                        for point in geometry_raw[:1000]:
+                            if (
+                                isinstance(point, (list, tuple))
+                                and len(point) == 2
+                                and isinstance(point[0], (int, float))
+                                and isinstance(point[1], (int, float))
+                            ):
+                                geometry.append([float(point[0]), float(point[1])])
+                    route_from = route_data.get("from") if isinstance(route_data.get("from"), dict) else None
+                    route_to = route_data.get("to") if isinstance(route_data.get("to"), dict) else None
                     artifact["last_route"] = {
                         "distance_km": route_data.get("distance_km"),
                         "duration_min": route_data.get("duration_min"),
+                        "geometry": geometry,
+                        "from": route_from,
+                        "to": route_to,
                     }
 
         if artifact:

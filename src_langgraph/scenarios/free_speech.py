@@ -312,7 +312,13 @@ def _needs_knowledge_retry(
     if _is_year_query(user_text) and not _contains_year(text):
         return True
     if _is_fact_query(user_text):
-        return True
+        score = _response_quality_score(
+            user_text=user_text,
+            response_text=text,
+            resolved_mode=resolved_mode,
+            resolved_entities=resolved_entities,
+        )
+        return score < 4
     return False
 
 
@@ -333,7 +339,7 @@ def _retry_reason(
     if resolved_mode in {"single", "multi"} and not _mentions_resolved_entities(text, resolved_entities):
         return "missing_resolved_entity_reference"
     if _is_fact_query(user_text):
-        return "fact_query_secondary_pass"
+        return "low_quality_fact_answer"
     return "generic_secondary_pass"
 
 
@@ -400,14 +406,13 @@ async def run_free_speech(
     if not primary_resp.ok:
         return done_response(req, "Сервис ответов временно недоступен. Попробуйте повторить запрос.")
     primary_text = _extract_text(primary_resp) or ""
-    fact_query = _is_fact_query(req.text or "")
     needs_retry = _needs_knowledge_retry(
         user_text=req.text or "",
         response_text=primary_text,
         resolved_mode=resolved_mode,
         resolved_entities=resolved_entities,
     )
-    if not (fact_query or needs_retry):
+    if not needs_retry:
         return done_response(req, primary_text or "Чем могу помочь?")
 
     retry_reason = _retry_reason(

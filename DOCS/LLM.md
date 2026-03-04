@@ -23,6 +23,7 @@ For every inbound LLM request, `src_llm` emits:
 - `log/info name=llm_runtime_config` with startup runtime config (`mode`, `configured_model`, `llm_context_size`)
 - `log/info name=llm_request_debug` with trace, mode, requested/configured model, constraints, and truncated input payload
 - `log/info name=llm_result` with response payload and `_debug` block (`effective_model`, `provider`, `duration_ms`)
+- runtime logs for NATS lifecycle (`disconnected`, `reconnected`, `closed`, transport errors)
 
 This is consumed by frontend console logging for readable per-request diagnostics.
 
@@ -39,6 +40,7 @@ Configured in `src_llm/settings.py` and `src_llm/env.example`.
 - `LLM_REMOTE_MODEL`
 - `DEFAULT_MAX_TOKENS`
 - `LLM_CONTEXT_SIZE`
+- `OLLAMA_TIMEOUT_SECONDS`
 
 NATS2Ollama endpoint mode:
 - Service uses plain endpoint access (no auth headers/tokens/cookies).

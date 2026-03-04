@@ -50,6 +50,21 @@ async def load_runtime_state(db: Database, *, session_id: UUID) -> WorkflowRunti
     )
 
 
+async def load_runtime_context(db: Database, *, session_id: UUID) -> dict[str, Any] | None:
+    row = await db.fetchrow(
+        """
+        select context
+        from runtime_state
+        where session_id = $1
+        """,
+        session_id,
+    )
+    if row is None:
+        return None
+    context = _decode_jsonb(row["context"])
+    return context if isinstance(context, dict) else None
+
+
 async def save_runtime_state(
     db: Database,
     *,

@@ -17,40 +17,32 @@ type StatusHandler = (status: NatsStatus) => void;
 
 export class FrontendNatsClient {
   private connection: Connection | null = null;
+  private connectPromise: Promise<boolean> | null = null;
   private statusHandlers = new Set<StatusHandler>();
   private subscribedSubjects = new Set<string>();
 
   async connect(options: NatsClientOptions): Promise<boolean> {
-    if (this.connection) {
-      return false;
+    if (this.connection) return false;
+    if (this.connectPromise) return this.connectPromise;
+
+    this.connectPromise = this.openConnection(options);
+    try {
+      return await this.connectPromise;
+    } finally {
+      this.connectPromise = null;
     }
-    this.connection = await connect({
-      url: options.url,
-      name: options.name,
-      user: options.user,
-      pass: options.pass,
-      token: options.token,
-      payload: "string" as any,
-    });
-    this.subscribedSubjects.clear();
-    this.emitStatus({ type: "connected" });
+  }
 
-    this.connection.addEventListener(
-      "error",
-      ((err: Error) => {
-        this.emitStatus({ type: "error", error: err });
-      }) as any,
-    );
-
-    this.connection.addEventListener(
-      "close",
-      (() => {
-        this.emitStatus({ type: "closed" });
-        this.connection = null;
-        this.subscribedSubjects.clear();
-      }) as any,
-    );
-    return true;
+  async disconnect(): Promise<void> {
+    this.connectPromise = null;
+    const conn = this.connection;
+    this.resetConnectionState();
+    if (!conn) return;
+    try {
+      await Promise.resolve((conn as any).close?.());
+    } catch {
+      // Ignore close errors during reconnect attempts.
+    }
   }
 
   onStatus(handler: StatusHandler): void {
@@ -72,6 +64,45 @@ export class FrontendNatsClient {
       handler(payload);
     });
     this.subscribedSubjects.add(subject);
+  }
+
+  private async openConnection(options: NatsClientOptions): Promise<boolean> {
+    const conn = await connect({
+      url: options.url,
+      name: options.name,
+      user: options.user,
+      pass: options.pass,
+      token: options.token,
+      payload: "string" as any,
+    });
+    this.connection = conn;
+    this.subscribedSubjects.clear();
+    this.bindConnectionListeners(conn);
+    this.emitStatus({ type: "connected" });
+    return true;
+  }
+
+  private bindConnectionListeners(conn: Connection): void {
+    conn.addEventListener(
+      "error",
+      ((err: Error) => {
+        if (this.connection !== conn) return;
+        this.emitStatus({ type: "error", error: err });
+        if (!isStaleConnectionError(err)) return;
+        this.resetConnectionState();
+        this.emitStatus({ type: "closed" });
+        void Promise.resolve((conn as any).close?.()).catch(() => undefined);
+      }) as any,
+    );
+
+    conn.addEventListener(
+      "close",
+      (() => {
+        if (this.connection !== conn) return;
+        this.resetConnectionState();
+        this.emitStatus({ type: "closed" });
+      }) as any,
+    );
   }
 
   private decodePayload(msg: any): string {
@@ -100,4 +131,14 @@ export class FrontendNatsClient {
       }
     });
   }
+
+  private resetConnectionState(): void {
+    this.connection = null;
+    this.subscribedSubjects.clear();
+  }
+}
+
+function isStaleConnectionError(error: Error): boolean {
+  const message = `${error?.name ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  return message.includes("stale connection");
 }

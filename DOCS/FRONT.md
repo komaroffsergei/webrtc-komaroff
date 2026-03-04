@@ -6,10 +6,12 @@ It sends user messages to `src_core`, subscribes to backend events over NATS WS,
 It does not run workflow logic.
 
 ## Session and history behavior
-- Session ID is stored in `sessionStorage` under `assistant.session_id`.
-- Each browser tab has its own `sessionStorage`, so each tab has an independent chat session.
-- On page reload, the app restores `session_id` from `sessionStorage` and requests `GET /core/history`.
-- History is rendered with stable `turn_id` values, enabling inline user message editing.
+- Canonical chat route: `/chat/<session_id>`.
+- URL `session_id` is the source of truth for the current dialog.
+- If the app is opened without `session_id` in route, a new UUID is created and URL is replaced with `/chat/<new_session_id>`.
+- `session_id` is additionally stored in `sessionStorage` under `assistant.session_id` for diagnostics/debug tools.
+- On page reload or share-link open (including another PC), app restores by `session_id` via `GET /core/history`.
+- Restore includes both message history and runtime artifacts snapshot (`runtime_context.artifact_memory`), including map state.
 
 ## Edit behavior
 - User message edit sends `POST /core/message` with:
@@ -26,7 +28,17 @@ Outgoing:
 
 Incoming:
 - NATS WS subscription to `nats.events.<user_id>`
-- Handles `command/client`, `command/thought`, status, transcription and voice lock events
+- Handles `command/client`, `command/thought`, status, transcription, `transcription_pending`, and voice lock events
+
+Voice UX interim state:
+- After local VAD detects end of user speech, chat shows centered flash `Транскрипция...`.
+- Flash is also supported via server event `command/transcription_pending` (if ASR publishes pending markers).
+- Flash hides when final `command/transcription` arrives, on `voice.blocked=false`, on reconnect/disconnect reset, or when speech resumes.
+
+Resilience:
+- `/core/message` has client-side timeout (default `70000ms`, configurable via `window.SETTINGS.MESSAGE_REQUEST_TIMEOUT_MS`).
+- NATS reconnect uses exponential backoff (1s..15s).
+- `Stale Connection` errors force connection reset before retry to avoid fake reconnect loops.
 
 ## Debug logging
 - Events are logged in grouped format via `src_front/src/core/logging.ts`.
@@ -54,10 +66,12 @@ npm run dev
 ## Common issues
 - No events in UI after connect
   - Fix: verify NATS WS endpoint (`/ws`) and matching `user_id` subject suffix.
+- `NatsError: 'Stale Connection'` repeats but events never return
+  - Fix: ensure frontend version includes forced reset logic from `src_front/src/net/natsClient.ts` and retry backoff in `AssistantApp`.
 - Edit returns `edit_turn_not_found`
   - Fix: session mismatch or stale UI history; reload page to restore history from backend.
 - History not restored after reload
-  - Fix: ensure `/core/history` is reachable and `assistant.session_id` exists in tab `sessionStorage`.
+  - Fix: ensure `/core/history` is reachable and route has valid `/chat/<uuid>`.
 
 ## Code pointers
 - App entry and flow: `src_front/src/assistant/assistantApp.ts`

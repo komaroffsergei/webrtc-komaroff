@@ -11,6 +11,7 @@ from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
 
 from src_agent.agent import AgentRunner
+from src_agent.repositories.runtime_state import load_runtime_context
 from src_agent.settings import STACK_SERVICE_NAME
 from src_agent.ui_events import UiEventPublisher
 from src_agent.utils.db import Database, fetch_chat_history
@@ -46,6 +47,8 @@ class AgentServer:
         events_subject: str,
         workflow_subject: str,
         workflow_timeout_s: int,
+        workflow_no_responders_retries: int,
+        workflow_no_responders_retry_delay_s: float,
         db_url: str,
         user_id: str,
         runtime_conflict_retries: int,
@@ -56,6 +59,8 @@ class AgentServer:
         self.events_subject = events_subject
         self.workflow_subject = workflow_subject
         self.workflow_timeout_s = int(workflow_timeout_s)
+        self.workflow_no_responders_retries = max(0, int(workflow_no_responders_retries))
+        self.workflow_no_responders_retry_delay_s = max(0.1, float(workflow_no_responders_retry_delay_s))
         self.runtime_conflict_retries = int(runtime_conflict_retries)
         self.db_url = db_url
         self.user_id = user_id
@@ -88,6 +93,8 @@ class AgentServer:
             user_id=self.user_id,
             workflow_timeout_s=self.workflow_timeout_s,
             max_runtime_conflict_retries=self.runtime_conflict_retries,
+            workflow_no_responders_retries=self.workflow_no_responders_retries,
+            workflow_no_responders_retry_delay_s=self.workflow_no_responders_retry_delay_s,
         )
         await self.nats_logger.info(f"{STACK_SERVICE_NAME} connected (nats={self.nats_url})")
 
@@ -172,6 +179,10 @@ class AgentServer:
                 session_id=str(req.session_id),
                 limit=req.limit,
             )
+            runtime_context = await load_runtime_context(
+                self.db,
+                session_id=req.session_id,
+            )
             resp = HistoryGetResponse(
                 trace_id=req.trace_id,
                 correlation_id=req.correlation_id,
@@ -180,6 +191,7 @@ class AgentServer:
                 ts_ms=now_ts_ms(),
                 ok=True,
                 items=items,
+                runtime_context=runtime_context,
                 error=None,
             )
             await msg.respond(resp.model_dump_json().encode("utf-8"))
@@ -193,6 +205,7 @@ class AgentServer:
                 ts_ms=now_ts_ms(),
                 ok=False,
                 items=[],
+                runtime_context=None,
                 error=ErrorInfo(code="history_exception", message=str(exc)),
             )
             try:

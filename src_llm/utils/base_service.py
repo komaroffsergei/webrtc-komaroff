@@ -45,12 +45,28 @@ class BaseService:
 
     async def _connect(self) -> None:
         logger.info("Connecting to NATS: service=%s url=%s", self._service_name, self._nats_url)
+        async def _on_error(err: Exception) -> None:
+            logger.error("NATS error: %s", err)
+
+        async def _on_disconnected() -> None:
+            logger.warning("NATS disconnected: service=%s", self._service_name)
+
+        async def _on_reconnected() -> None:
+            logger.info("NATS reconnected: service=%s connected_url=%s", self._service_name, getattr(self._nc, "connected_url", None))
+
+        async def _on_closed() -> None:
+            logger.warning("NATS connection closed: service=%s", self._service_name)
+
         self._nc = await nats.connect(
             servers=[self._nats_url],
             name=self._service_name,
             max_reconnect_attempts=-1,
             reconnect_time_wait=2,
             ping_interval=10,
+            error_cb=_on_error,
+            disconnected_cb=_on_disconnected,
+            reconnected_cb=_on_reconnected,
+            closed_cb=_on_closed,
         )
         self._publisher = NatsPublisher(self._nc)
         self._nats_logger = NatsLogger(self._nc, self._events_subject, self._service_name)

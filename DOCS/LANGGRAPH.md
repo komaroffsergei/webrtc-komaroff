@@ -41,7 +41,7 @@ All scenarios are stateful because they receive this shared `dialog_context`.
 - `free_speech` uses both compact dialog context and model general knowledge; when confidence is low, it should state uncertainty explicitly.
 - For fact-like queries runtime uses two-pass generation:
   - pass 1: regular `final_response` with full context
-  - pass 2 (knowledge pass): retried for fact-like requests and also for context-only refusals (even if fact detector missed a wording variant)
+  - pass 2 (knowledge pass): retried only for weak primary answers (empty/context-only refusal/missed references/missed year)
   - runtime picks the better response using generic quality heuristics (no domain-specific hardcoding)
   - debug input markers: `free_speech_pass` (`primary|knowledge_retry`) and optional `retry_reason`
 
@@ -87,6 +87,9 @@ python -m src_langgraph.main
 - `no responders available` for tools/llm
   - Cause: downstream service is down or subject mismatch.
   - Fix: verify `src_llm`, `src_api_gateway`, and subject prefixes.
+- High response latency
+  - Cause: downstream LLM/tool latency or timeout budget too high.
+  - Fix: tune `NATS_REQUEST_TIMEOUT_SECONDS` (default 60s) and inspect `src_llm` request duration logs.
 - Context appears lost between turns
   - Cause: runtime state not saved in agent/postgres.
   - Fix: verify `src_agent` DB connectivity and `runtime_state` table updates.

@@ -14,15 +14,20 @@ It does not execute workflow logic.
 
 ## Message flow
 1. Browser calls `POST /core/message` with `{ text, session_id?, turn_id?, edit? }`.
-2. `src_core` publishes transcription + voice lock events to `nats.events.<user_id>`.
-3. `turn_id` is normalized to UUID before forwarding to agent.
-4. `src_core` sends req/reply to `nats.agent.<user_id>`.
-5. Returns `{ status: "ok", session_id }` to browser.
+2. `src_core` publishes `command/transcription` + voice lock events to `nats.events.<user_id>`.
+3. If ASR sends a pending marker without final text, `src_core` publishes `command/transcription_pending` for UI interim feedback.
+4. `turn_id` is normalized to UUID before forwarding to agent.
+5. `src_core` sends req/reply to `nats.agent.<user_id>`.
+6. Returns:
+   - success: `{ status: "ok", session_id }`
+   - downstream error: `{ status: "error", session_id, error, details? }` with HTTP 502/504
 
 History flow:
 1. Browser calls `GET /core/history`.
 2. `src_core` sends req/reply to `nats.agent.history.<user_id>`.
-3. Returns normalized history payload to browser.
+3. Returns normalized payload to browser:
+   - `items` (chat turns)
+   - `runtime_context` (snapshot of workflow context/artifacts for full UI restore)
 
 ## NATS subjects
 - Request: `nats.agent.<user_id>`
@@ -59,6 +64,9 @@ python -m src_core.main
   - Fix: stop Docker `src_core` container or set a free `CORE_PORT`.
 - `ConnectionRefusedError` to NATS
   - Fix: start NATS (`docker compose up -d nats`) and verify `NATS_URL`.
+- `/core/message` returns 502/504
+  - Cause: agent/workflow timeout or temporary unavailability.
+  - Fix: check `src_agent` and `src_langgraph` logs, and tune `NATS_REQUEST_TIMEOUT`/`WORKFLOW_TIMEOUT_SECONDS`.
 - `session_id must be a valid UUID` for `/core/history`
   - Fix: pass the exact session UUID returned by `/core/message`.
 

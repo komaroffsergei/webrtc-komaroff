@@ -62,6 +62,14 @@ export type HistoryTurn = {
   meta?: Record<string, unknown>;
 };
 
+export type HistorySnapshotResponse = {
+  ok?: unknown;
+  items?: unknown;
+  runtime_context?: unknown;
+  error?: unknown;
+  session_id?: unknown;
+};
+
 export type MessageEditPayload = {
   turn_id: string;
 };

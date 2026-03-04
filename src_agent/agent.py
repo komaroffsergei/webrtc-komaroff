@@ -40,10 +40,8 @@ class AgentRunner:
     user_id: str
     workflow_timeout_s: int
     max_runtime_conflict_retries: int = 3
-    # During deploys workflow responder can be temporarily unavailable.
-    # Keep retrying long enough to survive the rollout window.
-    workflow_no_responders_retries: int = 60
-    workflow_no_responders_retry_delay_s: float = 2.0
+    workflow_no_responders_retries: int = 4
+    workflow_no_responders_retry_delay_s: float = 1.0
 
     async def run(self, req: AgentInboundRequest) -> RunnerResult:
         # Ensure the `sessions` row exists even when the session_id is provided externally.

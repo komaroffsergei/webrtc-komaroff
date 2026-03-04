@@ -90,6 +90,16 @@ export class DialogReplayCollector {
       return { ...base, blocked };
     }
 
+    if (event.kind === "transcription_pending") {
+      const pending = typeof (event.data as Record<string, unknown>).pending === "boolean"
+        ? (event.data as Record<string, unknown>).pending as boolean
+        : undefined;
+      return {
+        ...base,
+        details: typeof pending === "boolean" ? { pending } : undefined,
+      };
+    }
+
     if (event.kind === "message" || event.kind === "transcription") {
       const text = typeof event.data.text === "string" ? shortText(event.data.text) : undefined;
       const turnId = cleanString((event.data as Record<string, unknown>).turn_id);
