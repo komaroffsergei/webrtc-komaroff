@@ -32,6 +32,8 @@ export class AssistantApp {
   private static readonly SESSION_STORAGE_KEY = "assistant.session_id";
   private static readonly CHAT_ROUTE_PREFIX = "/chat";
   private static readonly TRANSCRIPTION_FLASH_TEXT = "Транскрипция...";
+  private static readonly TRANSCRIPTION_FLASH_DELAY_MS = 180;
+  private static readonly TRANSCRIPTION_FLASH_MIN_VISIBLE_MS = 420;
   private static readonly UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -55,6 +57,10 @@ export class AssistantApp {
   private vadSpeechActive = false;
   private vadSpeechDetected = false;
   private transcriptionPending = false;
+  private transcriptionFlashVisible = false;
+  private transcriptionFlashShownAt = 0;
+  private transcriptionFlashShowTimer: number | null = null;
+  private transcriptionFlashHideTimer: number | null = null;
 
   constructor(private config: AppConfig) {
     this.replayCollector = new DialogReplayCollector({
@@ -167,6 +173,7 @@ export class AssistantApp {
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
     } catch (err) {
+      this.resetTranscriptionTracking();
       this.warning.show({message: `Connect failed: ${String(err)}`});
       setStatus(this.el, "Ошибка подключения");
       logError("webrtc", err);
@@ -451,13 +458,13 @@ export class AssistantApp {
       this.vadSpeechDetected = true;
       if (this.transcriptionPending) {
         this.transcriptionPending = false;
-        this.chat.hideTranscriptionFlash();
+        this.scheduleTranscriptionFlashHide();
       }
       return;
     }
     if (!this.vadSpeechDetected) return;
     this.transcriptionPending = true;
-    this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
+    this.scheduleTranscriptionFlashShow();
   }
 
   private handleTranscriptionPendingEvent(data: Record<string, unknown>): void {
@@ -468,25 +475,68 @@ export class AssistantApp {
     }
     this.transcriptionPending = true;
     if (!this.vadSpeechActive) {
-      this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
+      this.scheduleTranscriptionFlashShow();
     }
   }
 
   private resolveTranscriptionPending(): void {
-    if (!this.transcriptionPending) {
-      this.chat.hideTranscriptionFlash();
-      return;
-    }
+    this.clearTranscriptionFlashShowTimer();
+    if (!this.transcriptionPending && !this.transcriptionFlashVisible) return;
     this.transcriptionPending = false;
     this.vadSpeechDetected = false;
-    this.chat.hideTranscriptionFlash();
+    this.scheduleTranscriptionFlashHide();
   }
 
   private resetTranscriptionTracking(): void {
+    this.clearTranscriptionFlashShowTimer();
+    this.clearTranscriptionFlashHideTimer();
     this.vadSpeechActive = false;
     this.vadSpeechDetected = false;
     this.transcriptionPending = false;
+    this.transcriptionFlashVisible = false;
+    this.transcriptionFlashShownAt = 0;
     this.chat.hideTranscriptionFlash();
+  }
+
+  private scheduleTranscriptionFlashShow(): void {
+    this.clearTranscriptionFlashHideTimer();
+    if (this.transcriptionFlashVisible || this.transcriptionFlashShowTimer !== null) return;
+    this.transcriptionFlashShowTimer = window.setTimeout(() => {
+      this.transcriptionFlashShowTimer = null;
+      if (!this.transcriptionPending || this.vadSpeechActive) return;
+      this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
+      this.transcriptionFlashVisible = true;
+      this.transcriptionFlashShownAt = Date.now();
+    }, AssistantApp.TRANSCRIPTION_FLASH_DELAY_MS);
+  }
+
+  private scheduleTranscriptionFlashHide(): void {
+    this.clearTranscriptionFlashShowTimer();
+    if (!this.transcriptionFlashVisible) {
+      this.chat.hideTranscriptionFlash();
+      return;
+    }
+    this.clearTranscriptionFlashHideTimer();
+    const elapsedMs = Date.now() - this.transcriptionFlashShownAt;
+    const delayMs = Math.max(0, AssistantApp.TRANSCRIPTION_FLASH_MIN_VISIBLE_MS - elapsedMs);
+    this.transcriptionFlashHideTimer = window.setTimeout(() => {
+      this.transcriptionFlashHideTimer = null;
+      this.chat.hideTranscriptionFlash();
+      this.transcriptionFlashVisible = false;
+      this.transcriptionFlashShownAt = 0;
+    }, delayMs);
+  }
+
+  private clearTranscriptionFlashShowTimer(): void {
+    if (this.transcriptionFlashShowTimer === null) return;
+    window.clearTimeout(this.transcriptionFlashShowTimer);
+    this.transcriptionFlashShowTimer = null;
+  }
+
+  private clearTranscriptionFlashHideTimer(): void {
+    if (this.transcriptionFlashHideTimer === null) return;
+    window.clearTimeout(this.transcriptionFlashHideTimer);
+    this.transcriptionFlashHideTimer = null;
   }
 
   private initializeSessionId(): void {

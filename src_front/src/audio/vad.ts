@@ -43,6 +43,9 @@ export function createEnergyVad(
     const active = db > gate;
     if (lastActive === null) {
       lastActive = active;
+      if (active) {
+        onSpeechActivityChange?.(true);
+      }
     } else if (lastActive !== active) {
       lastActive = active;
       onSpeechActivityChange?.(active);
