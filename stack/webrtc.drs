@@ -10,6 +10,8 @@ NATS_AGENT_SUBJECT = "nats.agent."
 NATS_LLM_SUBJECT = "nats.llm."
 ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."
+LINTO_WS_URL = (ENV['LINTO_WS_URL'] || 'wss://linto-stt-whisper.rag-stack.gis-master.ru/streaming').to_s
+LINTO_WS_LANGUAGE = (ENV['LINTO_WS_LANGUAGE'] || 'ru').to_s
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -201,18 +203,18 @@ end
 
 
 
-Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
+Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
   env NATS_URL: NATS_URL,
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+      LINTO_WS_URL: LINTO_WS_URL,
+      LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
       WEBUI_BASE_PATH: "/whisper",
-      STACK_SERVICE_NAME: 'py_faster_whisper',
-      ASR_MODELS: '/app/models/asr',
-      ASR_MODEL_ID: 'Systran/faster-whisper-small'
-  volume name: 'ASR_MODELS', target: '/app/models/asr'
+      STACK_SERVICE_NAME: 'py_faster_whisper'
+
 end
 
 
