@@ -228,8 +228,9 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_WS_URL: LINTO_WS_URL,
       LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
       WEBUI_BASE_PATH: "/whisper",
-      STACK_SERVICE_NAME: 'py_faster_whisper'
+      STACK_SERVICE_NAME: 'stt_whisper_to_nats'
 
+  entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
 
