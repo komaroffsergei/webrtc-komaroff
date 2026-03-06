@@ -202,7 +202,22 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
 end
 
 
+# local transcribe
+#  Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
+#    ingress host: HOST, path: '/whisper', port: 8090
+#
+#    env NATS_URL: NATS_URL,
+#        NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+#        ASR_IN_PREFIX: ASR_IN_PREFIX,
+#        ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+#        WEBUI_BASE_PATH: '/whisper',
+#        STACK_SERVICE_NAME: 'py_faster_whisper',
+#        ASR_MODELS: '/app/src/models/asr',
+#        ASR_MODEL_ID: 'Systran/faster-whisper-small'
+#  end
 
+
+# linto transcribe
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
