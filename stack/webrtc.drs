@@ -10,7 +10,7 @@ NATS_AGENT_SUBJECT = "nats.agent."
 NATS_LLM_SUBJECT = "nats.llm."
 ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."
-LINTO_WS_URL = (ENV['LINTO_WS_URL'] || 'wss://linto-stt-whisper.rag-stack.gis-master.ru/streaming').to_s
+LINTO_WS_URL = (ENV['LINTO_WS_URL'] || 'ws://linto_stt_whisper.h100.local/streaming').to_s
 LINTO_WS_LANGUAGE = (ENV['LINTO_WS_LANGUAGE'] || 'ru').to_s
 
 HOST = 'webrtc-komaroff.*'
