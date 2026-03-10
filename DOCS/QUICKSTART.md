@@ -16,7 +16,7 @@ docker compose --profile langgraph up -d --build
 Для deploy-стека `webrtc.drs` маршрут `/whisper` теперь включает отдельный WebUI file-mode:
 - принимает `wav`, `mp3`, `m4a`, `mp4`
 - загружает файл кусками в bridge-сервис
-- декодирует его server-side и отдаёт один финальный plain text
+- проксирует исходный файл напрямую в LinTO `POST /transcribe` и отдаёт один финальный plain text
 - не меняет live voice ASR path `inference.whisper.*`
 
 NATS2Ollama endpoint (без auth):

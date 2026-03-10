@@ -46,7 +46,7 @@ docker compose --profile langgraph up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он отдаёт один финальный plain text через bridge к LinTO и не меняет live voice pipeline `inference.whisper.*`.
+В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в bridge, проксирует его напрямую в LinTO `POST /transcribe`, возвращает один финальный plain text и не меняет live voice pipeline `inference.whisper.*`.
 
 ## Docker + отладка (PyCharm Remote Debug)
 

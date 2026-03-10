@@ -13,6 +13,9 @@ ASR_OUT_PREFIX = "inference.whisper.text."
 LINTO_WS_URL = (ENV['LINTO_WS_URL'] || 'ws://192.168.28.134/streaming').to_s
 LINTO_WS_HOST = (ENV['LINTO_WS_HOST'] || 'linto_stt_whisper.h100.local').to_s
 LINTO_WS_LANGUAGE = (ENV['LINTO_WS_LANGUAGE'] || 'ru').to_s
+LINTO_HTTP_URL = (ENV['LINTO_HTTP_URL'] || 'http://192.168.28.134/transcribe').to_s
+LINTO_HTTP_HOST = (ENV['LINTO_HTTP_HOST'] || 'linto_stt_whisper_http.h100.local').to_s
+LINTO_HTTP_LANGUAGE = (ENV['LINTO_HTTP_LANGUAGE'] || LINTO_WS_LANGUAGE).to_s
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -226,14 +229,20 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+      LINTO_HTTP_URL: LINTO_HTTP_URL,
+      LINTO_HTTP_HOST: LINTO_HTTP_HOST,
+      LINTO_HTTP_LANGUAGE: LINTO_HTTP_LANGUAGE,
       LINTO_WS_URL: LINTO_WS_URL,
       LINTO_WS_HOST: LINTO_WS_HOST,
       LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
       WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
+      WEBUI_FILE_BACKEND: 'http_proxy',
       WEBUI_FILE_DEFAULT_TAB: 'file',
+      WEBUI_FILE_MAX_UPLOAD_MB: '1024',
       WEBUI_FILE_STREAM_CHUNK_MS: '500',
-      WEBUI_FILE_STREAM_WAIT_MS: '500',
+      WEBUI_FILE_STREAM_WAIT_MS: '50',
       WEBUI_FILE_EOF_TIMEOUT_S: '180',
+      WEBUI_FILE_FINAL_IDLE_S: '2.0',
       WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: "/whisper",
       STACK_SERVICE_NAME: 'stt_whisper_to_nats'
