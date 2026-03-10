@@ -229,6 +229,12 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_WS_URL: LINTO_WS_URL,
       LINTO_WS_HOST: LINTO_WS_HOST,
       LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
+      WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
+      WEBUI_FILE_DEFAULT_TAB: 'file',
+      WEBUI_FILE_STREAM_CHUNK_MS: '500',
+      WEBUI_FILE_STREAM_WAIT_MS: '500',
+      WEBUI_FILE_EOF_TIMEOUT_S: '180',
+      WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: "/whisper",
       STACK_SERVICE_NAME: 'stt_whisper_to_nats'
 
