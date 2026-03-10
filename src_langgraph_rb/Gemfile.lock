@@ -1,0 +1,39 @@
+PATH
+  remote: .
+  specs:
+    src_langgraph_rb (0.1.0)
+      langgraph_rb (~> 0.1.11)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    diff-lcs (1.6.2)
+    json (2.19.1)
+    langgraph_rb (0.1.11)
+      json (~> 2.0)
+    rake (13.3.1)
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.8)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.7)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  rake (~> 13.2)
+  rspec (~> 3.13)
+  src_langgraph_rb!
+
+BUNDLED WITH
+   2.6.7

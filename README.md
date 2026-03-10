@@ -8,6 +8,7 @@
 - `src_core` — обработка сессии/голоса и работа с фронтом.
 - `src_agent` — оркестратор пользовательского шага, хранит runtime в Postgres.
 - `src_langgraph` — runtime сценариев на LangGraph.
+- `src_langgraph_rb` — experimental Ruby DSL/registry layer for future scenario migration.
 - `src_llm` — gateway к модели (Ollama/remote).
 - `src_api_gateway` — tools (`nats.tools.*`) для сценариев.
 - `src_postgres` — БД runtime.

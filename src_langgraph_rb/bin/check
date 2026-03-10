@@ -1,0 +1,7 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+root = File.expand_path("..", __dir__)
+Dir.chdir(root) do
+  exec("bundle", "exec", "rake", "check")
+end

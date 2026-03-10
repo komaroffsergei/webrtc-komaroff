@@ -1,0 +1,15 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="src_langgraph_rb smoke" type="RubyRunConfigurationType" factoryName="Ruby">
+    <module name="webrtc-komaroff" />
+    <RUBY_RUN_CONFIG NAME="RUBY_ARGS" VALUE="" />
+    <RUBY_RUN_CONFIG NAME="WORK DIR" VALUE="$PROJECT_DIR$/src_langgraph_rb" />
+    <RUBY_RUN_CONFIG NAME="SHOULD_USE_SDK" VALUE="false" />
+    <RUBY_RUN_CONFIG NAME="ALTERN_SDK_NAME" VALUE="" />
+    <RUBY_RUN_CONFIG NAME="myPassParentEnvs" VALUE="true" />
+    <RUBY_RUN_CONFIG NAME="SCRIPT_PATH" VALUE="$PROJECT_DIR$/src_langgraph_rb/bin/smoke" />
+    <RUBY_RUN_CONFIG NAME="SCRIPT_ARGS" VALUE="" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>

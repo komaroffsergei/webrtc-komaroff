@@ -1,0 +1,43 @@
+jetstream: false
+websocket: { listen: 0.0.0.0:9222, no_tls: true, compression: true }
+
+debug: true
+trace: true
+
+accounts: {
+  local: {
+    users: [
+      { user: nats, password: T0pS3cr3tMaster, allowed_connection_types: [ STANDARD, WEBSOCKET ] }
+    ]
+    exports: [
+      { stream: "to.inference.>" }
+    ]
+    imports: [
+      { stream: { account: inference, subject: "inference.>" }, to: "from.inference.>" }
+      { service: { account: inference, subject: "$JS.dinf.API.>" }, to: "JS.INF.API.>" }
+    ]
+  }
+
+  inference: {
+    exports: [
+      { stream: "inference.>" }
+      { service: "$JS.dinf.API.>" }
+    ]
+    imports: [
+      { stream: { account: local, subject: "to.inference.>" }, to: "inference.>" }
+    ]
+    jetstream: enabled
+  }
+}
+
+leafnodes: {
+    remotes: [
+        # Inference
+        {
+            # url: nats://h100.local:37422,
+            url: nats://192.168.28.134:37422,
+            account: inference,
+            nkey: SUAI355NRU346GCGPBOIMVUHYPJWEWS3OI6F4NMJHWS4R6APIZ52PL4YJM
+        }
+    ]
+}

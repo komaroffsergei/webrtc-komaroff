@@ -39,3 +39,4 @@ coverage
 /otel/
 /vendor/
 /src_whisper/out/
+/src_langgraph_rb/.bundle/

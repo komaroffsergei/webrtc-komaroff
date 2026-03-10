@@ -13,6 +13,12 @@ ASR_OUT_PREFIX = "inference.whisper.text."
 LINTO_WS_URL = (ENV['LINTO_WS_URL'] || 'ws://192.168.28.134/streaming').to_s
 LINTO_WS_HOST = (ENV['LINTO_WS_HOST'] || 'linto_stt_whisper.h100.local').to_s
 LINTO_WS_LANGUAGE = (ENV['LINTO_WS_LANGUAGE'] || 'ru').to_s
+LINTO_PARTIAL_MODE = (ENV['LINTO_PARTIAL_MODE'] || 'off').to_s
+LINTO_DROP_APPLY = (ENV['LINTO_DROP_APPLY'] || 'both').to_s
+LINTO_DROP_REGEX = (
+  ENV['LINTO_DROP_REGEX'] ||
+  '(?i)^\\s*(subtitles?\\s+made\\s+by|\\u0441\\u0443\\u0431\\u0442\\u0438\\u0442\\u0440\\u044b\\s+\\u0441\\u0434\\u0435\\u043b\\u0430\\u043b)\\b'
+).to_s
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -229,6 +235,9 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_WS_URL: LINTO_WS_URL,
       LINTO_WS_HOST: LINTO_WS_HOST,
       LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
+      LINTO_PARTIAL_MODE: LINTO_PARTIAL_MODE,
+      LINTO_DROP_APPLY: LINTO_DROP_APPLY,
+      LINTO_DROP_REGEX: LINTO_DROP_REGEX,
       WEBUI_BASE_PATH: "/whisper",
       STACK_SERVICE_NAME: 'stt_whisper_to_nats'
 
