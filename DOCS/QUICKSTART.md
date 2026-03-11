@@ -15,12 +15,12 @@ docker compose --profile langgraph up -d --build
 
 Для deploy-стека `webrtc.drs` маршрут `/whisper` теперь включает отдельный WebUI file-mode:
 - принимает `wav`, `mp3`, `m4a`, `mp4`
-- проксирует исходный файл напрямую в LinTO `POST /transcribe` и отдаёт один финальный plain text
+- создаёт async file-job через NATS, режет long-file audio на backend-чанки и отдаёт прогресс плюс финальный plain text
 - не меняет live voice ASR path `inference.whisper.*`
 
 Текущие режимы ASR:
 - live voice: `WebRTC -> NATS -> LinTO websocket`
-- `/whisper` file mode: `Browser -> bridge HTTP upload -> LinTO HTTP /transcribe`
+- `/whisper` file mode: `Browser -> bridge upload -> NATS file job -> chunked LinTO HTTP`
 - `/whisper` stream debug: `Browser -> bridge websocket -> NATS -> LinTO websocket`
 
 Подробная схема всех режимов: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
