@@ -46,11 +46,11 @@ docker compose --profile langgraph up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в gateway, создаёт NATS file-job, worker вырезает audio-only поток, нормализует его в `mono 16k`, режет на чанки и отправляет их параллельно в file-only LinTO HTTP backend-ы, а браузер получает progress/result напрямую из NATS WS по session-scoped file subjects, не меняя live voice pipeline `inference.whisper.*`.
+В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в gateway, создаёт NATS file-job, worker вырезает audio-only поток, нормализует его в `mono 16k`, режет на чанки и отправляет их последовательно в `linto_stt_whisper_http`, а браузер получает progress/result напрямую из NATS WS по session-scoped file subjects, не меняя live voice pipeline `inference.whisper.*`.
 
 Режимы ASR в этом стэке сейчас такие:
 - live voice: `WebRTC -> NATS -> stt_whisper_to_nats -> LinTO websocket -> NATS`
-- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> parallel chunked LinTO HTTP -> strict-prefix merge`
+- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
 - `/whisper` stream debug: `Browser -> WebUI websocket -> NATS -> LinTO websocket`
 
 Подробная схема всех режимов: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
