@@ -48,6 +48,13 @@ docker compose --profile langgraph up -d --build
 
 В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в bridge, проксирует его напрямую в LinTO `POST /transcribe`, возвращает один финальный plain text и не меняет live voice pipeline `inference.whisper.*`.
 
+Режимы ASR в этом стэке сейчас такие:
+- live voice: `WebRTC -> NATS -> stt_whisper_to_nats -> LinTO websocket -> NATS`
+- `/whisper` file mode: `Browser -> stt_whisper_to_nats -> LinTO HTTP /transcribe`
+- `/whisper` stream debug: `Browser -> WebUI websocket -> NATS -> LinTO websocket`
+
+Подробная схема всех режимов: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
+
 ## Docker + отладка (PyCharm Remote Debug)
 
 `debugpy` включается только через override-файл, обычный запуск без отладки не меняется.
