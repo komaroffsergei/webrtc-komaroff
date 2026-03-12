@@ -51,9 +51,9 @@ docker compose --profile langgraph up -d --build
 Режимы ASR в этом стэке сейчас такие:
 - live voice: `WebRTC -> NATS -> stt_whisper_to_nats -> LinTO websocket -> NATS`
 - `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
-- `/whisper` stream debug: `Browser -> WebUI websocket -> NATS -> LinTO websocket`
+- `/whisper` stream debug: `Browser -> /whisper/ws -> NATS -> LinTO websocket`
 
-Подробная схема всех режимов: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
+Подробная архитектура, схемы сервисов, протоколы, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
 
 ## Docker + отладка (PyCharm Remote Debug)
 
