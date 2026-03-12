@@ -12,11 +12,6 @@ export type AppConfig = {
     iceGatherTimeoutMs: number;
   };
   audio: {
-    vad: {
-      fftSize: number;
-      attackSeconds: number;
-      releaseSeconds: number;
-    };
     input: {
       echoCancellationDefault: boolean;
       noiseSuppressionDefault: boolean;
@@ -69,11 +64,6 @@ export const appConfig: AppConfig = {
     iceGatherTimeoutMs: 1000,
   },
   audio: {
-    vad: {
-      fftSize: 2048,
-      attackSeconds: 0.02,
-      releaseSeconds: 0.02,
-    },
     input: {
       echoCancellationDefault: true,
       noiseSuppressionDefault: true,

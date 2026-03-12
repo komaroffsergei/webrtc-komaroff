@@ -28,12 +28,16 @@ Outgoing:
 
 Incoming:
 - NATS WS subscription to `nats.events.<user_id>`
-- Handles `command/client`, `command/thought`, status, transcription, `transcription_pending`, and voice lock events
+- Handles `command/client`, `command/thought`, status, `transcription_state`, final `transcription`, and voice lock events
 
 Voice UX interim state:
-- After local VAD detects end of user speech, chat shows centered flash `Транскрипция...`.
-- Flash is also supported via server event `command/transcription_pending` (if ASR publishes pending markers).
-- Flash hides when final `command/transcription` arrives, on `voice.blocked=false`, on reconnect/disconnect reset, or when speech resumes.
+- Browser VAD is only a local mic-level meter; it does not gate outbound audio and does not decide utterance boundaries.
+- Live ASR status comes from backend `command/transcription_state`.
+- Chat shows centered flash by stage:
+  - `speech_started` -> `Слушаю…`
+  - `transcribing` -> `Распознаю…`
+  - `thinking` / `final_received` / `idle` -> flash hides
+- During `voice.blocked=true` UI blocks both mic and text input.
 
 Resilience:
 - `/core/message` has client-side timeout (default `70000ms`, configurable via `window.SETTINGS.MESSAGE_REQUEST_TIMEOUT_MS`).

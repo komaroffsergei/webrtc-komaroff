@@ -19,7 +19,7 @@ docker compose --profile langgraph up -d --build
 - не меняет live voice ASR path `inference.whisper.*`
 
 Текущие режимы ASR:
-- live voice: `WebRTC -> NATS -> LinTO websocket`
+- live voice: `WebRTC -> NATS -> stt_whisper_to_nats (server-side utterance segmentation) -> LinTO websocket`
 - `/whisper` file mode: `Browser -> bridge upload -> NATS file job -> chunked LinTO HTTP`
 - `/whisper` stream debug: `Browser -> /whisper/ws -> NATS -> LinTO websocket`
 

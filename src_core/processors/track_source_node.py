@@ -13,7 +13,7 @@ class TrackSourceNode:
     - Fixed frame duration (frame_duration_ms)
     - Fixed sample rate (target_rate)
     - Fixed channel count (target_channels)
-    - Planar s16p numpy representation internally, emits AudioFrame in 's16p'
+    - Int16 PCM representation internally, emits AudioFrame in configured format
 
     Responsibilities:
     - Pull frames from aiortc track, resample/convert to the target format
@@ -27,7 +27,7 @@ class TrackSourceNode:
     def __init__(self, track,
                  frame_duration_ms: int = 20,
                  target_rate: int = 48000,
-                 target_output_format: str = 's16p',
+                 target_output_format: str = 's16',
                  target_channels: int = 1):
         """Initialize source normalization.
 
@@ -35,7 +35,7 @@ class TrackSourceNode:
             track: aiortc MediaStreamTrack (audio) to read from.
             frame_duration_ms: desired duration of emitted chunks (e.g., 20 ms).
             target_rate: output sample rate (Hz), typically 48000 for WebRTC.
-            target_output_format: PyAV audio format string; default 's16p' (planar int16).
+            target_output_format: PyAV audio format string; default 's16' (packed int16).
             target_channels: output channel count (1=mono, 2=stereo).
         """
         self.track = track
@@ -45,6 +45,7 @@ class TrackSourceNode:
 
         self.layout_name = "mono" if target_channels == 1 else "stereo"
         self.output_format = target_output_format
+        self.output_format_is_planar = av.AudioFormat(self.output_format).is_planar
 
         self.resampler = av.audio.resampler.AudioResampler(
             format=self.output_format,
@@ -155,7 +156,7 @@ class TrackSourceNode:
         """Async generator yielding normalized AudioFrame chunks.
 
         - Receives AudioFrame from aiortc
-        - Resamples/normalizes to 's16p' with target rate/layout
+        - Resamples/normalizes to configured int16 format with target rate/layout
         - Slices into equal-length frames, padding the tail of each chunk
         - Sets PTS monotonically with step = samples_per_frame
         """
@@ -193,11 +194,17 @@ class TrackSourceNode:
                         piece = self._padding_buffer[:, :spf].copy()
                         piece[:, :take] = pcm[:, i:i + take]
 
-                    out = AudioFrame.from_ndarray(piece, format=output_format, layout=layout_name)
+                    if self.output_format_is_planar:
+                        frame_data = np.ascontiguousarray(piece)
+                    elif target_channels == 1:
+                        frame_data = np.ascontiguousarray(piece.reshape(-1))
+                    else:
+                        frame_data = np.ascontiguousarray(piece.T)
+
+                    out = AudioFrame.from_ndarray(frame_data, format=output_format, layout=layout_name)
                     out.sample_rate = target_rate
                     out.time_base = time_base
                     out.pts = next_pts
                     next_pts += spf
                     yield out
                     i += take
-

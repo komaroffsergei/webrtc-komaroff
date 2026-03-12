@@ -16,8 +16,8 @@ class WhisperStreamNode(ConsumerNode):
     """
     Streams audio frames to the Whisper service over NATS and forwards JSON replies.
 
-    This node does not do VAD / silence segmentation. Segmentation is performed
-    inside the whisper service.
+    This node does not do VAD / silence segmentation. Live utterance segmentation
+    is performed downstream inside stt_whisper_to_nats before LinTO.
     """
 
     def __init__(
@@ -80,7 +80,7 @@ class WhisperStreamNode(ConsumerNode):
                 pcm = pcm.reshape(-1)
 
             sr = int(frame.sample_rate or self.target_sample_rate)
-            raw_bytes = np.asarray(pcm, dtype="<i2").tobytes()
+            raw_bytes = np.ascontiguousarray(pcm, dtype="<i2").tobytes()
 
             self._seq += 1
             meta: dict[str, object] = {
