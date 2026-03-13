@@ -23,8 +23,6 @@ export function logEvent(event: ServerEvent): void {
     method("llm.request", payload);
   } else if (event.name === "llm_result" && payload) {
     method("llm.result", payload);
-  } else if (event.name === "asr_linto_raw") {
-    method("linto.raw", event.data);
   } else {
     method("data", event.data);
   }

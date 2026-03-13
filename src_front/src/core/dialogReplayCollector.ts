@@ -90,24 +90,6 @@ export class DialogReplayCollector {
       return { ...base, blocked };
     }
 
-    if (event.kind === "transcription_state") {
-      const pending = typeof (event.data as Record<string, unknown>).pending === "boolean"
-        ? (event.data as Record<string, unknown>).pending as boolean
-        : undefined;
-      const state = cleanString((event.data as Record<string, unknown>).state);
-      const sourceEvent = cleanString((event.data as Record<string, unknown>).source_event);
-      const message = cleanString((event.data as Record<string, unknown>).message);
-      const details: Record<string, unknown> = {};
-      if (typeof pending === "boolean") details.pending = pending;
-      if (state) details.state = state;
-      if (sourceEvent) details.source_event = sourceEvent;
-      return {
-        ...base,
-        text: message ? shortText(message) : undefined,
-        details: Object.keys(details).length ? details : undefined,
-      };
-    }
-
     if (event.kind === "message" || event.kind === "transcription") {
       const text = typeof event.data.text === "string" ? shortText(event.data.text) : undefined;
       const turnId = cleanString((event.data as Record<string, unknown>).turn_id);

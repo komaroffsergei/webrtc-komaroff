@@ -14,7 +14,6 @@ export class ChatUI {
   private voiceBlocked = false;
   private editInFlight = false;
   private thinkingEl: HTMLElement | null = null;
-  private transcriptionFlashEl: HTMLElement | null = null;
   private messageByTurn = new Map<string, HTMLElement>();
   private editHandler: EditHandler | null = null;
   private activeInlineEditor: HTMLElement | null = null;
@@ -103,9 +102,6 @@ export class ChatUI {
       if (nodeTurnId) {
         this.messageByTurn.delete(nodeTurnId);
       }
-      if (node === this.transcriptionFlashEl) {
-        this.transcriptionFlashEl = null;
-      }
       node.remove();
       node = next;
     }
@@ -188,37 +184,6 @@ export class ChatUI {
     }
     this.thinkingActive = false;
     this.updateBlockedState();
-  }
-
-  showTranscriptionFlash(text = "Транскрипция..."): void {
-    if (this.transcriptionFlashEl) {
-      this.transcriptionFlashEl.textContent = text;
-      this.transcriptionFlashEl.classList.add("visible");
-      return;
-    }
-
-    const flash = document.createElement("div");
-    flash.className = "transcription-flash";
-    flash.textContent = text;
-    this.root.appendChild(flash);
-    this.transcriptionFlashEl = flash;
-    this.root.scrollTop = this.root.scrollHeight;
-    requestAnimationFrame(() => {
-      if (this.transcriptionFlashEl === flash) {
-        flash.classList.add("visible");
-      }
-    });
-  }
-
-  hideTranscriptionFlash(): void {
-    if (!this.transcriptionFlashEl) return;
-    const flash = this.transcriptionFlashEl;
-    flash.classList.remove("visible");
-    window.setTimeout(() => {
-      if (this.transcriptionFlashEl !== flash) return;
-      flash.remove();
-      this.transcriptionFlashEl = null;
-    }, 140);
   }
 
   setVoiceBlocked(blocked: boolean): void {

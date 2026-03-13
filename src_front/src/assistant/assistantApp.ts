@@ -51,7 +51,6 @@ export class AssistantApp {
   private agentCommands: AgentCommandHandler;
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
   private replayCollector: DialogReplayCollector;
-  private transcriptionFlashVisible = false;
 
   constructor(private config: AppConfig) {
     this.replayCollector = new DialogReplayCollector({
@@ -117,7 +116,6 @@ export class AssistantApp {
       this.el.textInput!.value = "";
       const turnId = crypto.randomUUID();
       this.chat.addMessage(text, "user", { turnId, editable: true });
-      this.hideVoiceStage();
 
       this.chat.clearThinking();
       this.chat.setThinking("Thinking…");
@@ -125,7 +123,6 @@ export class AssistantApp {
       void this.commands.sendMessage(text, turnId).then((sessionId) => {
         this.persistSessionId(sessionId);
       }).catch((err) => {
-        this.hideVoiceStage();
         this.chat.clearThinking();
         this.warning.show({message: String(err)});
       });
@@ -139,7 +136,6 @@ export class AssistantApp {
   private async toggleConnection(): Promise<void> {
     if (isConnected()) {
       disconnectSession();
-      this.hideVoiceStage();
       setStatus(this.el, "Отключено");
       this.chat.addMessage("Отключено", "status");
       return;
@@ -150,9 +146,6 @@ export class AssistantApp {
         this.config,
         this.el,
         this.audio,
-        (t) => {
-          if (this.el.vadLevel) this.el.vadLevel.textContent = t;
-        },
         { sessionId: this.commands.getSessionId() },
       );
       if (sessionId) {
@@ -163,7 +156,6 @@ export class AssistantApp {
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
     } catch (err) {
-      this.hideVoiceStage();
       this.warning.show({message: `Connect failed: ${String(err)}`});
       setStatus(this.el, "Ошибка подключения");
       logError("webrtc", err);
@@ -220,14 +212,12 @@ export class AssistantApp {
     }
 
     if (status.type === "error") {
-      this.hideVoiceStage();
       logError("nats", status.error);
       setStatus(this.el, "NATS: ошибка, переподключение…");
       this.scheduleNatsReconnect();
       return;
     }
 
-    this.hideVoiceStage();
     setStatus(this.el, "NATS отключено, переподключение…");
     this.scheduleNatsReconnect();
   }
@@ -314,14 +304,9 @@ export class AssistantApp {
           console.warn("[nats] Invalid transcription payload", event);
           return;
         }
-        this.hideVoiceStage();
         this.chat.clearThinking();
         this.chat.addMessage(text, "user", { turnId, editable: true });
         this.chat.setThinking("Thinking…");
-        return;
-      }
-      case "transcription_state": {
-        this.handleTranscriptionStateEvent(event.data);
         return;
       }
       case "thought": {
@@ -354,9 +339,6 @@ export class AssistantApp {
         setMicEnabled(!blocked);
         if (this.el.micWaveform) this.el.micWaveform.style.display = blocked ? "none" : "";
         if (this.el.waveBackground) this.el.waveBackground.style.display = blocked ? "none" : "";
-        if (!blocked) {
-          this.hideVoiceStage();
-        }
         return;
       }
       case "client": {
@@ -430,60 +412,14 @@ export class AssistantApp {
       this.warning.show({message: "Не удалось найти сообщение для редактирования"});
       return;
     }
-    this.hideVoiceStage();
     this.chat.setThinking("Thinking…");
     try {
       const sessionId = await this.commands.sendEditedMessage(text, turnId);
       this.persistSessionId(sessionId);
     } catch (err) {
-      this.hideVoiceStage();
       this.chat.clearThinking();
       this.warning.show({message: `Edit failed: ${String(err)}`});
     }
-  }
-
-  private handleTranscriptionStateEvent(data: Record<string, unknown>): void {
-    const state = typeof data.state === "string" ? data.state : "";
-    const details = typeof data.message === "string" ? data.message.trim() : "";
-    switch (state) {
-      case "speech_started":
-        this.showVoiceStage("Слушаю…");
-        return;
-      case "transcribing":
-        this.showVoiceStage("Распознаю…");
-        return;
-      case "thinking":
-        this.hideVoiceStage();
-        return;
-      case "final_received":
-        this.hideVoiceStage();
-        return;
-      case "idle":
-        this.hideVoiceStage();
-        return;
-      case "error":
-        this.hideVoiceStage();
-        if (details) {
-          this.warning.show({message: details});
-        }
-        return;
-      default:
-        return;
-    }
-  }
-
-  private showVoiceStage(text: string): void {
-    this.chat.showTranscriptionFlash(text);
-    this.transcriptionFlashVisible = true;
-  }
-
-  private hideVoiceStage(): void {
-    if (!this.transcriptionFlashVisible) {
-      this.chat.hideTranscriptionFlash();
-      return;
-    }
-    this.chat.hideTranscriptionFlash();
-    this.transcriptionFlashVisible = false;
   }
 
   private initializeSessionId(): void {

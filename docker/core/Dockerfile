@@ -30,13 +30,9 @@ exec "$@"
 EOF
 
 RUN chmod +x /entrypoint.sh
-RUN mkdir -p /app/models/asr /app/src_core/models/vad
 
 ENV SERVER_ENV=production \
-    PORT=8000 \
-    ASR_MODELS=/app/models/asr \
-    ASR_MODEL_ID=Systran/faster-whisper-small \
-    VAD_MODEL_PATH=/app/src_core/models/vad/
+    PORT=8000
 
 WORKDIR /app/src_core
 

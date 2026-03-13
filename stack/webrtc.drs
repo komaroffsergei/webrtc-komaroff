@@ -10,12 +10,10 @@ NATS_AGENT_SUBJECT = "nats.agent."
 NATS_LLM_SUBJECT = "nats.llm."
 ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."
-LINTO_WS_URL = 'ws://192.168.28.134/streaming'
-LINTO_WS_HOST = 'linto_stt_whisper.h100.local'
-LINTO_WS_LANGUAGE = 'ru'
 LINTO_HTTP_URL = 'http://192.168.28.134/transcribe'
 LINTO_HTTP_HOST = 'linto_stt_whisper_http.h100.local'
-LINTO_HTTP_LANGUAGE = LINTO_WS_LANGUAGE
+LINTO_HTTP_LANGUAGE = 'ru'
+LINTO_HTTP_CONNECT_TIMEOUT_S = '10.0'
 FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 ASR_FILE_JOB_SUBJECT = 'inference.whisper.file.job'
 ASR_FILE_EVENT_PREFIX = 'inference.whisper.file.event.'
@@ -28,7 +26,7 @@ FILE_CHUNK_OVERLAP_SECONDS = '15'
 FILE_CHUNK_RETRY_LIMIT = '2'
 FILE_TEXT_SOFT_BREAK_S = '0.8'
 FILE_TEXT_HARD_BREAK_S = '1.8'
-WHISPER_STACK_REVISION = '2026-03-13-live-buffered-commit-1'
+WHISPER_STACK_REVISION = '2026-03-13-live-phraser-1'
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -62,17 +60,10 @@ Service :src_core, image: webrtc_registry['core']do
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       NATS_REQUEST_TIMEOUT: NATS_REQUEST_TIMEOUT,
-      LIVE_ASR_COMMIT_IDLE_MS: '1200',
       STACK_SERVICE_NAME: 'src_core',
       USER_ID: USER_ID,
       CORE_HOST: '0.0.0.0',
-      CORE_PORT: 8000,
-      ASR_MODELS: '/app/models/asr',
-      ASR_MODEL_ID: 'Systran/faster-whisper-small',
-      VAD_MODEL_PATH: '/app/models/vad',
-      VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx'
-  volume name: 'ASR_MODELS', target: '/app/models/asr'
-  volume name: 'VAD_MODELS_PATH', target: '/app/models/vad'
+      CORE_PORT: 8000
 end
 
 Service :src_api_gateway, image: webrtc_registry['api-gateway']do
@@ -218,24 +209,6 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
     }
   CONF
 end
-
-
-# local transcribe
-#  Service :py_faster_whisper, image: webrtc_registry['voice-chat/py_faster_whisper'] do
-#    ingress host: HOST, path: '/whisper', port: 8090
-#
-#    env NATS_URL: NATS_URL,
-#        NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-#        ASR_IN_PREFIX: ASR_IN_PREFIX,
-#        ASR_OUT_PREFIX: ASR_OUT_PREFIX,
-#        WEBUI_BASE_PATH: '/whisper',
-#        STACK_SERVICE_NAME: 'py_faster_whisper',
-#        ASR_MODELS: '/app/src/models/asr',
-#        ASR_MODEL_ID: 'Systran/faster-whisper-small'
-#  end
-
-
-# linto transcribe
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
@@ -243,6 +216,11 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+      ASR_BACKEND: 'linto',
+      ASR_MODELS: '/app/src/models/asr',
+      ASR_MODEL_ID: 'Systran/faster-whisper-small',
+      VAD_MODELS: '/app/src/models/vad',
+      VAD_MODEL_URL: 'https://github.com/snakers4/silero-vad/raw/refs/heads/master/src/silero_vad/data/silero_vad.onnx',
       ASR_FILE_JOB_SUBJECT: ASR_FILE_JOB_SUBJECT,
       ASR_FILE_EVENT_PREFIX: ASR_FILE_EVENT_PREFIX,
       ASR_FILE_SESSION_EVENT_PREFIX: ASR_FILE_SESSION_EVENT_PREFIX,
@@ -254,11 +232,7 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_HTTP_URL: LINTO_HTTP_URL,
       LINTO_HTTP_HOST: LINTO_HTTP_HOST,
       LINTO_HTTP_LANGUAGE: LINTO_HTTP_LANGUAGE,
-      LINTO_WS_URL: LINTO_WS_URL,
-      LINTO_WS_HOST: LINTO_WS_HOST,
-      LINTO_WS_LANGUAGE: LINTO_WS_LANGUAGE,
-      STREAM_SERVER_VAD_ENABLED: '0',
-      STREAM_DROP_KNOWN_HALLUCINATIONS: '0',
+      LINTO_HTTP_CONNECT_TIMEOUT_S: LINTO_HTTP_CONNECT_TIMEOUT_S,
       FILE_JOB_STORAGE_DIR: FILE_JOB_STORAGE_DIR,
       FILE_CHUNK_SECONDS: FILE_CHUNK_SECONDS,
       FILE_CHUNK_OVERLAP_SECONDS: FILE_CHUNK_OVERLAP_SECONDS,
@@ -272,14 +246,11 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       WEBUI_FILE_BACKEND: 'chunked_http_nats',
       WEBUI_FILE_DEFAULT_TAB: 'file',
       WEBUI_FILE_MAX_UPLOAD_MB: '1024',
-      WEBUI_FILE_STREAM_CHUNK_MS: '500',
-      WEBUI_FILE_STREAM_WAIT_MS: '50',
-      WEBUI_FILE_EOF_TIMEOUT_S: '180',
-      WEBUI_FILE_FINAL_IDLE_S: '2.0',
-      WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: "/whisper",
       STACK_SERVICE_NAME: 'stt_whisper_to_nats'
 
+  volume name: 'ASR_MODELS', target: '/app/src/models/asr'
+  volume name: 'VAD_MODELS_PATH', target: '/app/src/models/vad'
   volume name: 'whisper-file-jobs', target: FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
@@ -294,6 +265,7 @@ Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_w
       LINTO_HTTP_URL: LINTO_HTTP_URL,
       LINTO_HTTP_HOST: LINTO_HTTP_HOST,
       LINTO_HTTP_LANGUAGE: LINTO_HTTP_LANGUAGE,
+      LINTO_HTTP_CONNECT_TIMEOUT_S: LINTO_HTTP_CONNECT_TIMEOUT_S,
       FILE_JOB_STORAGE_DIR: FILE_JOB_STORAGE_DIR,
       FILE_CHUNK_SECONDS: FILE_CHUNK_SECONDS,
       FILE_CHUNK_OVERLAP_SECONDS: FILE_CHUNK_OVERLAP_SECONDS,
