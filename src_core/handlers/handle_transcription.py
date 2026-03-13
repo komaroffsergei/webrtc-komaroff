@@ -140,45 +140,6 @@ async def _publish_transcription_log(
     )
 
 
-async def _publish_raw_linto_log(
-    app,
-    *,
-    payload: dict,
-    session_id: str | None,
-    phrase_id: str | None,
-    turn_id: str | None,
-    utterance_id: str | None,
-    event_name: str | None,
-    error_code: str | None,
-) -> None:
-    if "raw_linto" not in payload and "raw_linto_text" not in payload:
-        return
-    data: dict[str, object] = {}
-    if session_id:
-        data["session_id"] = session_id
-    if phrase_id:
-        data["phrase_id"] = phrase_id
-    if turn_id:
-        data["turn_id"] = turn_id
-    if utterance_id:
-        data["utterance_id"] = utterance_id
-    if event_name:
-        data["source_event"] = event_name
-    if "raw_linto" in payload:
-        data["raw_linto"] = payload.get("raw_linto")
-    if "raw_linto_text" in payload:
-        data["raw_linto_text"] = payload.get("raw_linto_text")
-    kind = "error" if error_code else "info"
-    await event_log(
-        "log",
-        kind,
-        data,
-        name="asr_linto_raw",
-        app=app,
-        service=STACK_SERVICE_NAME,
-    )
-
-
 async def _publish_transcription_state(
     app,
     *,
@@ -244,16 +205,6 @@ async def handle_transcription(app, payload: dict):
     )
 
     if not text:
-        await _publish_raw_linto_log(
-            app,
-            payload=payload,
-            session_id=session_id,
-            phrase_id=phrase_id,
-            turn_id=turn_id,
-            utterance_id=utterance_id,
-            event_name=event_name,
-            error_code=error_code,
-        )
         if partial:
             return {"status": "partial"}
         if state:
@@ -279,16 +230,6 @@ async def handle_transcription(app, payload: dict):
         return {}
 
     logger.info("handle_transcription: '%s'", text)
-    await _publish_raw_linto_log(
-        app,
-        payload=payload,
-        session_id=session_id,
-        phrase_id=phrase_id,
-        turn_id=turn_id,
-        utterance_id=utterance_id,
-        event_name=event_name,
-        error_code=error_code,
-    )
 
     effective_turn_id = turn_id or str(uuid4())
     if is_asr_stream_payload:
