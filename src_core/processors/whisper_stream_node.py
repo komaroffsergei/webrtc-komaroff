@@ -16,9 +16,8 @@ class WhisperStreamNode(ConsumerNode):
     """
     Streams audio frames to the Whisper service over NATS and forwards JSON replies.
 
-    This node only streams normalized audio frames to NATS and forwards ASR JSON
-    replies back into src_core. Live utterance commit is handled in src_core
-    after LinTO emits stream segments.
+    This node does not do VAD / silence segmentation. Live utterance segmentation
+    is performed downstream inside stt_whisper_to_nats before LinTO.
     """
 
     def __init__(

@@ -7,27 +7,6 @@ from otel import OTelBootstrap
 
 
 @OTelBootstrap.span(
-    "webrtc.live_asr.cancel_tasks",
-    attributes_from_args=lambda app: {
-        "webrtc.live_asr.sessions": len(app.get("live_asr_sessions", {})),
-    },
-)
-async def _cancel_live_asr_tasks(app: web.Application) -> None:
-    sessions = app.get("live_asr_sessions", {})
-    tasks = []
-    if isinstance(sessions, dict):
-        for state in sessions.values():
-            task = getattr(state, "commit_task", None)
-            if task and not task.done():
-                task.cancel()
-                tasks.append(task)
-    if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
-    if isinstance(sessions, dict):
-        sessions.clear()
-
-
-@OTelBootstrap.span(
     "webrtc.pcs.close_all",
     attributes_from_result=lambda errors: {"webrtc.pcs.close.errors": len(errors)},
     record_exceptions_from_result=lambda errors: errors[:1],
@@ -60,7 +39,6 @@ def _otel_shutdown(otel_obj) -> None:
 )
 async def handle_shutdown(app: web.Application):
     pcs = list(app.get("pcs", []))
-    await _cancel_live_asr_tasks(app)
     await _pcs_close_all(pcs)
     _pcs_clear(app)
     _otel_shutdown(app.get("otel"))
