@@ -33,6 +33,7 @@ from src_core.settings import (
     NATS_AGENT_HISTORY_SUBJECT,
     ASR_IN_PREFIX,
     ASR_OUT_PREFIX,
+    LIVE_ASR_COMMIT_IDLE_MS,
     OTEL_EXPORTER_OTLP_ENDPOINT,
     OTEL_EXPORTER_OTLP_ENDPOINT_FRONT,
     OTEL_LOG_LEVEL,
@@ -75,6 +76,7 @@ if __name__ == "__main__":
     app = web.Application(client_max_size=1_048_576)
 
     app["pcs"] = set()
+    app["live_asr_sessions"] = {}
     app["vars"] = {
         "NATS_URL": NATS_URL,
         "STACK_SERVICE_NAME": STACK_SERVICE_NAME,
@@ -84,6 +86,7 @@ if __name__ == "__main__":
         "ASR_IN_PREFIX": ASR_IN_PREFIX,
         "ASR_OUT_PREFIX": ASR_OUT_PREFIX,
         "USER_ID": USER_ID,
+        "LIVE_ASR_COMMIT_IDLE_MS": LIVE_ASR_COMMIT_IDLE_MS,
     }
 
     # --- OTel bootstrap ---
