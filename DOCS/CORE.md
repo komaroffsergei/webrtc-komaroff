@@ -14,24 +14,13 @@ It does not execute workflow logic.
 
 ## Message flow
 1. Browser calls `POST /core/message` with `{ text, session_id?, turn_id?, edit? }`.
-2. `src_core` normalizes `turn_id` to UUID before forwarding to agent.
-3. `src_core` sends req/reply to `nats.agent.<user_id>`.
-4. Returns:
+2. `src_core` publishes `command/transcription` + voice lock events to `nats.events.<user_id>`.
+3. If ASR sends a pending marker without final text, `src_core` publishes `command/transcription_pending` for UI interim feedback.
+4. `turn_id` is normalized to UUID before forwarding to agent.
+5. `src_core` sends req/reply to `nats.agent.<user_id>`.
+6. Returns:
    - success: `{ status: "ok", session_id }`
    - downstream error: `{ status: "error", session_id, error, details? }` with HTTP 502/504
-
-## Live ASR flow from `/chat`
-1. Browser sends a WebRTC audio track to `POST /core/offer`.
-2. `handle_track.py` builds `TrackSourceNode -> WhisperStreamNode`.
-3. `TrackSourceNode` normalizes audio to mono `16kHz` packed `s16`.
-4. `WhisperStreamNode` publishes binary wire packets to `inference.whisper.stream.<session_id>`.
-5. `stt_whisper_to_nats` does server-side utterance segmentation and talks to `linto_stt_whisper` over websocket.
-6. `src_core` receives stage/final payloads from `inference.whisper.text.<session_id>`.
-7. `handle_transcription.py` publishes:
-   - `command/transcription_state` for `speech_started`, `transcribing`, `thinking`, `idle`, `error`
-   - `command/voice` to block/unblock mic and text input
-   - `command/transcription` once final text is ready
-8. Only final text is forwarded to `src_agent`; partial/stage payloads stay in UI/event flow.
 
 History flow:
 1. Browser calls `GET /core/history`.

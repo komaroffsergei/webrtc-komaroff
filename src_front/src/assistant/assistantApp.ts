@@ -31,6 +31,9 @@ import { MapController } from "../map/mapController";
 export class AssistantApp {
   private static readonly SESSION_STORAGE_KEY = "assistant.session_id";
   private static readonly CHAT_ROUTE_PREFIX = "/chat";
+  private static readonly TRANSCRIPTION_FLASH_TEXT = "Транскрипция...";
+  private static readonly TRANSCRIPTION_FLASH_DELAY_MS = 180;
+  private static readonly TRANSCRIPTION_FLASH_MIN_VISIBLE_MS = 420;
   private static readonly UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -51,7 +54,13 @@ export class AssistantApp {
   private agentCommands: AgentCommandHandler;
   private modelStatuses = new Map<string, {status: string; percent?: number}>();
   private replayCollector: DialogReplayCollector;
+  private vadSpeechActive = false;
+  private vadSpeechDetected = false;
+  private transcriptionPending = false;
   private transcriptionFlashVisible = false;
+  private transcriptionFlashShownAt = 0;
+  private transcriptionFlashShowTimer: number | null = null;
+  private transcriptionFlashHideTimer: number | null = null;
 
   constructor(private config: AppConfig) {
     this.replayCollector = new DialogReplayCollector({
@@ -117,7 +126,7 @@ export class AssistantApp {
       this.el.textInput!.value = "";
       const turnId = crypto.randomUUID();
       this.chat.addMessage(text, "user", { turnId, editable: true });
-      this.hideVoiceStage();
+      this.resolveTranscriptionPending();
 
       this.chat.clearThinking();
       this.chat.setThinking("Thinking…");
@@ -125,7 +134,7 @@ export class AssistantApp {
       void this.commands.sendMessage(text, turnId).then((sessionId) => {
         this.persistSessionId(sessionId);
       }).catch((err) => {
-        this.hideVoiceStage();
+        this.resolveTranscriptionPending();
         this.chat.clearThinking();
         this.warning.show({message: String(err)});
       });
@@ -139,7 +148,7 @@ export class AssistantApp {
   private async toggleConnection(): Promise<void> {
     if (isConnected()) {
       disconnectSession();
-      this.hideVoiceStage();
+      this.resetTranscriptionTracking();
       setStatus(this.el, "Отключено");
       this.chat.addMessage("Отключено", "status");
       return;
@@ -153,6 +162,7 @@ export class AssistantApp {
         (t) => {
           if (this.el.vadLevel) this.el.vadLevel.textContent = t;
         },
+        (active) => this.handleVadSpeechActivity(active),
         { sessionId: this.commands.getSessionId() },
       );
       if (sessionId) {
@@ -163,7 +173,7 @@ export class AssistantApp {
       setStatus(this.el, "Подключено");
       // this.chat.addMessage("Подключено", "status");
     } catch (err) {
-      this.hideVoiceStage();
+      this.resetTranscriptionTracking();
       this.warning.show({message: `Connect failed: ${String(err)}`});
       setStatus(this.el, "Ошибка подключения");
       logError("webrtc", err);
@@ -220,14 +230,14 @@ export class AssistantApp {
     }
 
     if (status.type === "error") {
-      this.hideVoiceStage();
+      this.resolveTranscriptionPending();
       logError("nats", status.error);
       setStatus(this.el, "NATS: ошибка, переподключение…");
       this.scheduleNatsReconnect();
       return;
     }
 
-    this.hideVoiceStage();
+    this.resolveTranscriptionPending();
     setStatus(this.el, "NATS отключено, переподключение…");
     this.scheduleNatsReconnect();
   }
@@ -314,14 +324,14 @@ export class AssistantApp {
           console.warn("[nats] Invalid transcription payload", event);
           return;
         }
-        this.hideVoiceStage();
+        this.resolveTranscriptionPending();
         this.chat.clearThinking();
         this.chat.addMessage(text, "user", { turnId, editable: true });
         this.chat.setThinking("Thinking…");
         return;
       }
-      case "transcription_state": {
-        this.handleTranscriptionStateEvent(event.data);
+      case "transcription_pending": {
+        this.handleTranscriptionPendingEvent(event.data);
         return;
       }
       case "thought": {
@@ -355,7 +365,7 @@ export class AssistantApp {
         if (this.el.micWaveform) this.el.micWaveform.style.display = blocked ? "none" : "";
         if (this.el.waveBackground) this.el.waveBackground.style.display = blocked ? "none" : "";
         if (!blocked) {
-          this.hideVoiceStage();
+          this.resolveTranscriptionPending();
         }
         return;
       }
@@ -430,60 +440,103 @@ export class AssistantApp {
       this.warning.show({message: "Не удалось найти сообщение для редактирования"});
       return;
     }
-    this.hideVoiceStage();
+    this.resolveTranscriptionPending();
     this.chat.setThinking("Thinking…");
     try {
       const sessionId = await this.commands.sendEditedMessage(text, turnId);
       this.persistSessionId(sessionId);
     } catch (err) {
-      this.hideVoiceStage();
+      this.resolveTranscriptionPending();
       this.chat.clearThinking();
       this.warning.show({message: `Edit failed: ${String(err)}`});
     }
   }
 
-  private handleTranscriptionStateEvent(data: Record<string, unknown>): void {
-    const state = typeof data.state === "string" ? data.state : "";
-    const details = typeof data.message === "string" ? data.message.trim() : "";
-    switch (state) {
-      case "speech_started":
-        this.showVoiceStage("Слушаю…");
-        return;
-      case "transcribing":
-        this.showVoiceStage("Распознаю…");
-        return;
-      case "thinking":
-        this.hideVoiceStage();
-        return;
-      case "final_received":
-        this.hideVoiceStage();
-        return;
-      case "idle":
-        this.hideVoiceStage();
-        return;
-      case "error":
-        this.hideVoiceStage();
-        if (details) {
-          this.warning.show({message: details});
-        }
-        return;
-      default:
-        return;
+  private handleVadSpeechActivity(active: boolean): void {
+    this.vadSpeechActive = active;
+    if (active) {
+      this.vadSpeechDetected = true;
+      if (this.transcriptionPending) {
+        this.transcriptionPending = false;
+        this.scheduleTranscriptionFlashHide();
+      }
+      return;
+    }
+    if (!this.vadSpeechDetected) return;
+    this.transcriptionPending = true;
+    this.scheduleTranscriptionFlashShow();
+  }
+
+  private handleTranscriptionPendingEvent(data: Record<string, unknown>): void {
+    const pending = typeof data.pending === "boolean" ? data.pending : true;
+    if (!pending) {
+      this.resolveTranscriptionPending();
+      return;
+    }
+    this.transcriptionPending = true;
+    if (!this.vadSpeechActive) {
+      this.scheduleTranscriptionFlashShow();
     }
   }
 
-  private showVoiceStage(text: string): void {
-    this.chat.showTranscriptionFlash(text);
-    this.transcriptionFlashVisible = true;
+  private resolveTranscriptionPending(): void {
+    this.clearTranscriptionFlashShowTimer();
+    if (!this.transcriptionPending && !this.transcriptionFlashVisible) return;
+    this.transcriptionPending = false;
+    this.vadSpeechDetected = false;
+    this.scheduleTranscriptionFlashHide();
   }
 
-  private hideVoiceStage(): void {
+  private resetTranscriptionTracking(): void {
+    this.clearTranscriptionFlashShowTimer();
+    this.clearTranscriptionFlashHideTimer();
+    this.vadSpeechActive = false;
+    this.vadSpeechDetected = false;
+    this.transcriptionPending = false;
+    this.transcriptionFlashVisible = false;
+    this.transcriptionFlashShownAt = 0;
+    this.chat.hideTranscriptionFlash();
+  }
+
+  private scheduleTranscriptionFlashShow(): void {
+    this.clearTranscriptionFlashHideTimer();
+    if (this.transcriptionFlashVisible || this.transcriptionFlashShowTimer !== null) return;
+    this.transcriptionFlashShowTimer = window.setTimeout(() => {
+      this.transcriptionFlashShowTimer = null;
+      if (!this.transcriptionPending || this.vadSpeechActive) return;
+      this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_TEXT);
+      this.transcriptionFlashVisible = true;
+      this.transcriptionFlashShownAt = Date.now();
+    }, AssistantApp.TRANSCRIPTION_FLASH_DELAY_MS);
+  }
+
+  private scheduleTranscriptionFlashHide(): void {
+    this.clearTranscriptionFlashShowTimer();
     if (!this.transcriptionFlashVisible) {
       this.chat.hideTranscriptionFlash();
       return;
     }
-    this.chat.hideTranscriptionFlash();
-    this.transcriptionFlashVisible = false;
+    this.clearTranscriptionFlashHideTimer();
+    const elapsedMs = Date.now() - this.transcriptionFlashShownAt;
+    const delayMs = Math.max(0, AssistantApp.TRANSCRIPTION_FLASH_MIN_VISIBLE_MS - elapsedMs);
+    this.transcriptionFlashHideTimer = window.setTimeout(() => {
+      this.transcriptionFlashHideTimer = null;
+      this.chat.hideTranscriptionFlash();
+      this.transcriptionFlashVisible = false;
+      this.transcriptionFlashShownAt = 0;
+    }, delayMs);
+  }
+
+  private clearTranscriptionFlashShowTimer(): void {
+    if (this.transcriptionFlashShowTimer === null) return;
+    window.clearTimeout(this.transcriptionFlashShowTimer);
+    this.transcriptionFlashShowTimer = null;
+  }
+
+  private clearTranscriptionFlashHideTimer(): void {
+    if (this.transcriptionFlashHideTimer === null) return;
+    window.clearTimeout(this.transcriptionFlashHideTimer);
+    this.transcriptionFlashHideTimer = null;
   }
 
   private initializeSessionId(): void {

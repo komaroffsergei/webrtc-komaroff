@@ -14,11 +14,19 @@
     <div class="control-group">
         <label class="control-label">
             <input type="checkbox" id="vadEnable"/>
-            Mic level meter
+            VAD (energy-based)
         </label>
         <label class="control-label">
-            <span>Уровень:</span>
-            <span id="vadLevel" class="control-value">-inf dBFS</span>
+            <span>Порог:</span>
+            <input
+                    type="range"
+                    id="vadThresh"
+                    min="-60"
+                    max="0"
+                    step="1"
+                    value="-55"
+            />
+            <span id="vadLevel" class="control-value">-55 dBFS</span>
         </label>
     </div>
     <div class="control-group">

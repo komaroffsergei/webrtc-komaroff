@@ -38,7 +38,7 @@ async def handle_track(track, pc, audio_transceiver, app, *, session_id: str | N
             frame_duration_ms=20,
             target_rate=16000,
             target_channels=1,
-            target_output_format='s16'
+            target_output_format='s16p'
         )
     )
 

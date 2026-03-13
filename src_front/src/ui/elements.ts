@@ -11,6 +11,7 @@ export type AssistantElements = {
   remoteAudio: HTMLAudioElement | null;
 
   vadEnable: HTMLInputElement | null;
+  vadThresh: HTMLInputElement | null;
   vadLevel: HTMLElement | null;
 
   ecEnable: HTMLInputElement | null;
@@ -31,6 +32,7 @@ export function getAssistantElements(): AssistantElements {
     remoteAudio: document.getElementById("remoteAudio") as HTMLAudioElement | null,
 
     vadEnable: document.getElementById("vadEnable") as HTMLInputElement | null,
+    vadThresh: document.getElementById("vadThresh") as HTMLInputElement | null,
     vadLevel: document.getElementById("vadLevel"),
 
     ecEnable: document.getElementById("ecEnable") as HTMLInputElement | null,
