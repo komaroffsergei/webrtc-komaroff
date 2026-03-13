@@ -197,8 +197,7 @@ class TrackSourceNode:
                     if self.output_format_is_planar:
                         frame_data = np.ascontiguousarray(piece)
                     else:
-                        # Packed audio in PyAV expects a single interleaved plane.
-                        frame_data = np.ascontiguousarray(piece.T.reshape(1, -1))
+                        frame_data = np.ascontiguousarray(piece.T)
 
                     out = AudioFrame.from_ndarray(frame_data, format=output_format, layout=layout_name)
                     out.sample_rate = target_rate
