@@ -26,7 +26,7 @@ FILE_CHUNK_OVERLAP_SECONDS = '15'
 FILE_CHUNK_RETRY_LIMIT = '2'
 FILE_TEXT_SOFT_BREAK_S = '0.8'
 FILE_TEXT_HARD_BREAK_S = '1.8'
-WHISPER_STACK_REVISION = '2026-03-13-live-phraser-local-whisper-1'
+WHISPER_STACK_REVISION = '2026-03-13-live-phraser-1'
 
 HOST = 'webrtc-komaroff.*'
 VOICE_CHAT_HOST = 'voice-chat.*'
@@ -216,7 +216,7 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
-      ASR_BACKEND: 'local_whisper',
+      ASR_BACKEND: 'linto',
       ASR_MODELS: '/app/src/models/asr',
       ASR_MODEL_ID: 'Systran/faster-whisper-small',
       VAD_MODELS: '/app/src/models/vad',
