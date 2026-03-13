@@ -13,6 +13,7 @@ NATS_EVENTS_SUBJECT = os.getenv("NATS_EVENTS_SUBJECT", "nats.events.")
 NATS_AGENT_SUBJECT = os.getenv("NATS_AGENT_SUBJECT", "nats.agent.")
 NATS_AGENT_HISTORY_SUBJECT = os.getenv("NATS_AGENT_HISTORY_SUBJECT", "nats.agent.history.")
 NATS_REQUEST_TIMEOUT = float(os.getenv("NATS_REQUEST_TIMEOUT", "90"))
+LIVE_ASR_COMMIT_IDLE_MS = int(os.getenv("LIVE_ASR_COMMIT_IDLE_MS", "1200"))
 
 ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."
@@ -22,6 +23,9 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8101/api")
 
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))
 CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")
+
+ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
+ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
 
 # OpenTelemetry is opt-in for local development.
 # Set OTEL_TRACES_EXPORTER=otlp and OTEL_EXPORTER_OTLP_ENDPOINT to enable exporting.

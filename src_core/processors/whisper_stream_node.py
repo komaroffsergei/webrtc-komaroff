@@ -14,11 +14,11 @@ logger = logging.getLogger("audio.WhisperStreamNode")
 
 class WhisperStreamNode(ConsumerNode):
     """
-    Streams audio frames to the phrase-level ASR service over NATS.
+    Streams audio frames to the Whisper service over NATS and forwards JSON replies.
 
-    Normalized PCM frames go to `inference.whisper.stream.<session>`. The ASR
-    service (`stt_whisper_to_nats`) performs phrase segmentation and returns one
-    final JSON reply per phrase on `inference.whisper.text.<session>`.
+    This node only streams normalized audio frames to NATS and forwards ASR JSON
+    replies back into src_core. Live utterance commit is handled in src_core
+    after LinTO emits stream segments.
     """
 
     def __init__(

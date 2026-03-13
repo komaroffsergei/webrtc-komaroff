@@ -1,92 +1,159 @@
 # webrtc-komaroff
 
-Локальный стек WebRTC + NATS + agent/runtime.
+Локальный стек WebRTC + NATS + LangGraph runtime.
 
-## Основные сервисы
+## Сервисы
 
-- `src_front` — браузерный UI
-- `src_core` — HTTP/WebRTC ingress
-- `src_agent` — оркестрация пользовательского шага
-- `src_langgraph` — runtime сценариев
-- `src_llm` — LLM gateway
-- `src_api_gateway` — tools runtime
-- `src_postgres` — storage
-- `nats` — шина сообщений
-- `stt_whisper_to_nats` — canonical ASR service для `/chat` и `/whisper`
+- `src_front` — веб UI.
+- `src_core` — обработка сессии/голоса и работа с фронтом.
+- `src_agent` — оркестратор пользовательского шага, хранит runtime в Postgres.
+- `src_langgraph` — runtime сценариев на LangGraph.
+- `src_llm` — gateway к модели (Ollama/remote).
+- `src_api_gateway` — tools (`nats.tools.*`) для сценариев.
+- `src_postgres` — БД runtime.
+- `nats` — шина сообщений.
 
-## Текущие ASR режимы
+## NATS subjects
 
-- live `/chat`:
-  `WebRTC -> src_core -> inference.whisper.stream.<session> -> stt_whisper_to_nats(Phraser) -> ASR backend -> inference.whisper.text.<session>`
-- `/whisper` file mode:
-  `Browser -> HTTP upload -> NATS file job -> stt_whisper_file_worker -> LinTO HTTP`
-- `/whisper` stream debug:
-  `Browser -> /whisper/ws -> NATS -> stt_whisper_to_nats(Phraser) -> ASR backend`
+- `nats.agent.<user_id>` — вход в `src_agent`.
+- `nats.events.<user_id>` — события в UI.
+- `nats.workflow.run` — запрос на выполнение сценария.
+- `nats.workflow.health` — health runtime.
+- `nats.llm.<user_id>` — вызовы LLM.
+- `nats.tools.<tool_name>` — вызовы инструментов.
 
-Важно:
-
-- основной live backend по умолчанию: `ASR_BACKEND=linto`
-- `src_core` не буферизует live ASR и не решает, когда коммитить фразу
-- `stt_whisper_to_nats` режет поток на фразы сам
-- агент получает один final result на фразу
-
-Подробная схема: [ASR_BRIDGE_FLOW.md](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
-
-## Быстрый запуск
+## Быстрый запуск (Docker)
 
 ```bash
 cd docker
 docker compose --profile langgraph up -d --build
 ```
 
-Открыть:
+Для Docker-сервисов используется `NATS_URL_INTERNAL` (по умолчанию `nats://nats:4222`).
+Если в `docker/.env` у вас задан `NATS_URL=nats://localhost:4222` для запуска с хоста, это больше не ломает межконтейнерное подключение.
 
+Для NATS2Ollama endpoint без auth:
+```bash
+cd docker
+export OLLAMA_URL=https://nats2ollama.gis-master.ru
+docker compose --profile langgraph up -d --build
+```
+Важно: base URL не должен содержать `/api/chat`, иначе `src_llm` получит `405 Method Not Allowed`.
+
+Открыть:
 - UI: `http://127.0.0.1:8080/`
 - Core: `http://127.0.0.1:8000/core`
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-## Что происходит в `/chat`
+В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в gateway, создаёт NATS file-job, worker вырезает audio-only поток, нормализует его в `mono 16k`, режет на чанки и отправляет их последовательно в `linto_stt_whisper_http`, а браузер получает progress/result напрямую из NATS WS по `job` subject конкретного запуска, не меняя live voice pipeline `inference.whisper.*`.
 
-1. `src_front` захватывает микрофон через WebRTC.
-2. `src_core` нормализует track и публикует binary packets в `inference.whisper.stream.<session_id>`.
-3. `stt_whisper_to_nats` режет поток на phrase chunks.
-4. Каждая завершённая фраза транскрибируется backend-ом:
-   - `linto` по умолчанию
-   - `local_whisper` опционально
-5. Один final phrase result возвращается в `inference.whisper.text.<session_id>`.
-6. `src_core` сразу отправляет этот текст агенту.
+Режимы ASR в этом стэке сейчас такие:
+- live voice: `WebRTC -> NATS -> stt_whisper_to_nats (server-side utterance segmentation) -> LinTO websocket -> NATS`
+- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
+- `/whisper` stream debug: `Browser -> /whisper/ws -> NATS -> LinTO websocket`
 
-`/chat` не использует file-mode `/whisper` и не зависит от streaming partial semantics.
+Важно: `/chat` из `src_front` использует именно первый путь. То есть микрофон из браузера идёт в `src_core`, дальше в `WhisperStreamNode`, потом в `inference.whisper.stream.<session_id>`, затем в `stt_whisper_to_nats`, где поток режется на utterance-ы по server-side silence gate, и только потом уходит в `linto_stt_whisper` по websocket. UI получает стадийные события `Слушаю… -> Распознаю… -> Думаю…` через `nats.events.<user_id>`, а во время `transcribing/thinking` блокируются и микрофон, и текстовый ввод. `/chat` не использует `/whisper` file-mode, не ходит в `linto_stt_whisper_http` и не использует локальный `faster-whisper`.
 
-## Что происходит в `/whisper`
+Подробная архитектура, схемы сервисов, протоколы, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
 
-### File mode
+## Docker + отладка (PyCharm Remote Debug)
 
-- браузер делает `POST /whisper/api/file-transcribe`
-- gateway создаёт file job
-- worker режет длинный файл на чанки
-- chunk-и последовательно идут в `linto_stt_whisper_http`
-- браузер получает progress/result напрямую через NATS WS по `job_id`
+`debugpy` включается только через override-файл, обычный запуск без отладки не меняется.
 
-### Stream debug
+```bash
+cd docker
+cp .env.debug.example .env.debug
+# обязательно: абсолютный путь к корню репозитория на хосте
+# пример:
+# PYCHARM_PROJECT_ROOT=/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff
+docker compose --env-file .env --env-file .env.debug \
+  -f docker-compose.yml -f docker-compose.debug.yml \
+  --profile langgraph up -d --build
+```
 
-- браузер вручную шлёт `frame/end` через `/whisper/ws`
-- backend прокидывает эти пакеты в `ASR_IN_PREFIX`
-- дальше работает тот же `Phraser`, что и в `/chat`
+Важно: не запускай debug-стек без `-d` на длительную сессию. В attached-режиме (`up` без `-d`) закрытие/прерывание этой команды останавливает контейнеры, и все PyCharm attach-сессии сразу рвутся.
 
-## NATS subjects
+Порты отладки:
+- `src_core`: `127.0.0.1:5671`
+- `src_agent`: `127.0.0.1:5672`
+- `src_api_gateway`: `127.0.0.1:5673`
+- `src_langgraph`: `127.0.0.1:5674`
+- `src_llm`: `127.0.0.1:5675`
+- эти порты должны быть свободны на хосте для `Python Remote Debug` в PyCharm (docker их не публикует).
 
-- `nats.agent.<user_id>` — вход в `src_agent`
-- `nats.events.<user_id>` — UI events
-- `inference.whisper.stream.<session_id>` — live audio in
-- `inference.whisper.text.<session_id>` — final phrase results out
-- `inference.whisper.file.job` — file jobs
-- `inference.whisper.file.event.<job_id>` — file progress/result
+Если нужен стоп на старте до подключения IDE, выстави в `docker/.env.debug`:
+- `DEBUGPY_WAIT_FOR_CLIENT=1`
+- при этом сервисы не начнут слушать HTTP/NATS до attach, и до подключения дебаггера `src_front` может отвечать `502` на `/core/*` — это ожидаемо.
+- при `DEBUGPY_WAIT_FOR_CLIENT=0` сервисы стартуют сразу, а attach произойдёт в фоне, когда запустишь `Attach ...` конфиг в PyCharm.
+- `PYCHARM_REDIRECT_OUTPUT=0` рекомендуется для стабильного переподключения (логи смотри через `docker compose logs`).
+- `PYCHARM_PATCH_MULTIPROCESSING=0` рекомендуется оставить по умолчанию (стабильнее attach). Включай `1` только если нужно дебажить дочерние `multiprocessing` процессы.
+
+В проект уже добавлены shared PyCharm run-конфиги (`.run/Attach_*.run.xml`) для `Attach` к каждому сервису.
+В них уже включен параллельный запуск (`singleton=false`), поэтому можно одновременно подключаться к нескольким сервисам.
+
+## Локальный запуск Python-сервисов
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U pip
+pip install -r src_core/requirements.txt \
+  -r src_agent/requirements.txt \
+  -r src_llm/requirements.txt \
+  -r src_langgraph/requirements.txt \
+  -r src_api_gateway/requirements.txt
+```
+
+Сначала подними инфраструктуру:
+
+```bash
+cd docker
+docker compose up -d nats src_postgres
+```
+
+Потом в отдельных терминалах:
+
+```bash
+python src_api_gateway/main.py
+python -m src_llm.main
+python -m src_langgraph.main
+python -m src_agent.main
+python -m src_core.main
+```
+
+UI:
+
+```bash
+cd src_front
+npm install
+npm run dev
+```
+
+## Контракты сообщений
+
+Модели в `src_shared/contracts`:
+- `AgentInboundRequest` / `AgentInboundResponse`
+- `WorkflowRunRequest` / `WorkflowRunResponse`
+- `ToolCallRequest` / `ToolCallResponse`
+- `LlmRequest` / `LlmResponse`
+
+Во всех envelope полях используются:
+- `trace_id` — трассировка по всей цепочке вызовов.
+- `correlation_id` — связывание связанных операций/веток.
+- `request_id` — идемпотентность конкретного запроса.
+- `session_id` — состояние диалога пользователя.
+- `ts_ms` — время события.
 
 ## Документация
 
-- [DOCS/START_HERE.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/START_HERE.md)
-- [DOCS/QUICKSTART.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/QUICKSTART.md)
-- [DOCS/CORE.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/CORE.md)
-- [DOCS/FRONT.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/FRONT.md)
+- `DOCS/START_HERE.md`
+- `DOCS/QUICKSTART.md`
+- `DOCS/AGENT.md`
+- `DOCS/LLM.md`
+- `DOCS/LANGGRAPH.md`
+- `DOCS/API_GATEWAY.md`
+- `DOCS/NATS.md`
+- `DOCS/POSTGRES.md`
+- `DOCS/E2E.md`
+- `src_langgraph/README.md`

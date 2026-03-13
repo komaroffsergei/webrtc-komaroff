@@ -10,6 +10,9 @@ export type AssistantElements = {
   modelStatus: HTMLElement | null;
   remoteAudio: HTMLAudioElement | null;
 
+  vadEnable: HTMLInputElement | null;
+  vadLevel: HTMLElement | null;
+
   ecEnable: HTMLInputElement | null;
   nsEnable: HTMLInputElement | null;
 };
@@ -26,6 +29,9 @@ export function getAssistantElements(): AssistantElements {
     connectionStatus: document.getElementById("connectionStatus"),
     modelStatus: document.getElementById("modelStatus"),
     remoteAudio: document.getElementById("remoteAudio") as HTMLAudioElement | null,
+
+    vadEnable: document.getElementById("vadEnable") as HTMLInputElement | null,
+    vadLevel: document.getElementById("vadLevel"),
 
     ecEnable: document.getElementById("ecEnable") as HTMLInputElement | null,
     nsEnable: document.getElementById("nsEnable") as HTMLInputElement | null,
