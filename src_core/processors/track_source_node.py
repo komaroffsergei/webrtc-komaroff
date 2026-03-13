@@ -196,6 +196,8 @@ class TrackSourceNode:
 
                     if self.output_format_is_planar:
                         frame_data = np.ascontiguousarray(piece)
+                    elif target_channels == 1:
+                        frame_data = np.ascontiguousarray(piece.reshape(-1))
                     else:
                         frame_data = np.ascontiguousarray(piece.T)
 
