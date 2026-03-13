@@ -53,8 +53,6 @@ docker compose --profile langgraph up -d --build
 - `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
 - `/whisper` stream debug: `Browser -> /whisper/ws -> NATS -> LinTO websocket`
 
-Важно: `/chat` из `src_front` использует именно первый путь. То есть микрофон из браузера идёт в `src_core`, дальше в `WhisperStreamNode`, потом в `inference.whisper.stream.<session_id>`, затем в `stt_whisper_to_nats` и `linto_stt_whisper` по websocket. `/chat` не использует `/whisper` file-mode, не ходит в `linto_stt_whisper_http` и не использует локальный `faster-whisper`.
-
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
 
 ## Docker + отладка (PyCharm Remote Debug)
