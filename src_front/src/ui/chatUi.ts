@@ -14,7 +14,7 @@ export class ChatUI {
   private voiceBlocked = false;
   private editInFlight = false;
   private thinkingEl: HTMLElement | null = null;
-  private pendingVoiceEl: HTMLElement | null = null;
+  private transcriptionFlashEl: HTMLElement | null = null;
   private messageByTurn = new Map<string, HTMLElement>();
   private editHandler: EditHandler | null = null;
   private activeInlineEditor: HTMLElement | null = null;
@@ -91,8 +91,8 @@ export class ChatUI {
       if (nodeTurnId) {
         this.messageByTurn.delete(nodeTurnId);
       }
-      if (node === this.pendingVoiceEl) {
-        this.pendingVoiceEl = null;
+      if (node === this.transcriptionFlashEl) {
+        this.transcriptionFlashEl = null;
       }
       node.remove();
       node = next;
@@ -178,50 +178,35 @@ export class ChatUI {
     this.updateBlockedState();
   }
 
-  showPendingVoiceMessage(text = "Распознаю…", turnId?: string): void {
-    if (this.pendingVoiceEl) {
-      const textEl = this.pendingVoiceEl.querySelector(".message-text");
-      if (textEl) textEl.textContent = text;
-      if (turnId) this.pendingVoiceEl.dataset.pendingTurnId = turnId;
+  showTranscriptionFlash(text = "Транскрипция…"): void {
+    if (this.transcriptionFlashEl) {
+      this.transcriptionFlashEl.textContent = text;
+      this.transcriptionFlashEl.classList.add("visible");
       return;
     }
 
-    const bubble = document.createElement("div");
-    bubble.className = "message user-message pending-user-message";
-    bubble.dataset.role = "user";
-    if (turnId) {
-      bubble.dataset.pendingTurnId = turnId;
-    }
-
-    const textEl = document.createElement("div");
-    textEl.className = "message-text";
-    textEl.textContent = text;
-    bubble.appendChild(textEl);
-
-    this.root.appendChild(bubble);
-    this.pendingVoiceEl = bubble;
+    const flash = document.createElement("div");
+    flash.className = "transcription-flash";
+    flash.textContent = text;
+    this.root.appendChild(flash);
+    this.transcriptionFlashEl = flash;
     this.root.scrollTop = this.root.scrollHeight;
+    requestAnimationFrame(() => {
+      if (this.transcriptionFlashEl === flash) {
+        flash.classList.add("visible");
+      }
+    });
   }
 
-  resolvePendingVoiceMessage(finalText: string, turnId: string): boolean {
-    if (!this.pendingVoiceEl) return false;
-    const bubble = this.pendingVoiceEl;
-    const textEl = bubble.querySelector(".message-text");
-    if (textEl) textEl.textContent = finalText;
-    bubble.classList.remove("pending-user-message");
-    bubble.dataset.turnId = turnId;
-    delete bubble.dataset.pendingTurnId;
-    this.messageByTurn.set(turnId, bubble);
-    this.attachUserMessageActions(bubble, turnId, textEl);
-    this.pendingVoiceEl = null;
-    this.root.scrollTop = this.root.scrollHeight;
-    return true;
-  }
-
-  clearPendingVoiceMessage(): void {
-    if (!this.pendingVoiceEl) return;
-    this.pendingVoiceEl.remove();
-    this.pendingVoiceEl = null;
+  hideTranscriptionFlash(): void {
+    if (!this.transcriptionFlashEl) return;
+    const flash = this.transcriptionFlashEl;
+    flash.classList.remove("visible");
+    window.setTimeout(() => {
+      if (this.transcriptionFlashEl !== flash) return;
+      flash.remove();
+      this.transcriptionFlashEl = null;
+    }, 140);
   }
 
   setVoiceBlocked(blocked: boolean): void {

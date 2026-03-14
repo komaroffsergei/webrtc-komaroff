@@ -55,13 +55,16 @@ def _is_pending_payload(payload: dict) -> bool:
 async def handle_transcription(app, payload: dict):
     """Handle transcriptions and forward requests to the agent via NATS."""
     text = (payload.get("text") or "").strip()
+    partial = _clean_text(payload.get("partial"))
     session_id = _clean_text(payload.get("session_id"))
     phrase_id = _clean_text(payload.get("phrase_id"))
     raw_turn_id = payload.get("turn_id")
 
     if not text:
-        if _is_pending_payload(payload):
+        if partial or _is_pending_payload(payload):
             data = {"pending": True}
+            if partial:
+                data["partial"] = partial
             if phrase_id:
                 data["phrase_id"] = phrase_id
             if session_id:

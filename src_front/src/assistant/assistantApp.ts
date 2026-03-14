@@ -31,6 +31,7 @@ import { MapController } from "../map/mapController";
 export class AssistantApp {
   private static readonly SESSION_STORAGE_KEY = "assistant.session_id";
   private static readonly CHAT_ROUTE_PREFIX = "/chat";
+  private static readonly TRANSCRIPTION_FLASH_FALLBACK_TEXT = "Транскрипция…";
   private static readonly UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -54,7 +55,6 @@ export class AssistantApp {
   private vadSpeechActive = false;
   private vadSpeechDetected = false;
   private transcriptionPending = false;
-  private pendingVoiceTurnId: string | null = null;
 
   constructor(private config: AppConfig) {
     this.replayCollector = new DialogReplayCollector({
@@ -320,11 +320,9 @@ export class AssistantApp {
         }
         this.transcriptionPending = false;
         this.vadSpeechDetected = false;
-        this.pendingVoiceTurnId = null;
+        this.chat.hideTranscriptionFlash();
         this.chat.clearThinking();
-        if (!this.chat.resolvePendingVoiceMessage(text, turnId)) {
-          this.chat.addMessage(text, "user", { turnId, editable: true });
-        }
+        this.chat.addMessage(text, "user", { turnId, editable: true });
         this.chat.setThinking("Thinking…");
         return;
       }
@@ -456,14 +454,13 @@ export class AssistantApp {
       this.vadSpeechDetected = true;
       if (this.transcriptionPending) {
         this.transcriptionPending = false;
-        this.pendingVoiceTurnId = null;
-        this.chat.clearPendingVoiceMessage();
+        this.chat.hideTranscriptionFlash();
       }
       return;
     }
     if (!this.vadSpeechDetected) return;
     this.transcriptionPending = true;
-    this.ensurePendingVoiceBubble();
+    this.showTranscriptionFlash();
   }
 
   private handleTranscriptionPendingEvent(data: Record<string, unknown>): void {
@@ -473,34 +470,31 @@ export class AssistantApp {
       return;
     }
     this.transcriptionPending = true;
-    const turnId = typeof data.turn_id === "string" ? data.turn_id : null;
-    if (turnId) {
-      this.pendingVoiceTurnId = turnId;
-    }
     if (!this.vadSpeechActive) {
-      this.ensurePendingVoiceBubble();
+      this.showTranscriptionFlash(data.partial);
     }
   }
 
   private resolveTranscriptionPending(): void {
-    if (!this.transcriptionPending && !this.pendingVoiceTurnId) return;
+    if (!this.transcriptionPending) return;
     this.transcriptionPending = false;
     this.vadSpeechDetected = false;
-    this.pendingVoiceTurnId = null;
-    this.chat.clearPendingVoiceMessage();
+    this.chat.hideTranscriptionFlash();
   }
 
   private resetTranscriptionTracking(): void {
     this.vadSpeechActive = false;
     this.vadSpeechDetected = false;
     this.transcriptionPending = false;
-    this.pendingVoiceTurnId = null;
-    this.chat.clearPendingVoiceMessage();
+    this.chat.hideTranscriptionFlash();
   }
 
-  private ensurePendingVoiceBubble(): void {
+  private showTranscriptionFlash(rawText?: unknown): void {
     if (!this.transcriptionPending || this.vadSpeechActive) return;
-    this.chat.showPendingVoiceMessage("Распознаю…", this.pendingVoiceTurnId ?? undefined);
+    const normalizedText = typeof rawText === "string" ? rawText.trim() : "";
+    this.chat.showTranscriptionFlash(
+      normalizedText || AssistantApp.TRANSCRIPTION_FLASH_FALLBACK_TEXT,
+    );
   }
 
   private initializeSessionId(): void {
