@@ -471,7 +471,7 @@ export class AssistantApp {
     }
     this.transcriptionPending = true;
     if (!this.vadSpeechActive) {
-      this.showTranscriptionFlash(data.partial);
+      this.showTranscriptionFlash();
     }
   }
 
@@ -489,12 +489,9 @@ export class AssistantApp {
     this.chat.hideTranscriptionFlash();
   }
 
-  private showTranscriptionFlash(rawText?: unknown): void {
+  private showTranscriptionFlash(): void {
     if (!this.transcriptionPending || this.vadSpeechActive) return;
-    const normalizedText = typeof rawText === "string" ? rawText.trim() : "";
-    this.chat.showTranscriptionFlash(
-      normalizedText || AssistantApp.TRANSCRIPTION_FLASH_FALLBACK_TEXT,
-    );
+    this.chat.showTranscriptionFlash(AssistantApp.TRANSCRIPTION_FLASH_FALLBACK_TEXT);
   }
 
   private initializeSessionId(): void {
