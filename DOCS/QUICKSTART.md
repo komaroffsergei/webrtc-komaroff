@@ -21,7 +21,6 @@ docker compose --profile langgraph up -d --build
 Текущие режимы ASR:
 - live voice: `WebRTC -> NATS -> stt_whisper_to_nats(Phraser) -> LinTO HTTP`
 - `/whisper` file mode: `Browser -> bridge upload -> NATS file job -> chunked LinTO HTTP`
-- `/whisper` stream debug: `Browser -> /whisper/ws -> NATS -> stt_whisper_to_nats(Phraser) -> LinTO HTTP`
 
 Подробная архитектура, схемы сервисов, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
 
