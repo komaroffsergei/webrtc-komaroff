@@ -12,20 +12,12 @@ ASR_IN_PREFIX = "inference.whisper.stream."
 ASR_OUT_PREFIX = "inference.whisper.text."
 
 HOST = 'webrtc-komaroff.*'
-VOICE_CHAT_HOST = 'voice-chat.*'
-POSTGRES_HOST = 'web-rtc-komaroff_src_postgres'
-POSTGRES_PORT = '5432'
 POSTGRES_DB = 'mcp'
 POSTGRES_USER = 'mcp'
 POSTGRES_PASSWORD = 'mcp_pass'
-DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@#{POSTGRES_HOST}:#{POSTGRES_PORT}/#{POSTGRES_DB}?sslmode=disable"
+DATABASE_URL = "postgresql://#{POSTGRES_USER}:#{POSTGRES_PASSWORD}@web-rtc-komaroff_src_postgres:5432/#{POSTGRES_DB}?sslmode=disable"
 NATS_TOOLS_PREFIX = 'nats.tools.'
-NATS_REQUEST_TIMEOUT = '600'
-AGENT_MAX_STEPS = '10'
-MAX_STEPS = '10'
-TIMEOUT_SECONDS = '600'
 NATS_WORKFLOW_RUN_SUBJECT = 'nats.workflow.run'
-NATS_WORKFLOW_HEALTH_SUBJECT = 'nats.workflow.health'
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
@@ -42,7 +34,7 @@ Service :src_core, image: webrtc_registry['core']do
       ASR_IN_PREFIX: ASR_IN_PREFIX,
       ASR_OUT_PREFIX: ASR_OUT_PREFIX,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
-      NATS_REQUEST_TIMEOUT: NATS_REQUEST_TIMEOUT,
+      NATS_REQUEST_TIMEOUT: '600',
       STACK_SERVICE_NAME: 'src_core',
       USER_ID: USER_ID,
       CORE_HOST: '0.0.0.0',
@@ -66,9 +58,9 @@ Service :src_agent, image: webrtc_registry['agent'] do
       NATS_AGENT_SUBJECT: NATS_AGENT_SUBJECT,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       NATS_WORKFLOW_RUN_SUBJECT: NATS_WORKFLOW_RUN_SUBJECT,
-      AGENT_MAX_STEPS: AGENT_MAX_STEPS,
-      MAX_STEPS: MAX_STEPS,
-      TIMEOUT_SECONDS: TIMEOUT_SECONDS,
+      AGENT_MAX_STEPS: '10',
+      MAX_STEPS: '10',
+      TIMEOUT_SECONDS: '600',
       DATABASE_URL: DATABASE_URL,
       API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api',
       AIRPORTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/airports/search',
@@ -102,7 +94,7 @@ Service :src_langgraph, image: webrtc_registry['langgraph'] do
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
       NATS_WORKFLOW_RUN_SUBJECT: NATS_WORKFLOW_RUN_SUBJECT,
-      NATS_WORKFLOW_HEALTH_SUBJECT: NATS_WORKFLOW_HEALTH_SUBJECT,
+      NATS_WORKFLOW_HEALTH_SUBJECT: 'nats.workflow.health',
       NATS_REQUEST_TIMEOUT_SECONDS: '120',
       MAX_CONCURRENCY: '8'
 end
@@ -230,10 +222,10 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       WEBUI_FILE_MAX_UPLOAD_MB: '1024',
       WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: "/whisper",
-      STACK_SERVICE_NAME: 'stt_whisper_to_nats'
+      STACK_SERVICE_NAME: 'live_phrase_bridge'
 
   volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
-  entrypoint 'python -m src.stt_whisper_to_nats'
+  entrypoint 'python -m src.live_phrase_bridge'
 end
 
 Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
@@ -255,10 +247,10 @@ Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_w
       WEBUI_ENABLED: '0',
       STREAM_BRIDGE_ENABLED: '0',
       FILE_WORKER_ENABLED: '1',
-      STACK_SERVICE_NAME: 'stt_whisper_file_worker'
+      STACK_SERVICE_NAME: 'file_job_worker'
 
   volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
-  entrypoint 'python -m src.stt_whisper_to_nats'
+  entrypoint 'python -m src.file_job_worker'
 end
 
 
