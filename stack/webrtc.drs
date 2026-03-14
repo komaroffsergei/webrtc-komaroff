@@ -212,6 +212,7 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
       LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
       LINTO_HTTP_LANGUAGE: 'ru',
+      LINTO_WS_URL: 'ws://192.168.28.134/streaming',
       MIN_SPEECH_DURATION_MS: '250',
       MIN_SILENCE_DURATION_MS: '500',
       MAX_SPEECH_DURATION_S: '30.0',
