@@ -4,8 +4,13 @@
 
 ```bash
 cd docker
-docker compose --profile langgraph up -d --build
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
+
+Активный runtime для локального Docker задается в `docker/.env`:
+- `COMPOSE_PROFILES=langgraph_rb` + Ruby subjects
+- `COMPOSE_PROFILES=langgraph` + Python subjects
 
 ## 2) Открой UI
 
@@ -15,7 +20,7 @@ docker compose --profile langgraph up -d --build
 
 1. `src_front` -> `src_core` (`POST /core/message`)
 2. `src_core` -> `src_agent` (`nats.agent.<user_id>`)
-3. `src_agent` -> `src_langgraph` (`nats.workflow.run`)
+3. `src_agent` -> выбранный runtime (`nats.workflow.run.ruby` или `nats.workflow.run.python`)
 4. `src_langgraph` -> `src_llm` (`nats.llm.<user_id>`)
 5. `src_langgraph` -> `src_api_gateway` (`nats.tools.*`)
 6. Ответ возвращается в UI через `nats.events.<user_id>`

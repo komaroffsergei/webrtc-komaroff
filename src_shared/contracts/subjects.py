@@ -13,7 +13,7 @@ class Subjects:
     EVENTS_PREFIX = "nats.events."
     LLM_PREFIX = "nats.llm."
 
-    WORKFLOW_RUN = "nats.workflow.run"
-    WORKFLOW_HEALTH = "nats.workflow.health"
+    WORKFLOW_RUN = "nats.workflow.run.python"
+    WORKFLOW_HEALTH = "nats.workflow.health.python"
 
     TOOLS_PREFIX = "nats.tools."

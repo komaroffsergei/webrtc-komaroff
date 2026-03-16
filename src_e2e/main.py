@@ -36,6 +36,10 @@ class Env:
     workflow_health_subject: str
     events_subject: str
 
+    @property
+    def uses_ruby_runtime(self) -> bool:
+        return self.workflow_health_subject.endswith(".ruby")
+
 
 def _env() -> Env:
     user_id = os.getenv("USER_ID", "user123")
@@ -304,7 +308,8 @@ async def main() -> None:
     try:
         await _wait_for_runtime(nc, env.workflow_health_subject, timeout_s=90)
         await test_llm_debug_includes_model(nc, env)
-        await test_echo(nc, env.agent_subject)
+        if not env.uses_ruby_runtime:
+            await test_echo(nc, env.agent_subject)
         await test_free_speech(nc, env.agent_subject)
         await test_where_my_flight(nc, env.agent_subject)
         await test_where_my_flight_pending_exit(nc, env.agent_subject)

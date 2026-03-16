@@ -24,8 +24,9 @@ NATS_REQUEST_TIMEOUT = '600'
 AGENT_MAX_STEPS = '10'
 MAX_STEPS = '10'
 TIMEOUT_SECONDS = '600'
-NATS_WORKFLOW_RUN_SUBJECT = 'nats.workflow.run'
-NATS_WORKFLOW_HEALTH_SUBJECT = 'nats.workflow.health'
+WORKFLOW_RUNTIME = ENV.fetch('WORKFLOW_RUNTIME', 'ruby')
+NATS_WORKFLOW_RUN_SUBJECT = WORKFLOW_RUNTIME == 'ruby' ? 'nats.workflow.run.ruby' : 'nats.workflow.run.python'
+NATS_WORKFLOW_HEALTH_SUBJECT = WORKFLOW_RUNTIME == 'ruby' ? 'nats.workflow.health.ruby' : 'nats.workflow.health.python'
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
@@ -101,10 +102,23 @@ Service :src_langgraph, image: webrtc_registry['langgraph'] do
       NATS_URL: NATS_URL,
       NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
       NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
-      NATS_WORKFLOW_RUN_SUBJECT: NATS_WORKFLOW_RUN_SUBJECT,
-      NATS_WORKFLOW_HEALTH_SUBJECT: NATS_WORKFLOW_HEALTH_SUBJECT,
+      NATS_WORKFLOW_RUN_SUBJECT: 'nats.workflow.run.python',
+      NATS_WORKFLOW_HEALTH_SUBJECT: 'nats.workflow.health.python',
       NATS_REQUEST_TIMEOUT_SECONDS: '120',
       MAX_CONCURRENCY: '8'
+end
+
+Service :src_langgraph_rb, image: webrtc_registry['langgraph-rb'] do
+  env STACK_SERVICE_NAME: 'src_langgraph_rb',
+      USER_ID: USER_ID,
+      NATS_URL: NATS_URL,
+      NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+      NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX,
+      NATS_WORKFLOW_RUN_SUBJECT: 'nats.workflow.run.ruby',
+      NATS_WORKFLOW_HEALTH_SUBJECT: 'nats.workflow.health.ruby',
+      NATS_REQUEST_TIMEOUT_SECONDS: '120'
+
+  command ['bundle', 'exec', 'ruby', './bin/service']
 end
 
 Service :src_front, image: webrtc_registry['front'] do

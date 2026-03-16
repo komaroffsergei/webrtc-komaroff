@@ -11,7 +11,7 @@ Subscriptions:
 - `nats.agent.history.<user_id>`: history/snapshot requests (`HistoryGetRequest`).
 
 Outbound req/reply:
-- `nats.workflow.run`: workflow execution requests (`WorkflowRunRequest`).
+- `NATS_WORKFLOW_RUN_SUBJECT` (по умолчанию `nats.workflow.run.python`): workflow execution requests (`WorkflowRunRequest`).
 
 Outbound events:
 - `nats.events.<user_id>` via `NatsLogger` (`command/client`, `command/thought`, etc.).
@@ -39,6 +39,7 @@ Configured in `src_agent/settings.py` and `src_agent/env.example`.
 - `NATS_AGENT_HISTORY_SUBJECT` (prefix)
 - `NATS_EVENTS_SUBJECT` (prefix)
 - `NATS_WORKFLOW_RUN_SUBJECT`
+- для локального Docker runtime switch задается в `docker/.env`
 - `WORKFLOW_TIMEOUT_SECONDS`
 - `WORKFLOW_NO_RESPONDERS_RETRIES`
 - `WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS`
@@ -64,9 +65,9 @@ python -m src_agent.main
   - Cause: concurrent updates for the same session.
   - Fix: retry is built in; if persistent, check duplicated clients writing same `session_id`.
 - `no responders available` for workflow subject
-  - Cause: `src_langgraph` is down or wrong `NATS_WORKFLOW_RUN_SUBJECT`.
-  - Fix: start `src_langgraph` and verify subject config.
-  - Note: retries are bounded by `WORKFLOW_NO_RESPONDERS_RETRIES` and `WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS` to fail fast instead of hanging for minutes.
+  - Cause: выбранный runtime (`src_langgraph` или `src_langgraph_rb`) не запущен или `NATS_WORKFLOW_RUN_SUBJECT` указывает не на тот subject.
+  - Fix: подними runtime, который обслуживает настроенный subject, и проверь `NATS_WORKFLOW_RUN_SUBJECT`.
+  - Note: `src_agent` больше не переключается молча на другой subject; retries идут только в явно настроенный subject.
 - `edit_turn_not_found`
   - Cause: frontend sends edit for a turn that does not exist in DB session history.
   - Fix: refresh history and retry edit from an existing user turn.

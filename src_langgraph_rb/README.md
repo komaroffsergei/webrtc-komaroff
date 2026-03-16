@@ -1,13 +1,23 @@
 # `src_langgraph_rb`
 
-`src_langgraph_rb` — это Ruby DSL для декларативного описания сценариев `src_langgraph` в виде переиспользуемых graph-spec.
+`src_langgraph_rb` — Ruby runtime для мигрированных сценариев `src_langgraph` и DSL для их декларативного описания в виде переиспользуемых graph-spec.
 
-Библиотека **не** поднимает NATS, **не** вызывает LLM, **не** вызывает инструменты и **не** компилирует графы в обычном authoring-flow.
-Ее зона ответственности уже и намеренно ограничена:
-- описывать сценарии как данные
-- держать authoring-модель чистой и переиспользуемой
-- валидировать структуру графа заранее
-- переводить готовый spec в adapter-ready plan для `LangGraphRB`
+Сейчас проект покрывает две роли:
+- authoring/catalog слой для graph-spec и adapter plan
+- отдельный NATS runtime sidecar на Ruby для сценариев:
+  - `free_speech@2.0.0`
+  - `where_my_flight@2.0.0`
+  - `find_nearest_airport@2.0.0`
+
+Runtime слушает отдельные subject'ы:
+- `nats.workflow.run.ruby`
+- `nats.workflow.health.ruby`
+
+Python `src_langgraph` остаётся отдельным legacy runtime на:
+- `nats.workflow.run.python`
+- `nats.workflow.health.python`
+
+Переключение между Python и Ruby выполняется только через конфигурацию subject'ов в `src_agent`/`src_e2e`; скрытого fallback между runtime нет.
 
 ## Зачем это нужно
 

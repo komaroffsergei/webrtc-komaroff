@@ -16,12 +16,15 @@ module SrcLanggraphRb
 
           graph do
             use :assistant_reply_tail, as: :final
+            use :state_response_tail, as: :terminal
             entry_point :collect_params
 
-            node :collect_params, kind: :llm_tool_params, tool_name: :get_flight_status
+            node :collect_params, kind: :flight_collect_params, tool_name: :get_flight_status
             node :ask_missing, kind: :partial_response, pending_key: :flight_lookup
-            node :call_status_tool, kind: :tool_call, tool_name: :get_flight_status
-            node :reroute, kind: :scenario_handoff
+            node :call_status_tool, kind: :flight_lookup_tool, tool_name: :get_flight_status
+            node :tool_not_found, kind: :done_response, message_source: :response_message
+            node :tool_failed, kind: :failed_response, message_source: :error_message
+            node :reroute, kind: :flight_reroute
 
             conditional_edge :collect_params, :flight_param_status, {
               "ready" => :call_status_tool,
@@ -29,9 +32,15 @@ module SrcLanggraphRb
               "reroute" => :reroute
             }
 
-            edge :call_status_tool, ref(:final, :respond)
-            finish_point :ask_missing
-            finish_point :reroute
+            edge :ask_missing, ref(:terminal, :respond)
+            conditional_edge :call_status_tool, :flight_tool_result_status, {
+              "done" => ref(:final, :respond),
+              "not_found" => :tool_not_found,
+              "failed" => :tool_failed
+            }
+            edge :tool_not_found, ref(:terminal, :respond)
+            edge :tool_failed, ref(:terminal, :respond)
+            edge :reroute, ref(:terminal, :respond)
           end
         end
       end

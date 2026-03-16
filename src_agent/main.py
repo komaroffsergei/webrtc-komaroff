@@ -45,7 +45,8 @@ def main():
 
     logger.info(f"Starting {STACK_SERVICE_NAME} service...")
     logger.info(
-        "workflow timeout=%ss no_responders_retries=%s no_responders_retry_delay=%ss",
+        "workflow subject=%s timeout=%ss no_responders_retries=%s no_responders_retry_delay=%ss",
+        NATS_WORKFLOW_RUN_SUBJECT,
         WORKFLOW_TIMEOUT_SECONDS,
         WORKFLOW_NO_RESPONDERS_RETRIES,
         WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS,

@@ -82,7 +82,7 @@ sequenceDiagram
     participant L as src_llm
     participant T as src_api_gateway
 
-    A->>W: WorkflowRunRequest (nats.workflow.run)
+    A->>W: WorkflowRunRequest (nats.workflow.run.python)
     W->>W: validate + dispatch
     W->>L: routing_decision
     L-->>W: workflow_id / reason / confidence
@@ -223,7 +223,7 @@ flowchart TD
 
 6. Проверь end-to-end:
 - локально через UI
-- `docker compose --profile langgraph --profile test run --rm src_e2e`
+- `cd ../docker && COMPOSE_PROFILES=langgraph NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python docker compose --profile test run --rm src_e2e`
 
 ---
 
@@ -232,15 +232,18 @@ flowchart TD
 Запуск:
 ```bash
 cd docker
-docker compose --profile langgraph up -d --build
+COMPOSE_PROFILES=langgraph \
+NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python \
+NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python \
+docker compose up -d --build
 ```
 
 Проверить, что runtime поднялся:
 ```bash
-docker compose --profile langgraph logs --tail=100 src_langgraph
+docker compose logs --tail=100 src_langgraph
 ```
 В логах должно быть:
-- `Subscribed to nats.workflow.run and nats.workflow.health`
+- `Subscribed to nats.workflow.run.python and nats.workflow.health.python`
 
 Проверочные фразы в UI:
 1. `где мой рейс`
@@ -259,7 +262,7 @@ docker compose --profile langgraph logs --tail=100 src_langgraph
 - неверный subject в `src_agent`
 
 Проверка:
-- в `src_agent` должен быть `NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run`
+- в `src_agent` должен быть `NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python`
 - `docker compose ps` должен показывать `src_langgraph` в `Up`
 
 ### `missing_session_id`
@@ -277,4 +280,3 @@ docker compose --profile langgraph logs --tail=100 src_langgraph
 
 Где падает:
 - `runtime_io.py` (`_request_json`)
-

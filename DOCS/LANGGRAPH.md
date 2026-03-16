@@ -7,8 +7,8 @@ It does not expose HTTP endpoints.
 
 ## NATS API
 Subscriptions:
-- `nats.workflow.run`
-- `nats.workflow.health`
+- `nats.workflow.run.python`
+- `nats.workflow.health.python`
 
 Outbound req/reply calls:
 - `nats.llm.<user_id>`
@@ -71,8 +71,11 @@ Configured in `src_langgraph/settings.py` and `src_langgraph/env.example`.
 Docker:
 ```bash
 cd docker
-docker compose --profile langgraph up -d src_langgraph
-docker compose --profile langgraph stop src_langgraph
+COMPOSE_PROFILES=langgraph \
+NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python \
+NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python \
+docker compose up -d src_langgraph
+docker compose stop src_langgraph
 ```
 
 Local:

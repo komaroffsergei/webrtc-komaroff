@@ -36,6 +36,7 @@ task :smoke do
     graph = plan.build_graph
 
     abort("unexpected graph state") unless graph.nodes.key?(:prepare_context)
+    abort("unexpected graph state") unless graph.nodes.key?(:compose_primary)
     abort("graph should stay uncompiled") if graph.compiled?
 
     puts({

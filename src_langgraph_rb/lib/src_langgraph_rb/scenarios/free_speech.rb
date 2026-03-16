@@ -15,13 +15,26 @@ module SrcLanggraphRb
 
           graph do
             use :assistant_reply_tail, as: :final
+            use :state_response_tail, as: :terminal
             entry_point :prepare_context
 
             node :prepare_context, kind: :context_enrichment, inputs: %i[dialog_context artifacts]
-            node :compose_prompt, kind: :llm_prompt, mode: :final_response
+            node :clarify_reference, kind: :done_response, message_source: :clarify_message
+            node :compose_primary, kind: :free_speech_primary
+            node :compose_retry, kind: :free_speech_retry
 
-            edge :prepare_context, :compose_prompt
-            edge :compose_prompt, ref(:final, :respond)
+            conditional_edge :prepare_context, :free_speech_entry, {
+              "clarify" => :clarify_reference,
+              "continue" => :compose_primary
+            }
+
+            edge :clarify_reference, ref(:terminal, :respond)
+            conditional_edge :compose_primary, :free_speech_primary_result, {
+              "done" => ref(:final, :respond),
+              "retry" => :compose_retry,
+              "terminal" => ref(:terminal, :respond)
+            }
+            edge :compose_retry, ref(:final, :respond)
           end
         end
       end

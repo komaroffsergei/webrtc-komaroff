@@ -8,7 +8,7 @@
 - `src_core` — обработка сессии/голоса и работа с фронтом.
 - `src_agent` — оркестратор пользовательского шага, хранит runtime в Postgres.
 - `src_langgraph` — runtime сценариев на LangGraph.
-- `src_langgraph_rb` — experimental Ruby DSL/registry layer for future scenario migration.
+- `src_langgraph_rb` — Ruby workflow runtime for migrated сценариев (`free_speech`, `where_my_flight`, `find_nearest_airport`) plus DSL/catalog.
 - `src_llm` — gateway к модели (Ollama/remote).
 - `src_api_gateway` — tools (`nats.tools.*`) для сценариев.
 - `src_postgres` — БД runtime.
@@ -18,8 +18,10 @@
 
 - `nats.agent.<user_id>` — вход в `src_agent`.
 - `nats.events.<user_id>` — события в UI.
-- `nats.workflow.run` — запрос на выполнение сценария.
-- `nats.workflow.health` — health runtime.
+- `nats.workflow.run.python` — запрос на выполнение Python runtime.
+- `nats.workflow.health.python` — health Python runtime.
+- `nats.workflow.run.ruby` — запрос на выполнение Ruby runtime.
+- `nats.workflow.health.ruby` — health Ruby runtime.
 - `nats.llm.<user_id>` — вызовы LLM.
 - `nats.tools.<tool_name>` — вызовы инструментов.
 
@@ -27,8 +29,38 @@
 
 ```bash
 cd docker
-docker compose --profile langgraph up -d --build
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
+
+Локальный Docker по умолчанию использует Ruby runtime. Переключатель собран в одном месте: [docker/.env](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/docker/.env).
+В нем должны совпадать `COMPOSE_PROFILES` и workflow subject'ы:
+
+```bash
+COMPOSE_PROFILES=langgraph_rb
+NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.ruby
+NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.ruby
+```
+
+Для Python runtime:
+
+```bash
+COMPOSE_PROFILES=langgraph
+NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python
+NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python
+```
+
+После смены runtime делай только clean-start:
+
+```bash
+cd docker
+docker compose down --remove-orphans
+docker compose up -d --build
+```
+
+`src_agent` и `src_e2e` используют только настроенные `NATS_WORKFLOW_*_SUBJECT`; скрытого fallback между Ruby и Python runtime больше нет.
+
+Если Docker отвечает `failed to set up container networking ... network ... not found`, это stale state у старого контейнера после пересоздания сети. Нужен `docker compose down --remove-orphans`; если контейнер остался, удали его через `docker rm -f <container>`, потом снова `docker compose up -d --build`.
 
 Для Docker-сервисов используется `NATS_URL_INTERNAL` (по умолчанию `nats://nats:4222`).
 Если в `docker/.env` у вас задан `NATS_URL=nats://localhost:4222` для запуска с хоста, это больше не ломает межконтейнерное подключение.
@@ -37,7 +69,7 @@ docker compose --profile langgraph up -d --build
 ```bash
 cd docker
 export OLLAMA_URL=https://nats2ollama.gis-master.ru
-docker compose --profile langgraph up -d --build
+docker compose up -d --build
 ```
 Важно: base URL не должен содержать `/api/chat`, иначе `src_llm` получит `405 Method Not Allowed`.
 
@@ -65,9 +97,12 @@ cp .env.debug.example .env.debug
 # обязательно: абсолютный путь к корню репозитория на хосте
 # пример:
 # PYCHARM_PROJECT_ROOT=/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff
+export COMPOSE_PROFILES=langgraph
+export NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python
+export NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python
 docker compose --env-file .env --env-file .env.debug \
   -f docker-compose.yml -f docker-compose.debug.yml \
-  --profile langgraph up -d --build
+  up -d --build
 ```
 
 Важно: не запускай debug-стек без `-d` на длительную сессию. В attached-режиме (`up` без `-d`) закрытие/прерывание этой команды останавливает контейнеры, и все PyCharm attach-сессии сразу рвутся.

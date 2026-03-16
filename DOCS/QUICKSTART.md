@@ -4,8 +4,13 @@
 
 ```bash
 cd docker
-docker compose --profile langgraph up -d --build
+docker compose down --remove-orphans
+docker compose up -d --build
 ```
+
+Локальный runtime switch задается в `docker/.env`:
+- `COMPOSE_PROFILES=langgraph_rb` + `nats.workflow.run.ruby` / `nats.workflow.health.ruby`
+- `COMPOSE_PROFILES=langgraph` + `nats.workflow.run.python` / `nats.workflow.health.python`
 
 Проверка:
 - Front: `http://127.0.0.1:8080/`
@@ -28,7 +33,7 @@ NATS2Ollama endpoint (без auth):
 ```bash
 cd docker
 export OLLAMA_URL=https://nats2ollama.gis-master.ru
-docker compose --profile langgraph up -d --build
+docker compose up -d --build
 ```
 Важно: указывай базовый URL без `/api/chat`.
 
@@ -46,9 +51,13 @@ cp .env.debug.example .env.debug
 2. Запустить stack в debug-режиме:
 
 ```bash
+cd docker
+export COMPOSE_PROFILES=langgraph
+export NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python
+export NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python
 docker compose --env-file .env --env-file .env.debug \
   -f docker-compose.yml -f docker-compose.debug.yml \
-  --profile langgraph up -d --build
+  up -d --build
 ```
 
 Важно: для долгой debug-сессии используй именно `-d`. Если запускать `up` без `-d`, завершение/прерывание этой команды останавливает контейнеры и все attach-сессии в PyCharm.

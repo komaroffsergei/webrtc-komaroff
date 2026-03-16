@@ -21,7 +21,6 @@ from src_shared.contracts import (
     WorkflowRuntimeState,
     now_ts_ms,
 )
-from src_shared.contracts.subjects import Subjects
 
 logger = logging.getLogger("src_agent.runner")
 
@@ -174,98 +173,78 @@ class AgentRunner:
 
     async def _call_workflow(self, req: WorkflowRunRequest) -> WorkflowRunResponse:
         payload = req.model_dump_json().encode("utf-8")
-        canonical_subject = Subjects.WORKFLOW_RUN
-        subjects = [self.workflow_subject]
-        if self.workflow_subject != canonical_subject:
-            subjects.append(canonical_subject)
-
         total_attempts = self.workflow_no_responders_retries + 1
-        if len(subjects) == 1:
-            attempts_by_subject = [total_attempts]
-        else:
-            first_budget = min(3, max(1, total_attempts - 1))
-            attempts_by_subject = [first_budget, total_attempts - first_budget]
-
         last_exc: Exception | None = None
-        for subject, subject_attempts in zip(subjects, attempts_by_subject):
-            for attempt in range(subject_attempts):
-                try:
-                    started_at = time.monotonic()
-                    logger.info(
-                        "workflow request start subject=%s attempt=%s/%s request_id=%s session_id=%s timeout_s=%s",
-                        subject,
-                        attempt + 1,
-                        subject_attempts,
-                        str(req.request_id),
-                        str(req.session_id) if req.session_id else "<none>",
-                        self.workflow_timeout_s,
-                    )
-                    msg = await self.nc.request(subject, payload, timeout=self.workflow_timeout_s)
-                    duration_ms = int((time.monotonic() - started_at) * 1000)
-                    if subject != self.workflow_subject:
-                        logger.warning(
-                            "Workflow subject switched from %s to %s",
-                            self.workflow_subject,
-                            subject,
+        for attempt in range(total_attempts):
+            try:
+                started_at = time.monotonic()
+                logger.info(
+                    "workflow request start subject=%s attempt=%s/%s request_id=%s session_id=%s timeout_s=%s",
+                    self.workflow_subject,
+                    attempt + 1,
+                    total_attempts,
+                    str(req.request_id),
+                    str(req.session_id) if req.session_id else "<none>",
+                    self.workflow_timeout_s,
+                )
+                msg = await self.nc.request(self.workflow_subject, payload, timeout=self.workflow_timeout_s)
+                duration_ms = int((time.monotonic() - started_at) * 1000)
+                raw = json.loads(msg.data.decode("utf-8"))
+                resp = WorkflowRunResponse.model_validate(raw)
+                logger.info(
+                    "workflow request done subject=%s request_id=%s status=%s duration_ms=%s",
+                    self.workflow_subject,
+                    str(req.request_id),
+                    resp.status,
+                    duration_ms,
+                )
+                return resp
+            except NatsTimeoutError:
+                logger.error(
+                    "Workflow request timeout subject=%s timeout=%ss request_id=%s session_id=%s",
+                    self.workflow_subject,
+                    self.workflow_timeout_s,
+                    str(req.request_id),
+                    str(req.session_id) if req.session_id else "<none>",
+                )
+                return WorkflowRunResponse(
+                    trace_id=req.trace_id,
+                    correlation_id=req.correlation_id,
+                    request_id=req.request_id,
+                    session_id=req.session_id,
+                    ts_ms=now_ts_ms(),
+                    status="FAILED",
+                    result="",
+                    errors=[
+                        ErrorInfo(
+                            code="workflow_timeout",
+                            message=(
+                                "Сервис сценариев не успел ответить вовремя. "
+                                "Попробуйте повторить запрос."
+                            ),
+                            details={
+                                "subject": self.workflow_subject,
+                                "timeout_s": self.workflow_timeout_s,
+                            },
                         )
-                        self.workflow_subject = subject
-                    raw = json.loads(msg.data.decode("utf-8"))
-                    resp = WorkflowRunResponse.model_validate(raw)
-                    logger.info(
-                        "workflow request done subject=%s request_id=%s status=%s duration_ms=%s",
-                        subject,
-                        str(req.request_id),
-                        resp.status,
-                        duration_ms,
-                    )
-                    return resp
-                except NatsTimeoutError as exc:
-                    logger.error(
-                        "Workflow request timeout subject=%s timeout=%ss request_id=%s session_id=%s",
-                        subject,
-                        self.workflow_timeout_s,
-                        str(req.request_id),
-                        str(req.session_id) if req.session_id else "<none>",
-                    )
-                    return WorkflowRunResponse(
-                        trace_id=req.trace_id,
-                        correlation_id=req.correlation_id,
-                        request_id=req.request_id,
-                        session_id=req.session_id,
-                        ts_ms=now_ts_ms(),
-                        status="FAILED",
-                        result="",
-                        errors=[
-                            ErrorInfo(
-                                code="workflow_timeout",
-                                message=(
-                                    "Сервис сценариев не успел ответить вовремя. "
-                                    "Попробуйте повторить запрос."
-                                ),
-                                details={
-                                    "subject": subject,
-                                    "timeout_s": self.workflow_timeout_s,
-                                },
-                            )
-                        ],
-                        next_runtime=req.runtime,
-                    )
-                except NoRespondersError as exc:
-                    last_exc = exc
-                    if attempt >= subject_attempts - 1:
-                        break
-                    logger.warning(
-                        "No responders for subject=%s request_id=%s (attempt=%s/%s), retrying in %.1fs",
-                        subject,
-                        str(req.request_id),
-                        attempt + 1,
-                        subject_attempts,
-                        self.workflow_no_responders_retry_delay_s,
-                    )
-                    await asyncio.sleep(self.workflow_no_responders_retry_delay_s)
+                    ],
+                    next_runtime=req.runtime,
+                )
+            except NoRespondersError as exc:
+                last_exc = exc
+                if attempt >= total_attempts - 1:
+                    break
+                logger.warning(
+                    "No responders for subject=%s request_id=%s (attempt=%s/%s), retrying in %.1fs",
+                    self.workflow_subject,
+                    str(req.request_id),
+                    attempt + 1,
+                    total_attempts,
+                    self.workflow_no_responders_retry_delay_s,
+                )
+                await asyncio.sleep(self.workflow_no_responders_retry_delay_s)
 
         waited_s = self.workflow_no_responders_retries * self.workflow_no_responders_retry_delay_s
-        subject_list = ", ".join(f"`{s}`" for s in subjects)
         return WorkflowRunResponse(
             trace_id=req.trace_id,
             correlation_id=req.correlation_id,
@@ -279,10 +258,13 @@ class AgentRunner:
                     code="workflow_unavailable",
                     message=(
                         "Сервис сценариев временно недоступен "
-                        f"(нет responder для NATS subject {subject_list} ~{waited_s:.0f}с). "
+                        f"(нет responder для NATS subject `{self.workflow_subject}` ~{waited_s:.0f}с). "
                         "Повторите запрос через несколько секунд."
                     ),
-                    details={"error": str(last_exc)} if last_exc else None,
+                    details={
+                        "subject": self.workflow_subject,
+                        "error": str(last_exc) if last_exc else None,
+                    },
                 )
             ],
             next_runtime=req.runtime,

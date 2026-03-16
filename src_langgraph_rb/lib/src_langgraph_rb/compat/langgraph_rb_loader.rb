@@ -12,7 +12,11 @@ module SrcLanggraphRb
         require "langgraph_rb/state"
         require "langgraph_rb/node"
         require "langgraph_rb/edge"
+        require "langgraph_rb/command"
         require "langgraph_rb/graph"
+        require "langgraph_rb/runner"
+        require "langgraph_rb/stores/memory"
+        require "langgraph_rb/observers/base"
       end
 
       def define_base_errors!

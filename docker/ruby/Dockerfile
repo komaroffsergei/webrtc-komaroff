@@ -1,5 +1,7 @@
 FROM ruby:3.4.5-slim-bookworm AS base
 
+ARG APP_PATH=src_langgraph_rb
+
 RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
      libsqlite3-dev libssl-dev libgeos-dev libyaml-dev cmake libgomp1 \
      && rm -rf /var/lib/apt/lists/* \
@@ -49,7 +51,6 @@ ENV SERVER_ENV=production \
     NODE_ENV=production \
     DOCKER_CONTAINER=true \
     ASR_MODELS=/app/models/asr \
-    PORT=7000 \
     WHISPERCPP_FORCE_CPU=1 \
     WHISPERCPP_DISABLE_GPU=1 \
     WHISPER_NO_GPU=1 \
@@ -60,5 +61,4 @@ ENV SERVER_ENV=production \
 
 WORKDIR /app
 
-HEALTHCHECK --interval=15s --timeout=2s --retries=3 --start-period=30s CMD curl --fail http://localhost:$PORT/healthcheck || exit 1
-CMD bundle exec rackup -o 0.0.0.0 -p $PORT -s falcon
+CMD ["bundle", "exec", "ruby", "./bin/service"]

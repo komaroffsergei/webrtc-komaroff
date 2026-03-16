@@ -1,0 +1,11 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+root = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift(File.join(root, "lib"))
+
+require "src_langgraph_rb"
+
+SrcLanggraphRb::Runtime::Service.new(
+  settings: SrcLanggraphRb::Runtime::Settings.from_env
+).run

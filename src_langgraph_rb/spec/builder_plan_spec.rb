@@ -18,6 +18,6 @@ RSpec.describe SrcLanggraphRb::Adapters::LangGraphRB::BuilderPlan do
 
     expect(graph).to be_a(LangGraphRB::Graph)
     expect(graph.compiled?).to be(false)
-    expect(graph.nodes.keys).to include(:prepare_context, :compose_prompt, :final__respond)
+    expect(graph.nodes.keys).to include(:prepare_context, :compose_primary, :compose_retry, :final__respond, :terminal__respond)
   end
 end
