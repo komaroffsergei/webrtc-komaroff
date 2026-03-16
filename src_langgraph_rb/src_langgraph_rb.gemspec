@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["OpenAI Codex"]
   spec.email = ["noreply@example.com"]
 
-  spec.summary = "Declarative scenario DSL and adapter layer for src_langgraph"
-  spec.description = "A declarative Ruby DSL for authoring reusable workflow scenarios and translating them to LangGraphRB builder plans."
+  spec.summary = "Ruby workflow runtime and declarative scenario DSL for src_langgraph"
+  spec.description = "Ruby NATS runtime for migrated workflow scenarios plus a declarative DSL that translates reusable scenario specs into LangGraphRB builder plans."
   spec.homepage = "https://github.com/fulit103/langgraph_rb"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.4.0"

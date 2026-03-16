@@ -86,6 +86,7 @@ docker compose up -d --build
 - `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
 
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
+Ruby runtime code map: [`src_langgraph_rb/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/CODEMAP.md)
 
 ## Docker + отладка (PyCharm Remote Debug)
 
