@@ -9,15 +9,6 @@ from src_shared.contracts.common import now_ts_ms
 logger = logging.getLogger("handle_transcription")
 
 
-_PENDING_STATUSES = {"pending", "processing", "transcribing"}
-_PENDING_EVENTS = {
-    "pending",
-    "transcription_pending",
-    "transcription_started",
-    "transcribing_started",
-}
-
-
 def _normalize_turn_id(raw_turn_id: object, raw_phrase_id: object) -> str:
     for value in (raw_turn_id, raw_phrase_id):
         if not isinstance(value, str):
@@ -40,18 +31,6 @@ def _clean_text(value: object) -> str | None:
     return out or None
 
 
-def _is_pending_payload(payload: dict) -> bool:
-    if payload.get("pending") is True:
-        return True
-    status = _clean_text(payload.get("status"))
-    if status and status.lower() in _PENDING_STATUSES:
-        return True
-    event = _clean_text(payload.get("event"))
-    if event and event.lower() in _PENDING_EVENTS:
-        return True
-    return False
-
-
 async def handle_transcription(app, payload: dict):
     """Handle transcriptions and forward requests to the agent via NATS."""
     text = (payload.get("text") or "").strip()
@@ -60,7 +39,7 @@ async def handle_transcription(app, payload: dict):
     raw_turn_id = payload.get("turn_id")
 
     if not text:
-        if _is_pending_payload(payload):
+        if payload.get("pending") is True:
             data = {"pending": True}
             if phrase_id:
                 data["phrase_id"] = phrase_id

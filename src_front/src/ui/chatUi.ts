@@ -47,19 +47,7 @@ export class ChatUI {
     div.appendChild(textEl);
 
     if (role === "user" && options?.turnId && options?.editable) {
-      const actions = document.createElement("div");
-      actions.className = "message-actions";
-
-      const editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "message-edit-btn";
-      editBtn.textContent = "Edit";
-      editBtn.addEventListener("click", () => {
-        this.openInlineEditor(div, options.turnId as string, textEl, actions);
-      });
-
-      actions.appendChild(editBtn);
-      div.appendChild(actions);
+      this.attachUserMessageActions(div, options.turnId, textEl);
     }
 
     this.root.appendChild(div);
@@ -190,7 +178,7 @@ export class ChatUI {
     this.updateBlockedState();
   }
 
-  showTranscriptionFlash(text = "Транскрипция..."): void {
+  showTranscriptionFlash(text = "Транскрипция…"): void {
     if (this.transcriptionFlashEl) {
       this.transcriptionFlashEl.textContent = text;
       this.transcriptionFlashEl.classList.add("visible");
@@ -307,6 +295,26 @@ export class ChatUI {
     this.root.querySelectorAll<HTMLButtonElement>(".message-edit-btn").forEach((btn) => {
       btn.disabled = blocked;
     });
+  }
+
+  private attachUserMessageActions(wrapper: HTMLElement, turnId: string, textEl: Element | null): void {
+    if (!textEl) return;
+    const existing = wrapper.querySelector(".message-actions");
+    if (existing) return;
+
+    const actions = document.createElement("div");
+    actions.className = "message-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = "message-edit-btn";
+    editBtn.textContent = "Edit";
+    editBtn.addEventListener("click", () => {
+      this.openInlineEditor(wrapper, turnId, textEl, actions);
+    });
+
+    actions.appendChild(editBtn);
+    wrapper.appendChild(actions);
   }
 
   private formatThinkingMeta(meta?: ThinkingMeta): string {

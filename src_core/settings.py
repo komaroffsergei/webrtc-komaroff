@@ -23,9 +23,6 @@ API_URL = os.getenv("API_URL", "http://127.0.0.1:8101/api")
 CORE_PORT = int(os.getenv("CORE_PORT", "8000"))
 CORE_HOST = os.getenv("CORE_HOST", "0.0.0.0")
 
-ASR_MODELS = os.getenv("ASR_MODELS", "/app/models/asr")
-ASR_MODEL_ID = os.getenv("ASR_MODEL_ID", "Systran/faster-whisper-small")
-
 # OpenTelemetry is opt-in for local development.
 # Set OTEL_TRACES_EXPORTER=otlp and OTEL_EXPORTER_OTLP_ENDPOINT to enable exporting.
 OTEL_EXPORTER_OTLP_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")

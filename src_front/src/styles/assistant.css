@@ -187,6 +187,7 @@ body {
     left: 50%;
     top: 50%;
     transform: translate(-50%, -50%) scale(0.98);
+    max-width: min(78%, 420px);
     padding: 10px 16px;
     border-radius: 14px;
     background: rgba(29, 29, 31, 0.84);
@@ -194,6 +195,8 @@ body {
     font-size: 14px;
     font-weight: 500;
     letter-spacing: 0.01em;
+    line-height: 1.35;
+    text-align: center;
     box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
     backdrop-filter: blur(2px);
     pointer-events: none;
