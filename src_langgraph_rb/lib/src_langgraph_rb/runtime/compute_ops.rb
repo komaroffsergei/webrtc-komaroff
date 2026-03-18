@@ -31,6 +31,7 @@ module SrcLanggraphRb
                                     "Не отвечай шаблоном о нехватке данных, если факт можно дать из общих знаний.\n" \
                                     "Если уверенность низкая, прямо укажи это в ответе."
 
+      # Routes a generic compute node from the DSL graph to its concrete implementation.
       def call(op:, state:, io:, engine:, scenario_id:, config:)
         case op.to_s
         when "resolve_context_references"
@@ -54,6 +55,7 @@ module SrcLanggraphRb
         end
       end
 
+      # Resolves pronouns and implicit references against artifact_memory before free-form reply generation.
       def resolve_context_references(state, config)
         extra = Runtime::Util.extract_hash(state[:context_extra])
         entities = extract_entities_from_artifacts(extra)
@@ -76,6 +78,7 @@ module SrcLanggraphRb
         out
       end
 
+      # Builds the free-speech response and retries once if the first answer looks context-bound or low quality.
       def compose_free_speech_response(state, io:, config:)
         req = state.fetch(:req)
         status_key = fetch_key(config, :status_key, :free_speech_result)
@@ -164,6 +167,7 @@ module SrcLanggraphRb
         }
       end
 
+      # Extracts tool params, merges them with pending state, and decides between ready, ask-user, or reroute.
       def collect_tool_params_with_pending(state, io:, engine:, scenario_id:, config:)
         req = state.fetch(:req)
         pending = Runtime::Util.extract_hash(req.dig(:runtime, :pending))
@@ -237,6 +241,7 @@ module SrcLanggraphRb
         }
       end
 
+      # Continues execution by handing control over to another selected scenario graph.
       def reroute_selected_scenario(state, engine:, config:)
         scenario_source = fetch_key(config, :scenario_source, :reroute_scenario_id)
         scenario_id = state[scenario_source].to_s
@@ -244,6 +249,7 @@ module SrcLanggraphRb
         { response: response }
       end
 
+      # Calls a lookup tool and then asks the LLM to turn tool output into the final user-facing message.
       def tool_lookup_with_llm_response(state, io:, config:)
         req = state.fetch(:req)
         args = Runtime::Util.extract_hash(state[fetch_key(config, :args_source, :merged_params)])
@@ -301,6 +307,7 @@ module SrcLanggraphRb
         }
       end
 
+      # Combines current-position data with LLM-produced search params for nearby-airport lookup.
       def prepare_airport_search(state, io:, config:)
         req = state.fetch(:req)
         position_source = fetch_key(config, :position_source, :position_response)
@@ -336,6 +343,7 @@ module SrcLanggraphRb
         }
       end
 
+      # Normalizes route arguments from position and airport search results before route tool execution.
       def prepare_airport_route(state, io:, config:)
         req = state.fetch(:req)
         search_response_key = fetch_key(config, :search_response_key, :search_response)
@@ -373,6 +381,7 @@ module SrcLanggraphRb
         }
       end
 
+      # Builds the route, asks the LLM for the final summary, and emits front-end map update events.
       def build_route_with_response(state, io:, config:)
         req = state.fetch(:req)
         args = Runtime::Util.extract_hash(state[fetch_key(config, :args_source, :route_args)])
@@ -421,11 +430,13 @@ module SrcLanggraphRb
         }
       end
 
+      # Reads a symbol key from node config while preserving a sensible default name.
       def fetch_key(config, name, default)
         (config[name] || default).to_sym
       end
       private_class_method :fetch_key
 
+      # Accepts either a Regexp or a string pattern from DSL config and normalizes it to Regexp.
       def regexp_from_config(value)
         return value if value.is_a?(Regexp)
         return nil unless value.is_a?(String) && !value.strip.empty?
@@ -434,6 +445,7 @@ module SrcLanggraphRb
       end
       private_class_method :regexp_from_config
 
+      # Returns true when at least one required field is present and non-empty.
       def ready_with_any_field?(payload, fields)
         Array(fields).map(&:to_sym).any? do |key|
           value = payload[key]
@@ -442,6 +454,7 @@ module SrcLanggraphRb
       end
       private_class_method :ready_with_any_field?
 
+      # Extracts the normalized response text from an LLM reply envelope.
       def extract_llm_text(resp)
         data = Runtime::Util.extract_hash(resp[:data])
         value = data[:response_text]
@@ -451,6 +464,7 @@ module SrcLanggraphRb
       end
       private_class_method :extract_llm_text
 
+      # Normalizes a tool_params LLM response into extracted fields, missing keys, and prompt text.
       def normalize_tool_params(resp)
         data = resp[:ok] ? Runtime::Util.extract_hash(resp[:data]) : {}
         extracted = data[:extracted].is_a?(Hash) ? Runtime::Util.extract_hash(data[:extracted]) : {}
@@ -461,6 +475,7 @@ module SrcLanggraphRb
       end
       private_class_method :normalize_tool_params
 
+      # Merges only meaningful values, preserving earlier params when the new value is blank.
       def merge_non_empty_params(base, new_values)
         merged = Runtime::Util.extract_hash(base)
         Runtime::Util.extract_hash(new_values).each do |key, value|
@@ -473,6 +488,7 @@ module SrcLanggraphRb
       end
       private_class_method :merge_non_empty_params
 
+      # Unwraps nested { data: ... } payloads returned by tools or transport layers.
       def extract_nested_data(payload)
         data = Runtime::Util.extract_hash(payload)
         inner = data[:data]
@@ -480,6 +496,7 @@ module SrcLanggraphRb
       end
       private_class_method :extract_nested_data
 
+      # Builds a deterministic fallback message when the LLM could not verbalize flight lookup results.
       def fallback_tool_message(formatter, tool_data)
         return nil unless formatter.to_s == "flight_status"
 
@@ -510,6 +527,7 @@ module SrcLanggraphRb
       end
       private_class_method :fallback_tool_message
 
+      # Fills in route coordinates from extracted params, current position, and the first airport result.
       def normalize_route_args(extracted, pos_data, airports_data)
         out = {}
         %i[from_lat from_lon to_lat to_lon].each do |key|
@@ -531,6 +549,7 @@ module SrcLanggraphRb
       end
       private_class_method :normalize_route_args
 
+      # Produces a human-readable label for an entity-like hash from artifact memory.
       def entity_label(entity, fallback: "объект")
         payload = Runtime::Util.extract_hash(entity)
         title = [payload[:label], payload[:name], payload[:title]].map { |item| item.to_s.strip }.find { |item| !item.empty? }.to_s
@@ -543,6 +562,7 @@ module SrcLanggraphRb
       end
       private_class_method :entity_label
 
+      # Splits a display label into loose search tokens for mention matching.
       def tokenize_label(label)
         compact = label.to_s.strip
         return [] if compact.empty?
@@ -551,6 +571,7 @@ module SrcLanggraphRb
       end
       private_class_method :tokenize_label
 
+      # Heuristically checks whether a hash looks like an entity worth exposing to reference resolution.
       def looks_like_entity(payload)
         data = Runtime::Util.extract_hash(payload)
         %i[label name title code id key].any? do |key|
@@ -562,6 +583,7 @@ module SrcLanggraphRb
       end
       private_class_method :looks_like_entity
 
+      # Pulls candidate entities out of artifact_memory and deduplicates them by label.
       def extract_entities_from_artifacts(context_extra)
         artifact = Runtime::Util.extract_hash(context_extra[:artifact_memory])
         return [] if artifact.empty?
@@ -593,6 +615,7 @@ module SrcLanggraphRb
       end
       private_class_method :extract_entities_from_artifacts
 
+      # Finds entities explicitly mentioned in the current user text.
       def explicit_entity_mentions(text, entities)
         clean = text.to_s
         lower = clean.downcase
@@ -606,12 +629,14 @@ module SrcLanggraphRb
       end
       private_class_method :explicit_entity_mentions
 
+      # Returns the most recent assistant line from compressed dialog context.
       def last_assistant_turn(dialog_context)
         assistant_lines = dialog_context.to_s.lines.map(&:strip).reject(&:empty?).select { |line| line.start_with?("- Assistant:") }
         assistant_lines.last.to_s
       end
       private_class_method :last_assistant_turn
 
+      # Picks a single focused entity if the latest assistant turn clearly talked about one object.
       def pick_primary_by_recent_assistant(entities, dialog_context)
         last = last_assistant_turn(dialog_context)
         return nil if last.empty?
@@ -627,6 +652,7 @@ module SrcLanggraphRb
       end
       private_class_method :pick_primary_by_recent_assistant
 
+      # Resolves explicit and implicit entity references into none/single/multi/clarify modes.
       def resolve_entity_reference(text, entities, dialog_context:)
         mentions = explicit_entity_mentions(text, entities)
         if mentions.length == 1
@@ -665,6 +691,7 @@ module SrcLanggraphRb
       end
       private_class_method :resolve_entity_reference
 
+      # Builds the clarification prompt when one pronoun could refer to multiple context entities.
       def clarify_entity_message(entities)
         return "Уточните, о каком объекте речь." if entities.empty?
 
@@ -672,29 +699,34 @@ module SrcLanggraphRb
       end
       private_class_method :clarify_entity_message
 
+      # Detects fact-seeking questions that deserve stronger answer-quality checks.
       def fact_query?(text)
         clean = text.to_s.strip
         !clean.empty? && (FACT_QUERY_RE.match?(clean) || YEAR_QUERY_RE.match?(clean))
       end
       private_class_method :fact_query?
 
+      # Detects year/date-style questions that should ideally contain a concrete year in the answer.
       def year_query?(text)
         clean = text.to_s.strip
         !clean.empty? && YEAR_QUERY_RE.match?(clean)
       end
       private_class_method :year_query?
 
+      # Checks whether the response contains a plausible year-like token.
       def contains_year?(text)
         YEAR_VALUE_RE.match?(text.to_s)
       end
       private_class_method :contains_year?
 
+      # Recognizes template-like refusals that overfit to local context instead of answering from model knowledge.
       def contains_context_only_refusal?(text)
         lower = text.to_s.downcase
         !lower.empty? && CONTEXT_ONLY_REFUSAL_HINTS.any? { |marker| lower.include?(marker) }
       end
       private_class_method :contains_context_only_refusal?
 
+      # Verifies that the answer still names the resolved entities when the prompt depended on them.
       def mentions_resolved_entities?(text, resolved_entities)
         return true if resolved_entities.empty?
 
@@ -713,6 +745,7 @@ module SrcLanggraphRb
       end
       private_class_method :mentions_resolved_entities?
 
+      # Scores response quality so the runtime can choose between primary and retry passes.
       def response_quality_score(user_text:, response_text:, resolved_mode:, resolved_entities:)
         text = response_text.to_s.strip
         return 0 if text.empty?
@@ -725,6 +758,7 @@ module SrcLanggraphRb
       end
       private_class_method :response_quality_score
 
+      # Decides whether the first free-speech answer should be retried with stronger factual guidance.
       def needs_knowledge_retry(user_text:, response_text:, resolved_mode:, resolved_entities:)
         text = response_text.to_s.strip
         return true if text.empty?
@@ -737,6 +771,7 @@ module SrcLanggraphRb
       end
       private_class_method :needs_knowledge_retry
 
+      # Explains why a retry happened so the second LLM pass sees the failure mode explicitly.
       def retry_reason(user_text:, response_text:, resolved_mode:, resolved_entities:)
         text = response_text.to_s.strip
         return "empty_response" if text.empty?
@@ -749,6 +784,7 @@ module SrcLanggraphRb
       end
       private_class_method :retry_reason
 
+      # Trims dialog context for the retry pass to keep only the most recent and useful lines.
       def short_dialog_context(dialog_context, max_lines: 10, max_chars: 2400)
         lines = dialog_context.to_s.lines.map(&:strip).reject(&:empty?)
         return "" if lines.empty?
@@ -758,6 +794,7 @@ module SrcLanggraphRb
       end
       private_class_method :short_dialog_context
 
+      # Narrows artifacts for the retry pass to only the resolved entities that matter for the answer.
       def retry_context_artifacts(context_artifacts:, resolved_entities:)
         return context_artifacts if resolved_entities.empty?
 
