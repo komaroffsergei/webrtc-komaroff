@@ -24,10 +24,10 @@ docker compose up -d --build
 - не меняет live voice ASR path `inference.whisper.*`
 
 Текущие режимы ASR:
-- live voice: `WebRTC -> NATS -> stt_whisper_to_nats(Phraser) -> LinTO HTTP`
-- `/whisper` file mode: `Browser -> bridge upload -> NATS file job -> chunked LinTO HTTP`
+- live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.*`
+- `/whisper` file mode: `Browser -> HTTP upload + NATS WS -> inference.whisper.file.* -> chunked LinTO HTTP`
 
-Подробная архитектура, схемы сервисов, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
+Подробная архитектура, схемы сервисов, payload-ы и `rag-stack` integration: [`ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 
 NATS2Ollama endpoint (без auth):
 ```bash

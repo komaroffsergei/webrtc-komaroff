@@ -1,6 +1,6 @@
 # webrtc-komaroff
 
-Локальный стек WebRTC + NATS + LangGraph runtime.
+Локальный стек WebRTC + NATS + workflow runtime.
 
 ## Сервисы
 
@@ -14,7 +14,11 @@
 - `src_postgres` — БД runtime.
 - `nats` — шина сообщений.
 
+Каноническая карта сервисов, проектов, протоколов, subject-ов, payload-ов и внешнего `rag-stack`: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
+
 ## NATS subjects
+
+Краткая сводка:
 
 - `nats.agent.<user_id>` — вход в `src_agent`.
 - `nats.events.<user_id>` — события в UI.
@@ -24,6 +28,8 @@
 - `nats.workflow.health.ruby` — health Ruby runtime.
 - `nats.llm.<user_id>` — вызовы LLM.
 - `nats.tools.<tool_name>` — вызовы инструментов.
+
+Полный registry, включая live/file ASR и `rag-stack` bridge subjects, см. в [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md) и [`DOCS/NATS.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/NATS.md).
 
 ## Быстрый запуск (Docker)
 
@@ -79,13 +85,13 @@ docker compose up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-В stack-конфиге `webrtc.drs` маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Он загружает исходный файл в gateway, создаёт NATS file-job, worker вырезает audio-only поток, нормализует его в `mono 16k`, режет на чанки и отправляет их последовательно в `linto_stt_whisper_http`, а браузер получает progress/result напрямую из NATS WS по `job` subject конкретного запуска, не меняя live voice pipeline `inference.whisper.*`.
+В deploy stack маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Upload handler публикует NATS file-job, worker нормализует audio в `mono 16k`, режет на чанки и отправляет их последовательно в `linto_stt_whisper_http`, а браузер получает progress/result напрямую из NATS WS по job/session subjects.
 
 Режимы ASR в этом стэке сейчас такие:
-- live voice: `WebRTC -> NATS -> stt_whisper_to_nats(Phraser) -> LinTO HTTP -> NATS`
-- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> gateway -> NATS file job -> sequential chunked LinTO HTTP`
+- live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.* -> src_core`
+- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* -> file worker -> sequential chunked LinTO HTTP`
 
-Подробная архитектура, схемы сервисов, протоколы, payload-ы и code map: [`ASR_BRIDGE_FLOW.md`](/home/komaroff/dev/monitorsoft/voice-chat/ASR_BRIDGE_FLOW.md)
+Подробная архитектура, схемы сервисов, протоколы, payload-ы и внешние интеграции: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 Ruby runtime code map: [`src_langgraph_rb/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/CODEMAP.md)
 
 ## Docker + отладка (PyCharm Remote Debug)
@@ -181,6 +187,7 @@ npm run dev
 
 ## Документация
 
+- `DOCS/ARCHITECTURE.md`
 - `DOCS/START_HERE.md`
 - `DOCS/QUICKSTART.md`
 - `DOCS/AGENT.md`
@@ -190,3 +197,5 @@ npm run dev
 - `DOCS/NATS.md`
 - `DOCS/POSTGRES.md`
 - `src_langgraph/README.md`
+- `src_langgraph_rb/README.md`
+- `src_langgraph_rb/CODEMAP.md`

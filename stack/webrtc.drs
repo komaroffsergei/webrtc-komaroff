@@ -118,7 +118,7 @@ Service :src_langgraph_rb, image: webrtc_registry['langgraph-rb'] do
       NATS_WORKFLOW_HEALTH_SUBJECT: 'nats.workflow.health.ruby',
       NATS_REQUEST_TIMEOUT_SECONDS: '120'
 
-  command ['bundle', 'exec', 'ruby', './bin/service']
+  command ['bundle', 'exec', 'ruby', './lib/src_langgraph_rb/runtime/service.rb']
 end
 
 Service :src_front, image: webrtc_registry['front'] do

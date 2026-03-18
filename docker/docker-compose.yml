@@ -142,7 +142,7 @@ services:
       NATS_LLM_SUBJECT: nats.llm.
       NATS_TOOLS_PREFIX: nats.tools.
       NATS_REQUEST_TIMEOUT_SECONDS: ${NATS_REQUEST_TIMEOUT_SECONDS:-60}
-    command: ["bundle", "exec", "ruby", "./bin/service"]
+    command: ["bundle", "exec", "ruby", "./lib/src_langgraph_rb/runtime/service.rb"]
 
   src_front:
     build:

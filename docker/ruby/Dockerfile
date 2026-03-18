@@ -33,4 +33,4 @@ ENV SERVER_ENV=production \
 
 WORKDIR /app
 
-CMD ["bundle", "exec", "ruby", "./bin/service"]
+CMD ["bundle", "exec", "ruby", "./lib/src_langgraph_rb/runtime/service.rb"]

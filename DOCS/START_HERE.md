@@ -16,14 +16,14 @@ docker compose up -d --build
 
 - `http://127.0.0.1:8080/`
 
-## 3) Что происходит при сообщении пользователя
+## 3) Что происходит в системе
 
-1. `src_front` -> `src_core` (`POST /core/message`)
-2. `src_core` -> `src_agent` (`nats.agent.<user_id>`)
-3. `src_agent` -> выбранный runtime (`nats.workflow.run.ruby` или `nats.workflow.run.python`)
-4. `src_langgraph` -> `src_llm` (`nats.llm.<user_id>`)
-5. `src_langgraph` -> `src_api_gateway` (`nats.tools.*`)
-6. Ответ возвращается в UI через `nats.events.<user_id>`
+- text turn: `src_front -> /core/message -> nats.agent.* -> runtime -> nats.llm.* / nats.tools.* -> nats.events.*`
+- live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> inference.whisper.text.* -> src_core -> nats.agent.*`
+- file transcription: `Browser -> /whisper/api/file-transcribe -> inference.whisper.file.* -> file worker -> NATS WS progress/result`
+- LLM inference идет через `src_llm` и внешний `rag-stack` / `llm-models`.
+
+Полная карта сервисов, subject-ов, payload-ов и `rag-stack` integration: [`ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 
 ## 4) Проверка сценариев
 
@@ -37,3 +37,4 @@ docker compose up -d --build
 - `src_langgraph/config/scenarios/*.json` — промпты, tool names, схемы.
 - `src_langgraph/scenarios/*.py` — логика сценариев.
 - `src_langgraph/engine.py` — подключение сценария в граф.
+- Ruby runtime и DSL: [`src_langgraph_rb/README.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/README.md)
