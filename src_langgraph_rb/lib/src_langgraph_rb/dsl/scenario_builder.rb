@@ -14,6 +14,7 @@ module SrcLanggraphRb
         @fragment_lookup = fragment_lookup
         @title = nil
         @description = nil
+        @routing_description = nil
         @tags = []
         @capabilities = []
         @required_tools = []
@@ -27,6 +28,10 @@ module SrcLanggraphRb
 
       def description(value)
         @description = value.to_s.strip
+      end
+
+      def routing_description(value)
+        @routing_description = value.to_s.strip
       end
 
       def tags(*values)
@@ -58,6 +63,7 @@ module SrcLanggraphRb
         metadata = Schema::ScenarioMetadata.new(
           @title,
           @description,
+          @routing_description,
           @tags.uniq.freeze,
           @capabilities.uniq.freeze,
           @required_tools.uniq.freeze,

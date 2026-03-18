@@ -1,17 +1,18 @@
 # `src_langgraph_rb` Code Map
 
-Рабочая карта runtime, DSL и boundary files. Этот файл нужен для быстрого входа в код и поиска точки правки. Архитектурное описание и sequence diagrams см. в [`README.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/README.md).
+Рабочая карта текущего DSL-driven runtime. Этот файл нужен для быстрого входа в код и поиска точки правки. Архитектурное описание см. в [`README.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/README.md).
 
 ## Рекомендуемый порядок чтения
 
 1. [lib/src_langgraph_rb/runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb)
 2. [lib/src_langgraph_rb/runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb)
-3. [lib/src_langgraph_rb/runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb)
-4. [lib/src_langgraph_rb/runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb)
-5. [lib/src_langgraph_rb/runtime/scenarios/free_speech.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/free_speech.rb)
-6. [lib/src_langgraph_rb/runtime/scenarios/where_my_flight.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/where_my_flight.rb)
-7. [lib/src_langgraph_rb/runtime/scenarios/find_nearest_airport.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/find_nearest_airport.rb)
-8. [lib/src_langgraph_rb/scenarios/built_in_catalog.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/built_in_catalog.rb)
+3. [lib/src_langgraph_rb/runtime/compute_ops.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/compute_ops.rb)
+4. [lib/src_langgraph_rb/runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb)
+5. [lib/src_langgraph_rb/runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb)
+6. [lib/src_langgraph_rb/scenarios/free_speech.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/free_speech.rb)
+7. [lib/src_langgraph_rb/scenarios/where_my_flight.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/where_my_flight.rb)
+8. [lib/src_langgraph_rb/scenarios/find_nearest_airport.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/find_nearest_airport.rb)
+9. [lib/src_langgraph_rb/scenarios/built_in_catalog.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/built_in_catalog.rb)
 
 ## Верхний уровень
 
@@ -32,101 +33,60 @@
 | [lib/src_langgraph_rb/schema](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/schema) | immutable graph/schema objects |
 | [lib/src_langgraph_rb/dsl](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/dsl) | builders декларативного DSL |
 | [lib/src_langgraph_rb/catalog](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/catalog) | catalog build/filter/lookup |
-| [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios) | built-in DSL descriptions |
+| [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios) | built-in DSL descriptions и source of truth |
 | [lib/src_langgraph_rb/adapters/lang_graph_rb/builder_plan.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/adapters/lang_graph_rb/builder_plan.rb) | `Scenario` -> `LangGraphRB::Graph` |
 
 ## Runtime boundary files
 
-| Файл | Точка чтения | Что искать внутри |
-| --- | --- | --- |
-| [runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb) | сначала | NATS connect, subscribe, run/health handler, reply normalization |
-| [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) | сразу после service | main orchestration, node/router dispatch, finalization |
-| [runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb) | после engine | downstream req-reply и transport normalization |
-| [runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb) | когда нужен router logic | LLM `routing_decision` |
-| [runtime/memory.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/memory.rb) | когда нужен context shape | compaction и artifact storage |
-
-## Key methods by file
-
-### `runtime/service.rb`
-
-| Метод | Назначение |
+| Файл | Что искать внутри |
 | --- | --- |
-| [`Settings.from_env`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L26) | env -> typed runtime settings |
-| [`Service.run_from_env`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L46) | единая точка входа для CLI/runtime startup |
-| [`run`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L58) | bootstrap runtime и подписка на subjects |
-| [`handle_run`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L107) | parsing + contract validation + engine call |
-| [`invalid_run_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L117) | build safe failed response |
-| [`handle_health`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L135) | health req-reply |
-| [`safe_respond`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb#L156) | no-reply guard и NATS respond safety |
+| [runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb) | NATS lifecycle, run/health handler, safe JSON reply |
+| [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) | graph invocation, node dispatch, router dispatch, finalization |
+| [runtime/compute_ops.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/compute_ops.rb) | reusable compute ops вместо scenario runtime files |
+| [runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb) | downstream req-reply и transport normalization |
+| [runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb) | LLM router по catalog metadata |
+| [runtime/memory.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/memory.rb) | context shape и artifact storage |
 
-### `runtime/engine.rb`
-
-| Метод | Назначение |
-| --- | --- |
-| [`run`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L17) | full orchestration path |
-| [`choose_scenario`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L45) | thin wrapper над `Router.choose_scenario` |
-| [`run_selected_scenario`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L55) | compiled graph invocation |
-| [`initial_scenario`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L69) | pending-aware scenario selection |
-| [`node_callable`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L90) | DSL node kind dispatch |
-| [`generic_tool_call`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L148) | generic tool node helper |
-| [`router_callable`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L177) | DSL router dispatch |
-| [`finalize_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L201) | memory + artifact persistence + turn ids |
-| [`with_artifact_memory`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L246) | `client_events` -> `artifact_memory` |
-
-### `runtime/runtime_io.rb`
-
-| Метод | Назначение |
-| --- | --- |
-| [`call_llm`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb#L19) | LLM req-reply boundary |
-| [`call_tool`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb#L33) | tool req-reply boundary |
-| [`request_json`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb#L60) | parse and verify JSON object response |
-
-### `runtime/router.rb`
-
-| Метод | Назначение |
-| --- | --- |
-| [`choose_scenario`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb#L31) | central router call |
-| [`filtered_scenarios`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb#L54) | exclusion-aware scenario list |
-
-## `kind` -> method mapping
+## `kind` -> executor mapping
 
 | `kind` | Исполняющий код |
 | --- | --- |
-| `context_enrichment` | [`FreeSpeech.prepare_context`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/free_speech.rb#L53) |
-| `free_speech_primary` | [`FreeSpeech.primary_pass`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/free_speech.rb#L73) |
-| `free_speech_retry` | [`FreeSpeech.retry_pass`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/free_speech.rb#L112) |
-| `flight_collect_params` | [`WhereMyFlight.collect_params`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/where_my_flight.rb#L44) |
-| `flight_lookup_tool` | [`WhereMyFlight.lookup_tool`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/where_my_flight.rb#L114) |
-| `flight_reroute` | [`WhereMyFlight.reroute`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/where_my_flight.rb#L156) |
-| `airport_prepare_search` | [`FindNearestAirport.prepare_search`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/find_nearest_airport.rb#L57) |
-| `airport_prepare_route` | [`FindNearestAirport.prepare_route`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/find_nearest_airport.rb#L88) |
-| `airport_build_route` | [`FindNearestAirport.build_route`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios/find_nearest_airport.rb#L117) |
-| `tool_call` | [`Engine#generic_tool_call`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L148) |
-| `final_response` | [`Runtime::Responses.done_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
-| `state_response` | [`Engine#ensure_response!`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb#L173) |
-| `done_response` | [`Runtime::Responses.done_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
-| `failed_response` | [`Runtime::Responses.failed_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
-| `partial_response` | [`Runtime::Responses.partial_response`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
+| `compute` | [runtime/compute_ops.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/compute_ops.rb) |
+| `tool_call` | `Engine#generic_tool_call` в [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) |
+| `final_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
+| `state_response` | `Engine#ensure_response!` в [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) |
+| `done_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
+| `failed_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
+| `partial_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
 
-## `router` -> state mapping
+## Compute ops
 
-| `router` id | State source |
+| `op` | Используется в | Что делает |
+| --- | --- | --- |
+| `resolve_context_references` | `free_speech` | entity extraction и reference resolution |
+| `compose_free_speech_response` | `free_speech` | primary/retry response generation |
+| `collect_tool_params_with_pending` | `where_my_flight` | tool params + pending merge + missing/reroute |
+| `tool_lookup_with_llm_response` | `where_my_flight` | tool call + not_found/error mapping + final response text |
+| `reroute_selected_scenario` | `where_my_flight` | pending reroute в другой scenario graph |
+| `prepare_airport_search` | `find_nearest_airport` | position -> search args |
+| `prepare_airport_route` | `find_nearest_airport` | airports -> route args |
+| `build_route_with_response` | `find_nearest_airport` | route tool call + final text + client events |
+
+## Router sources
+
+| Что влияет | Источник |
 | --- | --- |
-| `free_speech_entry` | `state[:free_speech_entry]` |
-| `free_speech_primary_result` | `state[:free_speech_primary_result]` |
-| `flight_param_status` | `state[:flight_param_status]` |
-| `flight_tool_result_status` | `state[:flight_tool_result_status]` |
-| `tool_status` | derived from `state[:last_tool_ok]` |
-| `route_args_status` | `state[:route_args_status]` |
-| `airport_route_result_status` | `state[:airport_route_result_status]` |
+| global router prompt | [runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb) |
+| list of available scenarios | [scenarios/built_in_catalog.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/built_in_catalog.rb) |
+| per-scenario router description | `routing_description` inside each scenario DSL file |
 
 ## Scenario touchpoints
 
-| Scenario | LLM calls | Tool calls | Runtime-specific side effects |
-| --- | --- | --- | --- |
-| `free_speech` | `routing_decision`, `final_response`, `final_response retry` | none | entity resolution from `artifact_memory` |
-| `where_my_flight` | `tool_params`, `final_response` | `get_flight_status` | pending flow, possible reroute |
-| `find_nearest_airport` | `tool_params search`, `tool_params route`, `final_response` | `get_current_position`, `search_airports_nearby`, `build_route` | emits `SET_POSITION`, `SET_AIRPORTS`, `BUILD_ROUTE` |
+| Scenario file | Важные вещи внутри |
+| --- | --- |
+| [scenarios/free_speech.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/free_speech.rb) | free-form prompts, retry config, `compute` nodes для references и response |
+| [scenarios/where_my_flight.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/where_my_flight.rb) | flight prompts/schema, pending config, reroute flow |
+| [scenarios/find_nearest_airport.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios/find_nearest_airport.rb) | search/route prompts, defaults, airport client events |
 
 ## Exceptions and normalization map
 
@@ -143,11 +103,8 @@
 
 | Нужно изменить | Файл/каталог |
 | --- | --- |
-| env / subjects / timeouts | [runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb) |
-| NATS boundary behavior | [runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb) |
-| orchestration / node routing / finalization | [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) |
-| router policy | [runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb), [config/scenarios/router.json](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/config/scenarios/router.json) |
-| prompts / tool schema | [config/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/config/scenarios) |
-| executable scenario behavior | [runtime/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/scenarios) |
-| DSL graph structure | [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios) |
-| graph compilation adapter | [adapters/lang_graph_rb/builder_plan.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/adapters/lang_graph_rb/builder_plan.rb) |
+| prompts / schema / defaults / routing hints / graph edges | [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios) |
+| compute behavior | [runtime/compute_ops.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/compute_ops.rb) |
+| orchestration / node dispatch / finalization | [runtime/engine.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/engine.rb) |
+| router behavior | [runtime/router.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/router.rb) |
+| transport contracts | [runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb), [runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb) |

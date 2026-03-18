@@ -5,31 +5,12 @@ module SrcLanggraphRb
     module Router
       module_function
 
-      CFG = Runtime::ConfigLoader.load_config("router")
-      ROUTER_TASK = Runtime::ConfigLoader.text_block(
-        CFG[:task],
-        "Определи, какой сценарий лучше всего подходит для запроса пользователя. Выбирай только один сценарий из списка."
-      )
-      ROUTER_SCENARIOS = Runtime::ConfigLoader.list_of_dicts(
-        CFG[:available_scenarios],
-        [
-          {
-            id: Runtime::ScenarioIds::WHERE_MY_FLIGHT,
-            description: "Найти статус рейса по номеру рейса или фамилии пассажира"
-          },
-          {
-            id: Runtime::ScenarioIds::FIND_NEAREST_AIRPORT,
-            description: "Найти ближайший аэропорт и построить маршрут до него"
-          },
-          {
-            id: Runtime::ScenarioIds::FREE_SPEECH,
-            description: "Свободный разговор: общение с пользователем без инструментов"
-          }
-        ]
-      )
+      ROUTER_TASK = "Определи, какой сценарий лучше всего подходит для запроса пользователя.\n" \
+                    "Выбирай только один сценарий из списка.\n" \
+                    "Если не подходит ни один инструментальный сценарий, выбери free_speech@2.0.0."
 
-      def choose_scenario(req, io, dialog_context:, excluded_scenarios: nil, context_artifacts: nil)
-        scenarios = filtered_scenarios(excluded_scenarios)
+      def choose_scenario(req, io, catalog:, dialog_context:, excluded_scenarios: nil, context_artifacts: nil)
+        scenarios = filtered_scenarios(catalog, excluded_scenarios)
         allowed_ids = scenarios.map { |item| item[:id].to_s.strip }.to_set
         return [Runtime::ScenarioIds::FREE_SPEECH, { reason: "No scenarios available after exclusions" }] if scenarios.empty?
 
@@ -51,14 +32,18 @@ module SrcLanggraphRb
         [Runtime::ScenarioIds::FREE_SPEECH, data]
       end
 
-      def filtered_scenarios(excluded_scenarios)
+      def filtered_scenarios(catalog, excluded_scenarios)
         excluded = Array(excluded_scenarios).map(&:to_s).reject(&:empty?).to_set
-        ROUTER_SCENARIOS.filter_map do |row|
-          item = Runtime::Util.extract_hash(row)
-          scenario_id = item[:id].to_s.strip
+        catalog.all.filter_map do |scenario|
+          scenario_id = scenario.id.to_s.strip
           next if scenario_id.empty? || excluded.include?(scenario_id)
 
-          { id: scenario_id, description: item[:description].to_s.strip }
+          metadata = scenario.metadata
+          description = metadata.routing_description.to_s.strip
+          description = metadata.description.to_s.strip if description.empty?
+          next if description.empty?
+
+          { id: scenario_id, description: description }
         end
       end
       private_class_method :filtered_scenarios

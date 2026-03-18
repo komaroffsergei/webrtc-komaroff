@@ -46,6 +46,7 @@ module SrcLanggraphRb
         Runtime::Router.choose_scenario(
           req,
           @io,
+          catalog: @catalog,
           dialog_context: dialog_context,
           excluded_scenarios: excluded_scenarios,
           context_artifacts: context_artifacts
@@ -69,7 +70,7 @@ module SrcLanggraphRb
       def initial_scenario(req, state)
         pending = Runtime::Util.extract_hash(req.dig(:runtime, :pending))
         active = req.dig(:runtime, :active_workflow_id).to_s.strip
-        return [Runtime::ScenarioIds::WHERE_MY_FLIGHT, {}] if active == Runtime::ScenarioIds::WHERE_MY_FLIGHT && !pending.empty?
+        return [active, {}] if !pending.empty? && resumable_scenario?(active)
 
         context_artifacts = Runtime::Util.extract_hash(Runtime::Util.extract_hash(state[:context_extra])[:artifact_memory])
         choose_scenario(req, dialog_context: state[:dialog_context].to_s, context_artifacts: context_artifacts)
@@ -79,7 +80,7 @@ module SrcLanggraphRb
         @catalog.all.each_with_object({}) do |scenario, out|
           plan = @catalog.to_builder_plan(scenario.id)
           graph = plan.build_graph(
-            node_resolver: ->(instruction) { node_callable(scenario.id, instruction) },
+            node_resolver: ->(instruction) { node_callable(scenario, instruction) },
             router_resolver: ->(instruction) { router_callable(instruction) }
           )
           graph.compile!
@@ -87,29 +88,20 @@ module SrcLanggraphRb
         end
       end
 
-      def node_callable(scenario_id, instruction)
+      def node_callable(scenario, instruction)
         kind = instruction.fetch(:kind).to_s
         config = Runtime::Util.deep_symbolize(instruction.fetch(:config, {}))
         lambda do |state, context|
           case kind
-          when "context_enrichment"
-            Runtime::Scenarios::FreeSpeech.prepare_context(state)
-          when "free_speech_primary"
-            Runtime::Scenarios::FreeSpeech.primary_pass(state, io: context.fetch(:io))
-          when "free_speech_retry"
-            Runtime::Scenarios::FreeSpeech.retry_pass(state, io: context.fetch(:io))
-          when "flight_collect_params"
-            Runtime::Scenarios::WhereMyFlight.collect_params(state, io: context.fetch(:io), engine: context.fetch(:engine))
-          when "flight_lookup_tool"
-            Runtime::Scenarios::WhereMyFlight.lookup_tool(state, io: context.fetch(:io))
-          when "flight_reroute"
-            Runtime::Scenarios::WhereMyFlight.reroute(state, engine: context.fetch(:engine))
-          when "airport_prepare_search"
-            Runtime::Scenarios::FindNearestAirport.prepare_search(state, io: context.fetch(:io))
-          when "airport_prepare_route"
-            Runtime::Scenarios::FindNearestAirport.prepare_route(state, io: context.fetch(:io))
-          when "airport_build_route"
-            Runtime::Scenarios::FindNearestAirport.build_route(state, io: context.fetch(:io))
+          when "compute"
+            Runtime::ComputeOps.call(
+              op: config.fetch(:op),
+              state: state,
+              io: context.fetch(:io),
+              engine: context.fetch(:engine),
+              scenario_id: scenario.id,
+              config: config
+            )
           when "tool_call"
             generic_tool_call(state, context.fetch(:io), config)
           when "final_response"
@@ -135,7 +127,7 @@ module SrcLanggraphRb
               response: Runtime::Responses.partial_response(
                 state.fetch(:req),
                 state[:response_prompt].to_s,
-                active_workflow_id: scenario_id,
+                active_workflow_id: config[:active_workflow_id].to_s.empty? ? scenario.id : config[:active_workflow_id].to_s,
                 pending: Runtime::Util.extract_hash(state[:pending_state])
               )
             }
@@ -174,27 +166,20 @@ module SrcLanggraphRb
         raise "runtime state response is missing" if Runtime::Util.extract_hash(state[:response]).empty?
       end
 
+      def resumable_scenario?(scenario_id)
+        scenario = @catalog.all.find { |item| item.id.to_s == scenario_id.to_s }
+        return false unless scenario
+
+        flags = Runtime::Util.extract_hash(scenario.metadata.runtime_flags)
+        !flags[:pending_key].to_s.strip.empty?
+      end
+
       def router_callable(instruction)
         router = instruction.fetch(:router).to_s
         lambda do |state, _context|
-          case router
-          when "free_speech_entry"
-            state[:free_speech_entry]
-          when "free_speech_primary_result"
-            state[:free_speech_primary_result]
-          when "flight_param_status"
-            state[:flight_param_status]
-          when "flight_tool_result_status"
-            state[:flight_tool_result_status]
-          when "tool_status"
-            state[:last_tool_ok] ? "ok" : "failed"
-          when "route_args_status"
-            state[:route_args_status]
-          when "airport_route_result_status"
-            state[:airport_route_result_status]
-          else
-            raise SrcLanggraphRb::ValidationError, "Unsupported runtime router '#{router}'"
-          end
+          return state[:last_tool_ok] ? "ok" : "failed" if router == "tool_status"
+
+          state[router.to_sym]
         end
       end
 
