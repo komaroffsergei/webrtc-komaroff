@@ -1,5 +1,4 @@
 export type AssistantElements = {
-  container: HTMLElement | null;
   chatWindow: HTMLElement | null;
   messageLog: HTMLElement | null;
   textInput: HTMLInputElement | null;
@@ -20,7 +19,6 @@ export type AssistantElements = {
 
 export function getAssistantElements(): AssistantElements {
   return {
-    container: document.getElementById("assistantContainer"),
     chatWindow: document.querySelector(".chat-window"),
     messageLog: document.getElementById("messageLog"),
     textInput: document.getElementById("textInput") as HTMLInputElement | null,

@@ -100,8 +100,6 @@ if __name__ == "__main__":
     otelb.instrument_aiohttp_app(app)
     app["otel"] = otelb
 
-    app["otel"] = otelb
-
     setup_routes(app)
 
     try:

@@ -159,28 +159,6 @@ services:
       - src_core
       - nats
 
-  src_e2e:
-    profiles: ["test"]
-    build:
-      context: ../src_e2e
-      additional_contexts:
-        shared: ../src_shared
-      dockerfile: ../docker/e2e/Dockerfile
-    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/e2e/${CI_COMMIT_BRANCH}
-    depends_on:
-      - nats
-      - src_postgres
-      - src_api_gateway
-      - src_llm
-      - src_agent
-    environment:
-      USER_ID: ${USER_ID:-user123}
-      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
-      DATABASE_URL: postgresql://mcp:mcp_pass@src_postgres:5432/mcp
-      NATS_AGENT_SUBJECT: nats.agent.
-      NATS_WORKFLOW_HEALTH_SUBJECT: ${NATS_WORKFLOW_HEALTH_SUBJECT:-nats.workflow.health.python}
-    restart: "no"
-
   nats:
     image: nats:2.11
     command: ["-c", "/etc/nats/nats.conf"]

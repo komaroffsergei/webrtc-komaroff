@@ -1,16 +1,10 @@
 import type { CommandRequestTelemetryEvent, MessageRequestPayload } from "../types";
 
-type CommandHandlerFn = (params: unknown, uid?: string) => void | Promise<void>;
 const DEFAULT_MESSAGE_TIMEOUT_MS = 70000;
 
 export class CommandHandler {
-  private handlers = new Map<string, CommandHandlerFn>();
   private sessionId: string | null = null;
   private telemetryHook: ((event: CommandRequestTelemetryEvent) => void) | null = null;
-
-  register(method: string, handler: CommandHandlerFn): void {
-    this.handlers.set(method, handler);
-  }
 
   setSessionId(sessionId: string | null): void {
     this.sessionId = sessionId;
@@ -23,28 +17,6 @@ export class CommandHandler {
   setTelemetryHook(hook: ((event: CommandRequestTelemetryEvent) => void) | null): void {
     this.telemetryHook = hook;
   }
-
-  // async handleServerEvent(event: ServerEvent): Promise<boolean> {
-  //   if (event && "type" in event && event.type === "command" && event.method) {
-  //     const h = this.handlers.get(event.method);
-  //     if (!h) {
-  //       logEvent({ service: "command", type: "warn", message: `No handler for ${event.method}` });
-  //       return true;
-  //     }
-  //     try {
-  //       await h(event.params, event.uid);
-  //     } catch (err) {
-  //       logEvent({
-  //         service: "command",
-  //         type: "error",
-  //         message: `Handler ${event.method} failed: ${err instanceof Error ? err.message : String(err)}`,
-  //       });
-  //     }
-  //     return true;
-  //   }
-  //
-  //   return false;
-  // }
 
   async sendMessage(text: string, turnId: string): Promise<string | null> {
     return this.postMessage({

@@ -1,4 +1,5 @@
 import {AgentCommandContext, ClientHandlerCommand} from "../../types";
+import { readLastArtifactData } from "./payload";
 
 type Airport = {
   id?: string;
@@ -16,10 +17,7 @@ function isAirport(x: unknown): x is Airport {
 }
 
 export function handleSetAirports(resp: ClientHandlerCommand, ctx: AgentCommandContext): void {
-  const artifacts = resp.artifacts;
-  const key = artifacts?.last ?? null;
-  const raw = key ? (artifacts?.payload as any)?.[key] : null;
-  const airportsRaw = raw?.data?.airports;
+  const airportsRaw = readLastArtifactData(resp).airports;
   if (!Array.isArray(airportsRaw)) return;
 
   const airports = airportsRaw.filter(isAirport) as Airport[];
@@ -36,4 +34,3 @@ export function handleSetAirports(resp: ClientHandlerCommand, ctx: AgentCommandC
     })),
   );
 }
-

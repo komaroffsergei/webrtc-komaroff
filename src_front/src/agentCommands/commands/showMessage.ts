@@ -1,12 +1,11 @@
 import {AgentCommandContext, ClientHandlerCommand} from "../../types";
+import { readLastArtifactPayload } from "./payload";
 
 export function handleShowMessage(
   resp: ClientHandlerCommand,
   ctx: AgentCommandContext,
 ): void {
-  const artifacts = resp.artifacts?.payload ?? {};
-  const last = resp.artifacts?.last;
-  const payload = last && artifacts[last] ? (artifacts[last] as Record<string, unknown>) : {};
+  const payload = readLastArtifactPayload(resp);
   const summary = payload?.summary ?? payload?.prompt ?? payload?.message;
   const text =
     typeof summary === "string"

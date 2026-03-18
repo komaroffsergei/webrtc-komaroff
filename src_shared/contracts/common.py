@@ -49,13 +49,6 @@ class TraceEnvelope(BaseModel):
         return self
 
 
-class StatusResponse(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    ok: bool
-    error: Optional[ErrorInfo] = None
-
-
 class ServiceHealthRequest(TraceEnvelope):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,4 +62,3 @@ class ServiceHealthResponse(TraceEnvelope):
     status: Literal["healthy", "unhealthy"]
     details: dict[str, Any] = Field(default_factory=dict)
     error: Optional[ErrorInfo] = None
-

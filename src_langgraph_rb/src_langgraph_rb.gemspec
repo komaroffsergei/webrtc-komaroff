@@ -18,14 +18,11 @@ Gem::Specification.new do |spec|
   spec.metadata["source_code_uri"] = spec.homepage
 
   spec.files = Dir.chdir(__dir__) do
-    Dir["README.md", "Rakefile", "bin/*", "config/**/*", "lib/**/*"].sort
+    Dir["README.md", "bin/*", "config/**/*", "lib/**/*"].sort
   end
   spec.require_paths = ["lib"]
 
   spec.add_dependency "langgraph_rb", "~> 0.1.11"
   spec.add_dependency "logger"
   spec.add_dependency "nats-pure", "~> 2.5"
-
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake", "~> 13.2"
 end

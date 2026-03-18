@@ -1,9 +1,25 @@
-import { commandHandlers } from "./commands";
-import {AgentCommandContext, ClientHandlerCommand} from "../types";
+import type { AgentCommandContext, ClientHandlerCommand } from "../types";
+import { handleBuildRoute } from "./commands/buildRoute";
+import { handleSetAirports } from "./commands/setAirports";
+import { handleSetPosition } from "./commands/setPosition";
+import { handleShowAirports } from "./commands/showAirports";
+import { handleShowErrorMessage } from "./commands/showErrorMessage";
+import { handleShowMessage } from "./commands/showMessage";
+
+type CommandHandlerFn = (resp: ClientHandlerCommand, ctx: AgentCommandContext) => void;
+
+const commandHandlers: Record<string, CommandHandlerFn> = {
+  SHOW_AIRPORTS: handleShowAirports,
+  SET_AIRPORTS: handleSetAirports,
+  SET_POSITION: handleSetPosition,
+  BUILD_ROUTE: handleBuildRoute,
+  SHOW_ERROR_MESSAGE: handleShowErrorMessage,
+  ASK_USER_INPUT: handleShowMessage,
+  SHOW_MESSAGE: handleShowMessage,
+};
 
 export class AgentCommandHandler {
   constructor(private ctx: AgentCommandContext) {}
-
 
   handle(event: ClientHandlerCommand): void {
     const command = String(event.command ?? "");

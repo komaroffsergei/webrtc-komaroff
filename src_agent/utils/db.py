@@ -68,19 +68,6 @@ async def create_session(db: Database, *, user_id: str, session_id: Optional[str
     return str(sid)
 
 
-async def update_session_status(db: Database, *, session_id: str, status: str) -> None:
-    await db.execute(
-        """
-        update sessions
-        set status = $2,
-            updated_at = now()
-        where session_id = $1
-        """,
-        session_id,
-        status,
-    )
-
-
 async def chat_turn_exists(db: Database, *, session_id: str, turn_id: str) -> bool:
     exists = await db.fetchval(
         """

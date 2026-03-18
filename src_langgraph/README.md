@@ -223,7 +223,6 @@ flowchart TD
 
 6. Проверь end-to-end:
 - локально через UI
-- `cd ../docker && COMPOSE_PROFILES=langgraph NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python docker compose --profile test run --rm src_e2e`
 
 ---
 

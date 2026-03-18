@@ -7,8 +7,6 @@ export type AppConfig = {
     iceCandidatePoolSize: number;
     bundlePolicy: "balanced" | "max-bundle" | "max-compat";
     rtcpMuxPolicy: "require";
-    forceRelay: boolean;
-    diagnostics: boolean;
     iceGatherTimeoutMs: number;
   };
   audio: {
@@ -34,7 +32,6 @@ export type AppConfig = {
   nats: {
     url: string;
     eventsSubject: string;
-    agentSubject: string;
     clientName: string;
     user?: string;
     pass?: string;
@@ -49,7 +46,6 @@ const defaultNatsUrl = import.meta.env.DEV
 const natsUrl =
   (window as any)?.SETTINGS?.NATS_URL ??  defaultNatsUrl;
 const natsEventsSubject = "nats.events.user123";
-const natsAgentSubject = "nats.agent.user123";
 const natsClientName = "src_front";
 const natsUser = (window as any)?.SETTINGS?.NATS_USER;
 const natsPass = (window as any)?.SETTINGS?.NATS_PASS;
@@ -64,8 +60,6 @@ export const appConfig: AppConfig = {
     iceCandidatePoolSize: 4,
     bundlePolicy: "max-bundle",
     rtcpMuxPolicy: "require",
-    forceRelay: false,
-    diagnostics: true,
     iceGatherTimeoutMs: 1000,
   },
   audio: {
@@ -91,7 +85,6 @@ export const appConfig: AppConfig = {
   nats: {
     url: natsUrl,
     eventsSubject: natsEventsSubject,
-    agentSubject: natsAgentSubject,
     clientName: natsClientName,
     user: natsUser,
     pass: natsPass,

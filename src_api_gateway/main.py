@@ -1,13 +1,13 @@
+import json
+import os
 import asyncio
 import math
-from typing import List, Optional
+from uuid import uuid4
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
-import json
-import os
-from uuid import uuid4
 
 from nats.aio.client import Client as NATS
 from nats.aio.msg import Msg
@@ -33,6 +33,31 @@ CITY_COORDS: dict[str, tuple[float, float]] = {
     "st petersburg": (59.9343, 30.3351),
     "amsterdam": (52.3676, 4.9041),
 }
+
+FLIGHTS: list[dict[str, str]] = [
+    {
+        "flight_number": "SU123",
+        "last_name": "Иванов",
+        "status": "ON_TIME",
+        "from": "SVO",
+        "to": "AMS",
+        "departure_time": "2026-01-14T12:30:00Z",
+        "arrival_time": "2026-01-14T15:10:00Z",
+        "gate": "A12",
+        "terminal": "C",
+    },
+    {
+        "flight_number": "S123",
+        "last_name": "Петров",
+        "status": "DELAYED",
+        "from": "DME",
+        "to": "LED",
+        "departure_time": "2026-01-14T09:10:00Z",
+        "arrival_time": "2026-01-14T10:35:00Z",
+        "gate": "B07",
+        "terminal": "B",
+    },
+]
 
 
 # -------------------------
@@ -163,35 +188,82 @@ def _tool_get_weather(*, city: str) -> dict:
     return {"data": {"weather": {"city": city, "temperature_c": temp, "condition": "CLEAR"}}}
 
 
-def _tool_get_flight_status(*, flight_number: str = None, last_name: str = None) -> dict:
-    flights = [
-        {"flight_number": "SU123", "last_name": "Иванов", "status": "ON_TIME", "from": "SVO", "to": "AMS",
-         "departure_time": "2026-01-14T12:30:00Z", "arrival_time": "2026-01-14T15:10:00Z", "gate": "A12", "terminal": "C"},
-        {"flight_number": "S123", "last_name": "Петров", "status": "DELAYED", "from": "DME", "to": "LED",
-         "departure_time": "2026-01-14T09:10:00Z", "arrival_time": "2026-01-14T10:35:00Z", "gate": "B07", "terminal": "B"},
-    ]
+def _lookup_flight(*, flight_number: str | None = None, last_name: str | None = None) -> dict[str, str] | None:
     if flight_number:
-        fn = flight_number.strip().upper()
-        found = next((f for f in flights if f.get("flight_number") == fn), None)
+        query = flight_number.strip().upper()
+        return next((flight for flight in FLIGHTS if flight.get("flight_number") == query), None)
+    if last_name:
+        query = last_name.strip().casefold()
+        return next((flight for flight in FLIGHTS if flight.get("last_name", "").casefold() == query), None)
+    return None
+
+
+def _tool_get_flight_status(*, flight_number: str = None, last_name: str = None) -> dict:
+    if flight_number:
+        found = _lookup_flight(flight_number=flight_number)
         if found:
             return {"data": {"flight": found}}
         return {"error": {"code": "not_found", "message": f"Flight {flight_number} not found"}}
     if last_name:
-        ln = last_name.strip().casefold()
-        found = next((f for f in flights if f.get("last_name", "").casefold() == ln), None)
+        found = _lookup_flight(last_name=last_name)
         if found:
             return {"data": {"flight": found}}
         return {"error": {"code": "not_found", "message": f"Passenger {last_name} not found"}}
     return {"error": {"code": "invalid_args", "message": "flight_number or last_name is required"}}
 
 
+def _current_position() -> dict[str, float | str]:
+    return {"lat": 55.7558, "lon": 37.6173, "city": "Moscow"}
+
+
+def _http_flight_payload(flight: dict[str, str]) -> dict[str, str]:
+    return {
+        "flight_number": flight["flight_number"],
+        "surname": flight["last_name"],
+        "status": flight["status"],
+        "from": flight["from"],
+        "to": flight["to"],
+        "departure_time": flight["departure_time"],
+        "arrival_time": flight["arrival_time"],
+        "gate": flight["gate"],
+        "terminal": flight["terminal"],
+    }
+
+
 def _tool_get_current_position() -> dict:
-    return {"data": {"lat": 55.7558, "lon": 37.6173, "city": "Moscow"}}
+    return {"data": _current_position()}
+
+
+def _build_route_data(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    points: int = 64,
+) -> dict[str, object]:
+    geometry = great_circle_geometry(
+        start_lat=start_lat,
+        start_lon=start_lon,
+        end_lat=end_lat,
+        end_lon=end_lon,
+        points=points,
+    )
+    return {
+        "geometry": geometry,
+        "distance_km": round(haversine(start_lat, start_lon, end_lat, end_lon), 2),
+    }
 
 
 def _tool_build_route(*, from_lat: float, from_lon: float, to_lat: float, to_lon: float) -> dict:
-    geometry = great_circle_geometry(start_lat=from_lat, start_lon=from_lon, end_lat=to_lat, end_lon=to_lon)
-    return {"data": {"geometry": geometry, "distance_km": round(haversine(from_lat, from_lon, to_lat, to_lon), 2)}}
+    return {
+        "data": _build_route_data(
+            start_lat=from_lat,
+            start_lon=from_lon,
+            end_lat=to_lat,
+            end_lon=to_lon,
+        )
+    }
 
 
 def get_tools_schema() -> dict:
@@ -370,8 +442,8 @@ async def _shutdown_nats_tools() -> None:
 
 @app.get("/api/pilot/location")
 def get_current_position():
-    # Moscow
-    return {"lat": 55.7558, "lon": 37.6173}
+    position = _current_position()
+    return {"lat": position["lat"], "lon": position["lon"]}
 
 
 @app.get("/api/airports/search_by_name")
@@ -444,44 +516,18 @@ def flight_status(
     flight_number: str | None = Query(default=None),
     surname: str | None = Query(default=None),
 ):
-    flights = [
-        {
-            "flight_number": "SU123",
-            "surname": "Иванов",
-            "status": "ON_TIME",
-            "from": "SVO",
-            "to": "AMS",
-            "departure_time": "2026-01-14T12:30:00Z",
-            "arrival_time": "2026-01-14T15:10:00Z",
-            "gate": "A12",
-            "terminal": "C",
-        },
-        {
-            "flight_number": "S123",
-            "surname": "Петров",
-            "status": "DELAYED",
-            "from": "DME",
-            "to": "LED",
-            "departure_time": "2026-01-14T09:10:00Z",
-            "arrival_time": "2026-01-14T10:35:00Z",
-            "gate": "B07",
-            "terminal": "B",
-        },
-    ]
-
     if isinstance(flight_number, str) and flight_number.strip():
-        q = flight_number.strip().upper()
-        found = next((f for f in flights if f.get("flight_number") == q), None)
+        query = flight_number.strip().upper()
+        found = _lookup_flight(flight_number=flight_number)
         if not found:
-            return JSONResponse({"error": "not_found", "flight_number": q}, status_code=404)
-        return found
+            return JSONResponse({"error": "not_found", "flight_number": query}, status_code=404)
+        return _http_flight_payload(found)
 
     if isinstance(surname, str) and surname.strip():
-        q = surname.strip().casefold()
-        found = next((f for f in flights if isinstance(f.get("surname"), str) and f["surname"].strip().casefold() == q), None)
+        found = _lookup_flight(last_name=surname)
         if not found:
             return JSONResponse({"error": "not_found", "surname": surname.strip()}, status_code=404)
-        return found
+        return _http_flight_payload(found)
 
     return JSONResponse({"error": "flight_number or surname is required"}, status_code=400)
 
@@ -493,19 +539,12 @@ def build_route(
     end_lat: float,
     end_lon: float
 ):
-    geometry = great_circle_geometry(
+    return _build_route_data(
         start_lat=start_lat,
         start_lon=start_lon,
         end_lat=end_lat,
         end_lon=end_lon,
-        points=64,
     )
-    return {
-        "geometry": geometry,
-        "distance_km": round(
-            haversine(start_lat, start_lon, end_lat, end_lon), 2
-        )
-    }
 
 config = uvicorn.Config(
     "main:app",

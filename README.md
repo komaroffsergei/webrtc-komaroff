@@ -58,7 +58,7 @@ docker compose down --remove-orphans
 docker compose up -d --build
 ```
 
-`src_agent` и `src_e2e` используют только настроенные `NATS_WORKFLOW_*_SUBJECT`; скрытого fallback между Ruby и Python runtime больше нет.
+`src_agent` использует только настроенные `NATS_WORKFLOW_*_SUBJECT`; скрытого fallback между Ruby и Python runtime больше нет.
 
 Если Docker отвечает `failed to set up container networking ... network ... not found`, это stale state у старого контейнера после пересоздания сети. Нужен `docker compose down --remove-orphans`; если контейнер остался, удали его через `docker rm -f <container>`, потом снова `docker compose up -d --build`.
 
@@ -189,5 +189,4 @@ npm run dev
 - `DOCS/API_GATEWAY.md`
 - `DOCS/NATS.md`
 - `DOCS/POSTGRES.md`
-- `DOCS/E2E.md`
 - `src_langgraph/README.md`

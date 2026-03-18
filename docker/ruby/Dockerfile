@@ -3,12 +3,9 @@ FROM ruby:3.4.5-slim-bookworm AS base
 ARG APP_PATH=src_langgraph_rb
 
 RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
-     libsqlite3-dev libssl-dev libgeos-dev libyaml-dev cmake libgomp1 \
+     libsqlite3-dev libssl-dev libgeos-dev libyaml-dev libgomp1 \
      && rm -rf /var/lib/apt/lists/* \
      && test -e /usr/lib/x86_64-linux-gnu/libgomp.so.1
-
-RUN curl -fsSL https://deb.nodesource.com/setup_21.x | bash - && \
-    apt-get install -y nodejs && npm i -g yarn
 
 RUN echo 'gem: --no-document' >> ~/.gemrc
 RUN gem install ruby-debug-ide bundler --no-document
@@ -19,22 +16,6 @@ COPY ${APP_PATH}/ /app
 
 RUN bundle install --jobs $(nproc) --retry=3 && \
     bundle clean --force && rm -rf /usr/local/bundle/cache/*
-
-RUN if [ -f package.json ]; then yarn install --frozen-lockfile || npm install; fi
-
-ENV RACK_ENV=production NODE_ENV=production \
-    ASR_MODELS=/app/models/asr \
-    WHISPERCPP_FORCE_CPU=1 \
-    WHISPERCPP_DISABLE_GPU=1 \
-    WHISPER_NO_GPU=1 \
-    GGML_NO_GPU=1 \
-    GGML_USE_GPU=0 \
-    GGML_USE_CUDA=0 \
-    GGML_CUDA=0
-
-RUN mkdir -p ${ASR_MODELS}
-
-RUN rm -rf node_modules
 
 FROM ruby:3.4.5-slim-bookworm AS deploy
 RUN apt update && apt install --fix-missing -y bash curl libpq-dev openssh-client \
@@ -48,16 +29,7 @@ COPY --from=base /app /app
 
 ENV SERVER_ENV=production \
     RACK_ENV=production \
-    NODE_ENV=production \
-    DOCKER_CONTAINER=true \
-    ASR_MODELS=/app/models/asr \
-    WHISPERCPP_FORCE_CPU=1 \
-    WHISPERCPP_DISABLE_GPU=1 \
-    WHISPER_NO_GPU=1 \
-    GGML_NO_GPU=1 \
-    GGML_USE_GPU=0 \
-    GGML_USE_CUDA=0 \
-    GGML_CUDA=0
+    DOCKER_CONTAINER=true
 
 WORKDIR /app
 

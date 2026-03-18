@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import logging
 from typing import Any
 
@@ -23,14 +22,6 @@ class EventBus:
         self._service_name = service_name
         self._logger = NatsLogger(nats_client, subject, service_name)
         logger.info("Event bus configured for subject %s", subject)
-
-    async def publish(self, payload: dict[str, Any]) -> None:
-        if not self._nats or not self._subject:
-            raise RuntimeError("Event bus is not configured")
-        await self._nats.publish(
-            self._subject,
-            json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        )
 
     async def log(
         self,

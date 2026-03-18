@@ -34,6 +34,7 @@ coverage
 /base_project/docker/.env
 /src_front/node_modules/
 /src_front/dist/
+/src_front/.vite/
 /src_front/tsconfig.tsbuildinfo
 /src_llm/models/
 /otel/

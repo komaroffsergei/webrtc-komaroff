@@ -1,13 +1,17 @@
 import {AgentCommandContext, ClientHandlerCommand} from "../../types";
+import { readLastArtifactData } from "./payload";
 
 export function handleBuildRoute(
   resp: ClientHandlerCommand,
   ctx: AgentCommandContext,
 ): void {
-  const artifacts = resp.artifacts;
-  const key = artifacts?.last ?? null;
-  const raw = key ? (artifacts?.payload as any)?.[key] : null;
-  const route = raw?.data?.route;
+  const routeValue = readLastArtifactData(resp).route;
+  const route =
+    routeValue && typeof routeValue === "object"
+      ? (routeValue as Record<string, unknown>)
+      : null;
+  if (!route) return;
+
   const geometry = Array.isArray(route?.geometry) ? route.geometry : null;
   if (!geometry || !geometry.length) return;
 
@@ -17,6 +21,6 @@ export function handleBuildRoute(
   );
   if (!coords.length) return;
 
-  const distance = typeof route?.distance_km === "number" ? route.distance_km : undefined;
+  const distance = typeof route.distance_km === "number" ? route.distance_km : undefined;
   ctx.map?.drawRoute({ geometry: coords, distance_km: distance });
 }

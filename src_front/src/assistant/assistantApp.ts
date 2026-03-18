@@ -2,8 +2,6 @@ import type {AppConfig} from "../config/appConfig";
 import {getAssistantElements} from "../ui/elements";
 import {ChatUI} from "../ui/chatUi";
 import {WarningUI} from "../ui/warningUi";
-import {setModelStatus, setStatus} from "../ui/status";
-import {bindMicButton} from "../ui/micButton";
 import {createAudioState} from "../audio/audioState";
 import {
   connectSession,
@@ -87,10 +85,11 @@ export class AssistantApp {
     });
 
     /* ---------- UI bindings ---------- */
-    bindMicButton(this.el, () => this.toggleConnection());
+    this.el.micButton?.addEventListener("click", () => {
+      this.el.chatWindow?.classList.toggle("expanded");
+      void this.toggleConnection();
+    });
     this.bindTextInput();
-
-    this.registerBuiltinCommands();
 
     this.chat.addMessage("Голосовой ассистент готов к работе", "status");
   }
@@ -143,7 +142,7 @@ export class AssistantApp {
     if (isConnected()) {
       disconnectSession();
       this.resetTranscriptionTracking();
-      setStatus(this.el, "Отключено");
+      this.setConnectionStatus("Отключено");
       this.chat.addMessage("Отключено", "status");
       return;
     }
@@ -164,25 +163,14 @@ export class AssistantApp {
         this.persistSessionId(sessionId);
       }
 
-      setStatus(this.el, "Подключено");
+      this.setConnectionStatus("Подключено");
       // this.chat.addMessage("Подключено", "status");
     } catch (err) {
       this.resetTranscriptionTracking();
       this.warning.show({message: `Connect failed: ${String(err)}`});
-      setStatus(this.el, "Ошибка подключения");
+      this.setConnectionStatus("Ошибка подключения");
       logError("webrtc", err);
     }
-  }
-
-  /* ===========================
-     COMMANDS
-     =========================== */
-
-  private registerBuiltinCommands(): void {
-    this.commands.register("alert", (params) => {
-      const msg = typeof params === "string" ? params : JSON.stringify(params);
-      this.warning.show({message: msg});
-    });
   }
 
   /* ===========================
@@ -210,7 +198,7 @@ export class AssistantApp {
       void this.requestInitMap();
     } catch (err) {
       logError("nats", err);
-      setStatus(this.el, "Ошибка подключения к событиям");
+      this.setConnectionStatus("Ошибка подключения к событиям");
       this.scheduleNatsReconnect();
     }
   }
@@ -219,20 +207,20 @@ export class AssistantApp {
     if (status.type === "connected") {
       this.clearNatsReconnectTimer();
       this.natsReconnectAttempt = 0;
-      setStatus(this.el, "События подключены");
+      this.setConnectionStatus("События подключены");
       return;
     }
 
     if (status.type === "error") {
       this.resolveTranscriptionPending();
       logError("nats", status.error);
-      setStatus(this.el, "NATS: ошибка, переподключение…");
+      this.setConnectionStatus("NATS: ошибка, переподключение…");
       this.scheduleNatsReconnect();
       return;
     }
 
     this.resolveTranscriptionPending();
-    setStatus(this.el, "NATS отключено, переподключение…");
+    this.setConnectionStatus("NATS отключено, переподключение…");
     this.scheduleNatsReconnect();
   }
 
@@ -402,7 +390,7 @@ export class AssistantApp {
     const text = Array.from(this.modelStatuses.entries())
       .map(([k, v]) => fmt(k, v))
       .join(" | ");
-    setModelStatus(this.el, text);
+    this.setModelStatus(text);
   }
 
   private readArtifacts(raw: unknown): ClientHandlerCommand["artifacts"] | undefined {
@@ -562,6 +550,18 @@ export class AssistantApp {
   private emitReplayBundle(bundle: unknown): void {
     if (!this.config.ui.debug) return;
     logReplayBundle(bundle);
+  }
+
+  private setConnectionStatus(text: string): void {
+    if (this.el.connectionStatus) {
+      this.el.connectionStatus.textContent = text;
+    }
+  }
+
+  private setModelStatus(text: string): void {
+    if (this.el.modelStatus) {
+      this.el.modelStatus.textContent = text;
+    }
   }
 
   private async restoreChatHistory(): Promise<void> {

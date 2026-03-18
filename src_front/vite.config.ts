@@ -19,19 +19,6 @@ export default defineConfig({
         target: CORE_TARGET,
         changeOrigin: true,
       },
-      "/offer": {
-        target: CORE_TARGET,
-        changeOrigin: true,
-      },
-      "/message": {
-        target: CORE_TARGET,
-        changeOrigin: true,
-      },
-      "/events": {
-        target: CORE_TARGET,
-        changeOrigin: true,
-        ws: false,
-      },
     },
   },
 });

@@ -2,7 +2,6 @@ import type { AppConfig } from "../config/appConfig";
 import type { AssistantElements } from "../ui/elements";
 import type { AudioState } from "../audio/audioState";
 import { startMic, stopMic } from "../audio/mic";
-import { createPeer } from "./peer";
 import { negotiate } from "./negotiate";
 import { createEnergyVad, type VadInstance } from "../audio/vad";
 import { startWaveforms } from "../ui/waves";
@@ -28,7 +27,12 @@ export async function connectSession(
   if (session) return null;
 
   const micStream = await startMic(audio);
-  const peer = createPeer(config);
+  const peer = new RTCPeerConnection({
+    iceServers: config.webrtc.iceServers,
+    iceCandidatePoolSize: config.webrtc.iceCandidatePoolSize,
+    bundlePolicy: config.webrtc.bundlePolicy,
+    rtcpMuxPolicy: config.webrtc.rtcpMuxPolicy,
+  });
 
   peer.ontrack = (e) => {
     if (el.remoteAudio) el.remoteAudio.srcObject = e.streams[0];
