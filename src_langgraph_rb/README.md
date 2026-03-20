@@ -4,6 +4,7 @@
 
 - source of truth для сценария лежит в одном Ruby DSL-файле в [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios)
 - там же живут graph связи, prompts, tool schemas, defaults, routing hints и policy config
+- authoring DSL теперь поддерживает sugar-слой: `tool_profile`, `use_default_tails`, semantic helper methods и auto-generated state keys
 - runtime больше не держит отдельные per-scenario Ruby модули и не читает scenario JSON configs
 - исполняемая часть интерпретирует DSL через generic node kinds и `Runtime::ComputeOps`
 
@@ -76,12 +77,48 @@ flowchart LR
 Внутри такого файла лежат:
 
 - `title`, `description`, `routing_description`
-- `required_tools`, `runtime_flags`
-- prompts и schemas как Ruby constants
+- `tool_profile` declarations с prompts, schemas и defaults
+- `runtime_flags` только там, где они не выводятся автоматически
+- prompts и schemas как Ruby constants или profile config
 - graph nodes и edges
-- config для `compute` nodes
+- authoring helper calls, которые builder понижает в generic runtime nodes
 
 Отдельных scenario runtime-файлов и `config/scenarios/*.json` больше нет.
+
+## Authoring sugar
+
+Автор сценария теперь не обязан явно писать plumbing вида `kind: :compute`, `op: ...`, `status_key`, `merged_key`, `pending_key`, `args_source` для типовых flow.
+
+Поверх базового DSL доступны helper methods:
+
+- `tool_profile`
+- `use_default_tails`
+- `tool`
+- `resolve_context_refs`
+- `free_speech_response`
+- `pending_tool_params`
+- `tool_lookup_response`
+- `airport_search_params`
+- `airport_route_params`
+- `route_response`
+- `ask_user_input`
+- `done`
+- `failed`
+- `reroute_scenario`
+- `route_status`
+- `route_tool_status`
+- `finish_with_state`
+
+Также доступны key helpers:
+
+- `status_of(:node)`
+- `response_of(:node)`
+- `params_of(:node)`
+- `prompt_of(:node)`
+- `pending_of(:node)`
+- `message_of(:node)`
+
+Builder разворачивает эти shorthand forms в тот же `Schema::Graph`, который runtime уже умеет исполнять.
 
 ## Ключевые методы и роли
 
@@ -106,6 +143,8 @@ flowchart LR
 | `done_response` | terminal success response из указанного state key |
 | `failed_response` | terminal failure response из `error_*` keys |
 | `partial_response` | `PARTIAL` + `pending` runtime state |
+
+Эти `kind`-ы остаются внутренней compiled form. Автор built-in сценариев теперь чаще работает helper methods из `GraphBuilder`, а не raw `kind` config.
 
 ### Compute ops
 

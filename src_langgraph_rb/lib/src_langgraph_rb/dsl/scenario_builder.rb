@@ -19,7 +19,8 @@ module SrcLanggraphRb
         @capabilities = []
         @required_tools = []
         @runtime_flags = {}
-        @graph_builder = nil
+        @tool_profiles = {}
+        @graph_block = nil
       end
 
       def title(value)
@@ -52,13 +53,34 @@ module SrcLanggraphRb
         end
       end
 
+      def tool_profile(name, **values)
+        key = name.to_s.strip
+        raise ValidationError, "Tool profile name must be provided" if key.empty?
+        raise ValidationError, "Tool profile '#{key}' is already registered in scenario '#{@id}'" if @tool_profiles.key?(key)
+
+        @tool_profiles[key] = Support::Normalization.normalize_hash(values)
+      end
+
       def graph(&block)
-        @graph_builder = GraphBuilder.new(fragment_lookup: @fragment_lookup)
-        @graph_builder.instance_eval(&block) if block
+        @graph_block = block
       end
 
       def build
-        raise ValidationError, "Scenario '#{@id}' must define a graph" unless @graph_builder
+        raise ValidationError, "Scenario '#{@id}' must define a graph" unless @graph_block
+
+        graph_builder = GraphBuilder.new(
+          fragment_lookup: @fragment_lookup,
+          tool_profiles: @tool_profiles,
+          scenario_id: @id
+        )
+        graph_builder.instance_eval(&@graph_block)
+
+        required_tools = (@required_tools + graph_builder.required_tools.to_a).uniq
+        runtime_flags = @runtime_flags.dup
+        if graph_builder.pending_enabled?
+          runtime_flags[:pending_key] ||= graph_builder.pending_key
+          runtime_flags[:active_workflow_id] ||= @id
+        end
 
         metadata = Schema::ScenarioMetadata.new(
           @title,
@@ -66,11 +88,11 @@ module SrcLanggraphRb
           @routing_description,
           @tags.uniq.freeze,
           @capabilities.uniq.freeze,
-          @required_tools.uniq.freeze,
-          @runtime_flags.dup.freeze
+          required_tools.freeze,
+          runtime_flags.freeze
         )
 
-        Schema::Scenario.new(@id, metadata, @graph_builder.build).validate!
+        Schema::Scenario.new(@id, metadata, graph_builder.build).validate!
       end
 
       private

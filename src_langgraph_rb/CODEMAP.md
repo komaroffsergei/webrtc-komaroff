@@ -31,7 +31,7 @@
 | --- | --- |
 | [lib/src_langgraph_rb/contracts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/contracts) | validation/value objects authoring API |
 | [lib/src_langgraph_rb/schema](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/schema) | immutable graph/schema objects |
-| [lib/src_langgraph_rb/dsl](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/dsl) | builders декларативного DSL |
+| [lib/src_langgraph_rb/dsl](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/dsl) | builders декларативного DSL и authoring sugar-layer |
 | [lib/src_langgraph_rb/catalog](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/catalog) | catalog build/filter/lookup |
 | [lib/src_langgraph_rb/scenarios](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/scenarios) | built-in DSL descriptions и source of truth |
 | [lib/src_langgraph_rb/adapters/lang_graph_rb/builder_plan.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/adapters/lang_graph_rb/builder_plan.rb) | `Scenario` -> `LangGraphRB::Graph` |
@@ -58,6 +58,41 @@
 | `done_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
 | `failed_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
 | `partial_response` | [runtime/responses.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/responses.rb) |
+
+Это compiled form. На уровне authoring сценарии теперь чаще используют helper methods из [dsl/graph_builder.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/dsl/graph_builder.rb), а builder сам опускает их в эти `kind`-ы.
+
+## Authoring sugar
+
+| Helper | Во что понижается |
+| --- | --- |
+| `use_default_tails` | imports `assistant_reply_tail` + `state_response_tail` |
+| `tool_profile` | scenario-local tool config registry |
+| `tool` | `kind: tool_call` |
+| `resolve_context_refs` | `compute op: resolve_context_references` |
+| `free_speech_response` | `compute op: compose_free_speech_response` |
+| `pending_tool_params` | `compute op: collect_tool_params_with_pending` |
+| `tool_lookup_response` | `compute op: tool_lookup_with_llm_response` |
+| `airport_search_params` | `compute op: prepare_airport_search` |
+| `airport_route_params` | `compute op: prepare_airport_route` |
+| `route_response` | `compute op: build_route_with_response` |
+| `ask_user_input` | `kind: partial_response` |
+| `done` | `kind: done_response` |
+| `failed` | `kind: failed_response` |
+| `reroute_scenario` | `compute op: reroute_selected_scenario` |
+| `route_status` | `conditional_edge` на `status_of(node)` |
+| `route_tool_status` | `conditional_edge` на `tool_status` |
+| `finish_with_state` | `edge ... -> terminal(:respond)` для каждого узла |
+
+## Auto-generated keys
+
+| Helper | Generated key |
+| --- | --- |
+| `status_of(:node)` | `:node_status` |
+| `response_of(:node)` | `:node_response` |
+| `params_of(:node)` | `:node_params` |
+| `prompt_of(:node)` | `:node_prompt` |
+| `pending_of(:node)` | `:node_pending` |
+| `message_of(:node)` | `:node_message` |
 
 ## Compute ops
 

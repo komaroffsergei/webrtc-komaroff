@@ -1,6 +1,7 @@
 FROM ruby:3.4.5-slim-bookworm AS base
 
 ARG APP_PATH=src_langgraph_rb
+ARG BUNDLER_VERSION=2.6.7
 
 RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
      libsqlite3-dev libssl-dev libgeos-dev libyaml-dev libgomp1 \
@@ -8,7 +9,8 @@ RUN apt update && apt --fix-missing install -y build-essential pkg-config bash c
      && test -e /usr/lib/x86_64-linux-gnu/libgomp.so.1
 
 RUN echo 'gem: --no-document' >> ~/.gemrc
-RUN gem install ruby-debug-ide bundler --no-document
+RUN gem install bundler -v ${BUNDLER_VERSION} --no-document && \
+    gem install ruby-debug-ide --no-document
 
 WORKDIR /app
 

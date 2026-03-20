@@ -113,22 +113,26 @@ module SrcLanggraphRb
             message = state[config.fetch(:message_source, :response_message)].to_s
             { response: Runtime::Responses.done_response(state.fetch(:req), message, client_events: state[:client_events]) }
           when "failed_response"
+            code = state[config.fetch(:code_source, :error_code)].to_s
+            message = state[config.fetch(:message_source, :error_message)].to_s
             {
               response: Runtime::Responses.failed_response(
                 state.fetch(:req),
-                code: state[:error_code].to_s.empty? ? "workflow_failed" : state[:error_code].to_s,
-                message: state[:error_message].to_s.empty? ? "Workflow failed." : state[:error_message].to_s,
-                runtime: state[:error_runtime],
-                client_handler: state[:error_client_handler]
+                code: code.empty? ? "workflow_failed" : code,
+                message: message.empty? ? "Workflow failed." : message,
+                runtime: state[config.fetch(:runtime_source, :error_runtime)],
+                client_handler: state[config.fetch(:client_handler_source, :error_client_handler)]
               )
             }
           when "partial_response"
+            prompt = state[config.fetch(:prompt_source, :response_prompt)].to_s
+            pending = Runtime::Util.extract_hash(state[config.fetch(:pending_source, :pending_state)])
             {
               response: Runtime::Responses.partial_response(
                 state.fetch(:req),
-                state[:response_prompt].to_s,
+                prompt,
                 active_workflow_id: config[:active_workflow_id].to_s.empty? ? scenario.id : config[:active_workflow_id].to_s,
-                pending: Runtime::Util.extract_hash(state[:pending_state])
+                pending: pending
               )
             }
           else
