@@ -24,5 +24,6 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "langgraph_rb", "~> 0.1.11"
   spec.add_dependency "logger"
+  spec.add_dependency "async-graph"
   spec.add_dependency "nats-pure", "~> 2.5"
 end

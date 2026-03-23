@@ -1,9 +1,9 @@
 FROM ruby:3.4.5-slim-bookworm AS base
 
-ARG APP_PATH=src_langgraph_rb
+ARG APP_PATH=src_langgraph_rb_node
 ARG BUNDLER_VERSION=2.6.7
 
-RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl libpq-dev openssh-client \
+RUN apt update && apt --fix-missing install -y build-essential pkg-config bash curl git libpq-dev openssh-client \
      libsqlite3-dev libssl-dev libgeos-dev libyaml-dev libgomp1 \
      && rm -rf /var/lib/apt/lists/* \
      && test -e /usr/lib/x86_64-linux-gnu/libgomp.so.1
@@ -35,4 +35,4 @@ ENV SERVER_ENV=production \
 
 WORKDIR /app
 
-CMD ["bundle", "exec", "ruby", "./lib/src_langgraph_rb/runtime/service.rb"]
+CMD ["bundle", "exec", "ruby", "./lib/src_langgraph_rb_node/runtime/service.rb"]

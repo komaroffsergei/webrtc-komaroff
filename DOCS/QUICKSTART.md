@@ -10,6 +10,7 @@ docker compose up -d --build
 
 Локальный runtime switch задается в `docker/.env`:
 - `COMPOSE_PROFILES=langgraph_rb` + `nats.workflow.run.ruby` / `nats.workflow.health.ruby`
+- `COMPOSE_PROFILES=langgraph_rb_node` + `nats.workflow.run.ruby.node` / `nats.workflow.health.ruby.node`
 - `COMPOSE_PROFILES=langgraph` + `nats.workflow.run.python` / `nats.workflow.health.python`
 
 Проверка:

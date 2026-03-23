@@ -19,6 +19,8 @@
 - `nats.workflow.health.python` — health Python runtime (req-reply).
 - `nats.workflow.run.ruby` — запуск Ruby runtime (req-reply).
 - `nats.workflow.health.ruby` — health Ruby runtime (req-reply).
+- `nats.workflow.run.ruby.node` — запуск AsyncGraph Ruby runtime (req-reply).
+- `nats.workflow.health.ruby.node` — health AsyncGraph Ruby runtime (req-reply).
 - `nats.llm.<user_id>` — вызовы LLM (req-reply).
 - `nats.tools.<tool_name>` — вызовы инструментов (req-reply).
 - `inference.whisper.stream.<session_id>` — live ASR input packets (pub-sub).

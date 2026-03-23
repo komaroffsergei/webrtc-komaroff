@@ -16,6 +16,7 @@
   - [src_agent](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_agent)
   - [src_langgraph](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph)
   - [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb)
+  - [src_langgraph_rb_node](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node)
   - [src_llm](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_llm)
   - [src_api_gateway/main.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_api_gateway/main.py)
 - ASR live/file code:
@@ -75,6 +76,7 @@ flowchart LR
     G10["nats.agent.history.&lt;user_id&gt;"]
     G12["nats.workflow.run.python"]
     G13["nats.workflow.run.ruby"]
+    G13A["nats.workflow.run.ruby.node"]
     G14["nats.llm.&lt;user_id&gt;"]
     G15["nats.tools.&lt;tool_name&gt;"]
     G16["inference.whisper.stream.&lt;session_id&gt;"]
@@ -89,6 +91,7 @@ flowchart LR
     G23["src_agent"]
     G24["src_langgraph"]
     G25["src_langgraph_rb"]
+    G25A["src_langgraph_rb_node"]
     G26["src_llm request side"]
     G27["src_api_gateway"]
     G28["src_postgres"]
@@ -139,10 +142,13 @@ flowchart LR
   G23 -->|"runtime state read/write"| G28
   G23 -->|"WorkflowRunRequest"| G12 --> G24
   G23 -->|"WorkflowRunRequest"| G13 --> G25
+  G23 -->|"WorkflowRunRequest"| G13A --> G25A
   G24 -->|"LlmRequest"| G14 --> G26
   G25 -->|"LlmRequest"| G14
+  G25A -->|"LlmRequest"| G14
   G24 -->|"ToolCallRequest"| G15 --> G27
   G25 -->|"ToolCallRequest"| G15
+  G25A -->|"ToolCallRequest"| G15
   G26 -->|"HTTP /api/chat"| G34 -->|"publish request"| G35 --> G36 -->|"route into inference account"| G37 --> G38 --> G39 -->|"HTTP Ollama API"| G40 -->|"model response"| G39 --> G41 --> G37 -->|"import back into local account"| G42 --> G43 -->|"HTTP JSON response"| G29
   G27 -->|"ToolCallResponse data"| G29
   G24 -->|"WorkflowRunResponse data"| G29
@@ -158,9 +164,10 @@ flowchart LR
 | --- | --- | --- | --- | --- |
 | `src_front` | browser UI, mic UX, map UI | `/core/*`, `/ws` | `POST /core/offer`, `POST /core/message`, `GET /core/history`, `POST /core/init_map`, NATS WS | HTTP JSON, WebRTC, NATS WS |
 | `src_core` | HTTP/WebRTC ingress, bridge между browser и backend NATS | `/core/*`, WebRTC media, `inference.whisper.text.*` | `nats.agent.*`, `nats.agent.history.*`, `nats.events.*`, `inference.whisper.stream.*`, `GET /api/airports/list`, `GET /api/pilot/location` | HTTP JSON, WebRTC, NATS req-reply, NATS pub-sub |
-| `src_agent` | orchestration boundary, хранение runtime state | `nats.agent.*`, `nats.agent.history.*` | `nats.workflow.run.python|ruby`, PostgreSQL | NATS req-reply, SQL |
+| `src_agent` | orchestration boundary, хранение runtime state | `nats.agent.*`, `nats.agent.history.*` | `nats.workflow.run.python|ruby|ruby.node`, PostgreSQL | NATS req-reply, SQL |
 | `src_langgraph` | Python workflow runtime | `nats.workflow.run.python`, `nats.workflow.health.python` | `nats.llm.*`, `nats.tools.*` | NATS req-reply |
 | `src_langgraph_rb` | Ruby workflow runtime | `nats.workflow.run.ruby`, `nats.workflow.health.ruby` | `nats.llm.*`, `nats.tools.*` | NATS req-reply |
+| `src_langgraph_rb_node` | Ruby workflow runtime on AsyncGraph | `nats.workflow.run.ruby.node`, `nats.workflow.health.ruby.node` | `nats.llm.*`, `nats.tools.*` | NATS req-reply |
 | `src_llm` | unified LLM gateway | `nats.llm.<user_id>` | external `OLLAMA_URL` | NATS req-reply, HTTP JSON |
 | `src_api_gateway` | tools service | HTTP `/api/*`, `nats.tools.*` | local data-only responses | HTTP JSON, NATS req-reply |
 | `src_postgres` | session/runtime persistence | SQL from `src_agent` | none | PostgreSQL |
@@ -200,8 +207,10 @@ flowchart LR
 | Python workflow health | `nats.workflow.health.python` | health callers | `src_langgraph` | `ServiceHealthRequest` |
 | Ruby workflow run | `nats.workflow.run.ruby` | `src_agent` | `src_langgraph_rb` | `WorkflowRunRequest` |
 | Ruby workflow health | `nats.workflow.health.ruby` | health callers | `src_langgraph_rb` | `ServiceHealthRequest` |
-| LLM call | `nats.llm.<user_id>` | `src_langgraph`, `src_langgraph_rb` | `src_llm` | `LlmRequest` |
-| Tool call | `nats.tools.<tool_name>` | `src_langgraph`, `src_langgraph_rb` | `src_api_gateway` | `ToolCallRequest` |
+| Ruby AsyncGraph workflow run | `nats.workflow.run.ruby.node` | `src_agent` | `src_langgraph_rb_node` | `WorkflowRunRequest` |
+| Ruby AsyncGraph workflow health | `nats.workflow.health.ruby.node` | health callers | `src_langgraph_rb_node` | `ServiceHealthRequest` |
+| LLM call | `nats.llm.<user_id>` | `src_langgraph`, `src_langgraph_rb`, `src_langgraph_rb_node` | `src_llm` | `LlmRequest` |
+| Tool call | `nats.tools.<tool_name>` | `src_langgraph`, `src_langgraph_rb`, `src_langgraph_rb_node` | `src_api_gateway` | `ToolCallRequest` |
 | Tool discovery | `nats.tools.discover` | callers | `src_api_gateway` | discovery request/response |
 | Live ASR input | `inference.whisper.stream.<session_id>` | `src_core` | `py_faster_whisper` / `stt_whisper_to_nats` | binary ASR packet |
 | Live ASR output | `inference.whisper.text.<session_id>` | `py_faster_whisper` / `stt_whisper_to_nats` | `src_core` | JSON pending/final/error |
@@ -370,8 +379,8 @@ flowchart LR
     T3["src_core"]
     T4["nats.agent.&lt;user_id&gt;"]
     T5["src_agent"]
-    T6["nats.workflow.run.python | nats.workflow.run.ruby"]
-    T7["runtime entry: src_langgraph | src_langgraph_rb"]
+    T6["nats.workflow.run.python | nats.workflow.run.ruby | nats.workflow.run.ruby.node"]
+    T7["runtime entry: src_langgraph | src_langgraph_rb | src_langgraph_rb_node"]
   end
 
   subgraph RuntimeDeps["Runtime dependency paths"]
@@ -545,23 +554,23 @@ flowchart LR
   - `nats.agent.<user_id>`
   - `nats.agent.history.<user_id>`
 - outbound:
-  - `nats.workflow.run.python` или `nats.workflow.run.ruby`
+  - `nats.workflow.run.python` или `nats.workflow.run.ruby` или `nats.workflow.run.ruby.node`
 - storage:
   - PostgreSQL runtime/session history
 
 Код: [src_agent/main.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_agent/main.py), [src_agent/service.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_agent/service.py), [src_agent/agent.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_agent/agent.py).
 
-### `src_langgraph` и `src_langgraph_rb`
+### `src_langgraph`, `src_langgraph_rb` и `src_langgraph_rb_node`
 
 - inbound:
-  - `nats.workflow.run.python` / `nats.workflow.run.ruby`
-  - `nats.workflow.health.python` / `nats.workflow.health.ruby`
+  - `nats.workflow.run.python` / `nats.workflow.run.ruby` / `nats.workflow.run.ruby.node`
+  - `nats.workflow.health.python` / `nats.workflow.health.ruby` / `nats.workflow.health.ruby.node`
 - outbound:
   - `nats.llm.<user_id>`
   - `nats.tools.<tool_name>`
 
 Python code: [src_langgraph](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph)  
-Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb)
+Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb), [src_langgraph_rb_node](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node)
 
 ### `src_llm`
 
@@ -600,6 +609,7 @@ Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-k
 | `src_agent -> runtime` | `workflow_timeout`, `workflow_unavailable`, `runtime_state_conflict`, `edit_turn_not_found` | [src_agent/agent.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_agent/agent.py) |
 | Python runtime | `invalid_request`, `missing_session_id`, `workflow_failed`, `health_failed`, `nats_timeout`, `llm_transport_error`, `tool_transport_error` | [src_langgraph/service.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph/service.py), [src_langgraph/runtime_io.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph/runtime_io.py) |
 | Ruby runtime | `workflow_failed`, `health_failed`, `llm_transport_error`, `tool_transport_error`, invalid downstream JSON | [src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/service.rb), [src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/lib/src_langgraph_rb/runtime/runtime_io.rb) |
+| Ruby AsyncGraph runtime | `workflow_failed`, `health_failed`, `llm_transport_error`, `tool_transport_error`, invalid downstream JSON | [src_langgraph_rb_node/lib/src_langgraph_rb_node/runtime/service.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node/lib/src_langgraph_rb_node/runtime/service.rb), [src_langgraph_rb_node/lib/src_langgraph_rb_node/runtime/runtime_io.rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node/lib/src_langgraph_rb_node/runtime/runtime_io.rb) |
 | `src_llm` | `invalid_request`, `llm_failed`, upstream JSON errors from Ollama bridge | [src_llm/service.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_llm/service.py) |
 | `src_api_gateway` | `unknown_tool`, `invalid_args`, `not_found`, `unknown_city`, `tool_exception` | [src_api_gateway/main.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_api_gateway/main.py) |
 | live ASR | `invalid_packet`, `unsupported_packet_type`, `transcription_failed` | [py_faster_whisper/src/stt_whisper_to_nats.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/stt_whisper_to_nats.py) |
@@ -614,7 +624,7 @@ Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-k
 2. Core bus layer:
    `nats.agent.*`, `nats.agent.history.*`, `nats.events.*`, `inference.whisper.stream.*`, `inference.whisper.text.*`
 3. Runtime layer:
-   `src_agent`, `src_langgraph`, `src_langgraph_rb`, `src_llm`, `src_api_gateway`, `src_postgres`
+   `src_agent`, `src_langgraph`, `src_langgraph_rb`, `src_langgraph_rb_node`, `src_llm`, `src_api_gateway`, `src_postgres`
 4. ASR side:
    `py_faster_whisper` / `stt_whisper_to_nats`, file worker, LinTO HTTP
 5. External inference:

@@ -9,6 +9,7 @@
 - `src_agent` — оркестратор пользовательского шага, хранит runtime в Postgres.
 - `src_langgraph` — runtime сценариев на LangGraph.
 - `src_langgraph_rb` — Ruby workflow runtime for migrated сценариев (`free_speech`, `where_my_flight`, `find_nearest_airport`) plus DSL/catalog.
+- `src_langgraph_rb_node` — Ruby workflow runtime на `AsyncGraph` с native graph authoring и direct-start сценариев.
 - `src_llm` — gateway к модели (Ollama/remote).
 - `src_api_gateway` — tools (`nats.tools.*`) для сценариев.
 - `src_postgres` — БД runtime.
@@ -26,6 +27,8 @@
 - `nats.workflow.health.python` — health Python runtime.
 - `nats.workflow.run.ruby` — запрос на выполнение Ruby runtime.
 - `nats.workflow.health.ruby` — health Ruby runtime.
+- `nats.workflow.run.ruby.node` — запрос на выполнение AsyncGraph Ruby runtime.
+- `nats.workflow.health.ruby.node` — health AsyncGraph Ruby runtime.
 - `nats.llm.<user_id>` — вызовы LLM.
 - `nats.tools.<tool_name>` — вызовы инструментов.
 
@@ -56,6 +59,14 @@ NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.python
 NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.python
 ```
 
+Для `src_langgraph_rb_node`:
+
+```bash
+COMPOSE_PROFILES=langgraph_rb_node
+NATS_WORKFLOW_RUN_SUBJECT=nats.workflow.run.ruby.node
+NATS_WORKFLOW_HEALTH_SUBJECT=nats.workflow.health.ruby.node
+```
+
 После смены runtime делай только clean-start:
 
 ```bash
@@ -65,6 +76,7 @@ docker compose up -d --build
 ```
 
 `src_agent` использует только настроенные `NATS_WORKFLOW_*_SUBJECT`; скрытого fallback между Ruby и Python runtime больше нет.
+То же правило действует и для `src_langgraph_rb_node`: переключение делается только subject-ом.
 
 Если Docker отвечает `failed to set up container networking ... network ... not found`, это stale state у старого контейнера после пересоздания сети. Нужен `docker compose down --remove-orphans`; если контейнер остался, удали его через `docker rm -f <container>`, потом снова `docker compose up -d --build`.
 
@@ -93,6 +105,7 @@ docker compose up -d --build
 
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и внешние интеграции: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 Ruby runtime code map: [`src_langgraph_rb/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/CODEMAP.md)
+AsyncGraph runtime docs: [`src_langgraph_rb_node/README.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node/README.md), [`src_langgraph_rb_node/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb_node/CODEMAP.md)
 
 ## Docker + отладка (PyCharm Remote Debug)
 
@@ -199,3 +212,5 @@ npm run dev
 - `src_langgraph/README.md`
 - `src_langgraph_rb/README.md`
 - `src_langgraph_rb/CODEMAP.md`
+- `src_langgraph_rb_node/README.md`
+- `src_langgraph_rb_node/CODEMAP.md`

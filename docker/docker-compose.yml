@@ -144,6 +144,28 @@ services:
       NATS_REQUEST_TIMEOUT_SECONDS: ${NATS_REQUEST_TIMEOUT_SECONDS:-60}
     command: ["bundle", "exec", "ruby", "./lib/src_langgraph_rb/runtime/service.rb"]
 
+  src_langgraph_rb_node:
+    profiles: ["langgraph_rb_node"]
+    build:
+      context: ..
+      dockerfile: ./docker/ruby/Dockerfile
+      args:
+        APP_PATH: src_langgraph_rb_node
+    image: ${REGISTRY_HOST}/gis/webrtc-komaroff/langgraph-rb-node/${CI_COMMIT_BRANCH}
+    depends_on:
+      - nats
+      - src_llm
+      - src_api_gateway
+    environment:
+      NATS_URL: ${NATS_URL_INTERNAL:-nats://nats:4222}
+      USER_ID: ${USER_ID:-user123}
+      NATS_WORKFLOW_RUN_SUBJECT: nats.workflow.run.ruby.node
+      NATS_WORKFLOW_HEALTH_SUBJECT: nats.workflow.health.ruby.node
+      NATS_LLM_SUBJECT: nats.llm.
+      NATS_TOOLS_PREFIX: nats.tools.
+      NATS_REQUEST_TIMEOUT_SECONDS: ${NATS_REQUEST_TIMEOUT_SECONDS:-60}
+    command: ["bundle", "exec", "ruby", "./lib/src_langgraph_rb_node/runtime/service.rb"]
+
   src_front:
     build:
       context: ../src_front

@@ -1,0 +1,55 @@
+GIT
+  remote: https://github.com/artyomb/async-graph.git
+  revision: f58a6032fdfb07540961d42d7d94689185835ae3
+  specs:
+    async-graph (0.1.1)
+
+PATH
+  remote: .
+  specs:
+    src_langgraph_rb_node (0.1.0)
+      async-graph
+      logger
+      nats-pure (~> 2.5)
+
+GEM
+  remote: https://rubygems.org/
+  specs:
+    base64 (0.3.0)
+    concurrent-ruby (1.3.6)
+    diff-lcs (1.6.2)
+    json (2.19.2)
+    logger (1.7.0)
+    nats-pure (2.5.0)
+      base64
+      concurrent-ruby (~> 1.0)
+      json
+      securerandom
+      uri
+    rspec (3.13.2)
+      rspec-core (~> 3.13.0)
+      rspec-expectations (~> 3.13.0)
+      rspec-mocks (~> 3.13.0)
+    rspec-core (3.13.6)
+      rspec-support (~> 3.13.0)
+    rspec-expectations (3.13.5)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-mocks (3.13.8)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.13.0)
+    rspec-support (3.13.7)
+    securerandom (0.4.1)
+    uri (1.1.1)
+
+PLATFORMS
+  ruby
+  x86_64-linux
+
+DEPENDENCIES
+  async-graph!
+  rspec (~> 3.13)
+  src_langgraph_rb_node!
+
+BUNDLED WITH
+   2.6.7
