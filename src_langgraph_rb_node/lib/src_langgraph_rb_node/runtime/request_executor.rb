@@ -7,18 +7,20 @@ module SrcLanggraphRbNode
         @io = io
       end
 
-      def call(request, state:)
+      def call(request, parent:)
+        # AsyncGraph::Request переводится в конкретный внешний boundary:
+        # LLM -> src_llm, tool -> src_api_gateway.
         case request.kind.to_sym
         when :llm
           @io.call_llm(
-            parent: state.fetch(:req),
+            parent: parent,
             mode: request.payload.fetch(:mode).to_s,
             input_data: Runtime::Util.extract_hash(request.payload[:input_data]),
             constraints: Runtime::Util.extract_hash(request.payload[:constraints])
           )
         when :tool
           @io.call_tool(
-            parent: state.fetch(:req),
+            parent: parent,
             tool_name: request.payload.fetch(:tool_name).to_s,
             args: Runtime::Util.extract_hash(request.payload[:args])
           )

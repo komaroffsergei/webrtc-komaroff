@@ -69,11 +69,11 @@ end
 | --- | --- | --- |
 | entrypoint + NATS boundary | `lib/src_langgraph_rb_node/runtime/service.rb` | subscribe на run/health subjects, validate request, normalize reply |
 | orchestration | `lib/src_langgraph_rb_node/runtime/engine.rb` | direct-start, top-level router, memory prepare/finalize, scenario run |
-| AsyncGraph executor | `lib/src_langgraph_rb_node/runtime/graph_runner.rb` | loop around `Graph#step`, resolve `await`, handle forks/joins |
+| AsyncGraph executor | `lib/src_langgraph_rb_node/runtime/graph_runner.rb` | thin adapter over `AsyncGraph::Runner`, bind external work, resume suspended runs |
 | external request dispatch | `lib/src_langgraph_rb_node/runtime/request_executor.rb` | переводит AsyncGraph request kinds в `call_llm` / `call_tool` |
 | downstream I/O | `lib/src_langgraph_rb_node/runtime/runtime_io.rb` | NATS req-reply до `src_llm` и `src_api_gateway` |
 | top-level router | `lib/src_langgraph_rb_node/runtime/router.rb` | LLM routing по metadata scenario registry |
-| built-in scenarios | `lib/src_langgraph_rb_node/scenarios` | нативные `AsyncGraph::Graph` definitions |
+| built-in scenarios | `lib/src_langgraph_rb_node/scenarios` | folderized scenarios: `definition.rb`, `graph.rb`, `nodes.rb` |
 
 ## Request vocabulary
 
@@ -134,58 +134,37 @@ await.call(
 - `where_my_flight@2.0.0`
 - `find_nearest_airport@2.0.0`
 
-### `where_my_flight`
+Каждый сценарий теперь лежит в собственной папке:
 
-Graph shape:
+- `scenarios/free_speech/`
+- `scenarios/where_my_flight/`
+- `scenarios/find_nearest_airport/`
 
-- `collect_params`
-- `route_after_collect`
-- `ask_missing`
-- `call_status_tool`
-- `route_after_tool`
-- `emit_final_response`
-- `emit_not_found_response`
-- `emit_failed_response`
-- `reroute`
+Структура у всех одинаковая:
 
-### `find_nearest_airport`
+- `definition.rb` — metadata + `ScenarioDefinition`
+- `graph.rb` — topology и wiring нод
+- `nodes.rb` — реализация node handlers и scenario-specific helpers
 
-Graph shape:
+Общий минимальный shared layer для node files вынесен в:
 
-- `get_position`
-- `route_after_position`
-- `prepare_airport_search`
-- `search_airports`
-- `route_after_search`
-- `prepare_route`
-- `route_after_route_args`
-- `build_route`
-- `route_after_build_route`
-- terminal response/error nodes
-
-### `free_speech`
-
-Graph shape:
-
-- `prepare_context`
-- `route_after_prepare`
-- `clarify_reference`
-- `compose_response`
-- `emit_final_response`
+- `scenarios/base_nodes.rb`
 
 ## AsyncGraph execution model внутри runtime
 
-`GraphRunner` делает следующее:
+`GraphRunner` больше не крутит вручную `Graph#step` и join bookkeeping.
 
-1. берет entry token
-2. вызывает `graph.step(...)`
-3. если узел `Suspended`, выполняет все `await` requests через `RequestExecutor`
-4. повторно вызывает тот же step уже с `resolved`
-5. если результат `Advanced`, отправляет токен по destinations
-6. если есть fork/join topology, использует встроенные `AsyncGraph` join primitives
-7. когда graph дошел до finish, забирает `state[:response]`
+Теперь runtime использует `AsyncGraph::Runner` из `async-graph 0.1.2`.
 
-Для built-in сценариев этот loop чаще выглядит как последовательный graph, но runner поддерживает и fan-out/join, если следующие сценарии будут его использовать.
+Поток исполнения такой:
+
+1. `GraphRunner` создает persisted run через `AsyncGraph::Runner#start_run`
+2. `Runner#advance_run` сам двигает tokens и joins
+3. при `Suspended` runtime синхронно исполняет `await` requests через `RequestExecutor`
+4. результаты привязываются к opaque request refs и отдаются назад через `resolved_for`
+5. когда `run.finished?`, runtime забирает `run.result`
+
+Для built-in сценариев это в основном последовательные графы, но barrier joins и `await.all(...)` теперь поддерживаются через нативный runner API библиотеки, а не через локальную реализацию.
 
 ## Memory и runtime context
 
@@ -232,9 +211,11 @@ bundle exec rspec
 
 | Нужно изменить | Файл / каталог |
 | --- | --- |
-| сценарную логику и topology | `lib/src_langgraph_rb_node/scenarios` |
+| сценарную metadata wiring | `lib/src_langgraph_rb_node/scenarios/*/definition.rb` |
+| topology графа | `lib/src_langgraph_rb_node/scenarios/*/graph.rb` |
+| node handlers и scenario helpers | `lib/src_langgraph_rb_node/scenarios/*/nodes.rb` |
 | top-level routing | `lib/src_langgraph_rb_node/runtime/router.rb` |
-| AsyncGraph run loop | `lib/src_langgraph_rb_node/runtime/graph_runner.rb` |
+| AsyncGraph runner adapter | `lib/src_langgraph_rb_node/runtime/graph_runner.rb` |
 | внешний I/O vocabulary | `lib/src_langgraph_rb_node/runtime/request_executor.rb` |
 | NATS boundary и env defaults | `lib/src_langgraph_rb_node/runtime/service.rb` |
 

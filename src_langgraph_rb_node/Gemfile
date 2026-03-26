@@ -3,4 +3,3 @@
 source "https://rubygems.org"
 
 gemspec
-gem "async-graph", git: "https://github.com/artyomb/async-graph.git"

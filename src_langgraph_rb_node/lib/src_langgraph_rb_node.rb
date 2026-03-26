@@ -20,9 +20,10 @@ require_relative "src_langgraph_rb_node/runtime/scenario_ids"
 require_relative "src_langgraph_rb_node/runtime/router"
 require_relative "src_langgraph_rb_node/runtime/engine"
 require_relative "src_langgraph_rb_node/runtime/service"
-require_relative "src_langgraph_rb_node/scenarios/free_speech"
-require_relative "src_langgraph_rb_node/scenarios/where_my_flight"
-require_relative "src_langgraph_rb_node/scenarios/find_nearest_airport"
+require_relative "src_langgraph_rb_node/scenarios/base_nodes"
+require_relative "src_langgraph_rb_node/scenarios/free_speech/definition"
+require_relative "src_langgraph_rb_node/scenarios/where_my_flight/definition"
+require_relative "src_langgraph_rb_node/scenarios/find_nearest_airport/definition"
 require_relative "src_langgraph_rb_node/scenarios/built_in_registry"
 
 module SrcLanggraphRbNode

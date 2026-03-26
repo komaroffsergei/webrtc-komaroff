@@ -25,6 +25,8 @@ module SrcLanggraphRbNode
         artifacts = Runtime::Util.extract_hash(context_artifacts)
         llm_input[:context_artifacts] = artifacts unless artifacts.empty?
 
+        # Верхнеуровневый выбор сценария тоже идет через LLM,
+        # но этот вызов живет вне AsyncGraph-сценариев и выполняется прямо из engine/router слоя.
         llm_resp = io.call_llm(parent: req, mode: "routing_decision", input_data: llm_input, constraints: { temperature: 0 })
         return [Runtime::ScenarioIds::FREE_SPEECH, {}] unless llm_resp[:ok] && llm_resp[:data].is_a?(Hash)
 

@@ -18,6 +18,8 @@ module SrcLanggraphRbNode
 
       def call_llm(parent:, mode:, input_data:, constraints: nil)
         req = Contracts::Llm.request(parent: parent, mode: mode, input: input_data, constraints: constraints || {})
+        # Это фактический транспортный вызов в рабочий LLM-стек:
+        # subject вида nats.llm.<user_id> обслуживает сервис src_llm.
         subject = "#{llm_subject_prefix}#{user_id}"
         raw = request_json(subject, JSON.generate(Runtime::Util.deep_stringify(req)))
         Contracts::Llm.normalize_response(raw, request: req)
@@ -58,6 +60,7 @@ module SrcLanggraphRbNode
       end
 
       def request_json(subject, payload)
+        # Здесь выполняется реальный NATS req-reply во внешний сервис.
         msg = nc.request(subject, payload, timeout: request_timeout_s)
         data = JSON.parse(msg.data)
         raise ValidationError, "Invalid JSON response from #{subject}" unless data.is_a?(Hash)
