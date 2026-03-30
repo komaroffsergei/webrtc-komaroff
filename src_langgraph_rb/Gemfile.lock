@@ -2,6 +2,7 @@ PATH
   remote: .
   specs:
     src_langgraph_rb (0.1.0)
+      async-graph
       langgraph_rb (~> 0.1.11)
       logger
       nats-pure (~> 2.5)
@@ -9,6 +10,7 @@ PATH
 GEM
   remote: https://rubygems.org/
   specs:
+    async-graph (0.1.2)
     base64 (0.3.0)
     concurrent-ruby (1.3.6)
     json (2.19.1)
