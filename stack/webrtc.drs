@@ -333,6 +333,56 @@ Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_w
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
+Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-diarize', port: 8090
+
+  env NATS_URL: NATS_URL,
+      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+      ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
+      ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
+      ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
+      ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
+      ASR_FILE_DIAR_EVENT_PREFIX: 'inference.whisper.file.diar.event.',
+      ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
+      ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.',
+      WEBUI_NATS_WS_URL: '/ws',
+      WEBUI_NATS_USER: NATS_USER,
+      WEBUI_NATS_PASS: NATS_PASS,
+      WEBUI_NATS_CLIENT_NAME: 'whisper-webui',
+      LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
+      LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
+      LINTO_HTTP_LANGUAGE: 'ru',
+      DIARIZATION_ENABLED: '1',
+      DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
+      DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
+      DIARIZATION_TIMEOUT_S: '1800',
+      DIARIZATION_RETRY_LIMIT: '1',
+      DIARIZATION_NUM_SPEAKERS: '',
+      DIARIZATION_MIN_SPEAKERS: '',
+      DIARIZATION_MAX_SPEAKERS: '',
+      DIARIZATION_TURN_BREAK_S: '1.0',
+      FILE_JOB_STORAGE_DIR: '/tmp/whisper-file-jobs',
+      FILE_CHUNK_SECONDS: '300',
+      FILE_CHUNK_OVERLAP_SECONDS: '15',
+      FILE_CHUNK_RETRY_LIMIT: '2',
+      FILE_TEXT_SOFT_BREAK_S: '0.8',
+      FILE_TEXT_HARD_BREAK_S: '1.8',
+      WEBUI_ENABLED: '1',
+      STREAM_BRIDGE_ENABLED: '0',
+      FILE_WORKER_ENABLED: '0',
+      WEBUI_FILE_BACKEND: 'chunked_http_nats',
+      WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
+      WEBUI_FILE_MAX_UPLOAD_MB: '1024',
+      WEBUI_FILE_MAX_CONCURRENCY: '1',
+      WEBUI_BASE_PATH: '/whisper-diarize',
+      WEBUI_HOME_LINK_PATH: '/whisper',
+      WHISPER_STACK_REVISION: '2026-03-31-whisper-diarize-page-1',
+      STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
+
+  volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
+  entrypoint 'python -m src.stt_whisper_to_nats'
+end
+
 
 
 Service :nats_box, image: 'natsio/nats-box' do
