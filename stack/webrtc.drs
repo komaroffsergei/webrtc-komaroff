@@ -248,9 +248,6 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
       ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
       ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
-      ASR_FILE_DIAR_EVENT_PREFIX: 'inference.whisper.file.diar.event.',
-      ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
-      ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.',
       WEBUI_NATS_WS_URL: '/ws',
       WEBUI_NATS_USER: NATS_USER,
       WEBUI_NATS_PASS: NATS_PASS,
@@ -259,15 +256,7 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
       LINTO_HTTP_LANGUAGE: 'ru',
       LINTO_WS_URL: 'ws://192.168.28.134/streaming',
-      DIARIZATION_ENABLED: '1',
-      DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
-      DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
-      DIARIZATION_TIMEOUT_S: '1800',
-      DIARIZATION_RETRY_LIMIT: '1',
-      DIARIZATION_NUM_SPEAKERS: '',
-      DIARIZATION_MIN_SPEAKERS: '',
-      DIARIZATION_MAX_SPEAKERS: '',
-      DIARIZATION_TURN_BREAK_S: '1.0',
+      DIARIZATION_ENABLED: '0',
       MIN_SPEECH_DURATION_MS: '250',
       MIN_SILENCE_DURATION_MS: '500',
       MAX_SPEECH_DURATION_S: '30.0',
@@ -287,7 +276,8 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
       WEBUI_FILE_MAX_UPLOAD_MB: '1024',
       WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: "/whisper",
-      WHISPER_STACK_REVISION: '2026-04-01-whisper-pyannote-external-1',
+      WEBUI_PAGE_MODE: 'transcribe_only',
+      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
       STACK_SERVICE_NAME: 'stt_whisper_to_nats'
 
   volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
@@ -326,7 +316,7 @@ Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_w
       STREAM_BRIDGE_ENABLED: '0',
       FILE_WORKER_ENABLED: '1',
       WEBUI_FILE_BACKEND: 'chunked_http_nats',
-      WHISPER_STACK_REVISION: '2026-04-01-whisper-pyannote-external-1',
+      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
       STACK_SERVICE_NAME: 'stt_whisper_file_worker'
 
   volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
@@ -375,8 +365,9 @@ Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisp
       WEBUI_FILE_MAX_UPLOAD_MB: '1024',
       WEBUI_FILE_MAX_CONCURRENCY: '1',
       WEBUI_BASE_PATH: '/whisper-diarize',
+      WEBUI_PAGE_MODE: 'diarize',
       WEBUI_HOME_LINK_PATH: '/whisper',
-      WHISPER_STACK_REVISION: '2026-04-01-whisper-pyannote-external-1',
+      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
       STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
 
   volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'

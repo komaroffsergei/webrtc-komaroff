@@ -97,11 +97,17 @@ docker compose up -d --build
 - API Gateway: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-В deploy stack маршрут `/whisper` включает server-side file transcription mode для `wav/mp3/m4a/mp4`. Upload handler публикует NATS file-job, worker нормализует audio в `mono 16k`, режет на чанки и отправляет их последовательно в `linto_stt_whisper_http`, а браузер получает progress/result напрямую из NATS WS по job/session subjects.
+В deploy stack сейчас есть два file-маршрута:
+
+- `/whisper` для plain transcription без diarization
+- `/whisper-diarize` для combined flow: plain text + speaker separation
+
+Оба маршрута публикуют NATS file-job, worker нормализует audio в `mono 16k`, режет его на чанки и отправляет transcription в `linto_stt_whisper_http`. Только `/whisper-diarize` дополнительно ждёт `pyannote_diarization` и показывает speaker progress/result через отдельные diarization subjects.
 
 Режимы ASR в этом стэке сейчас такие:
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.* -> src_core`
 - `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* -> file worker -> sequential chunked LinTO HTTP`
+- `/whisper-diarize` combined file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> file worker -> LinTO HTTP + pyannote diarization`
 
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и внешние интеграции: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 Ruby runtime code map: [`src_langgraph_rb/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/CODEMAP.md)
