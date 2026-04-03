@@ -302,6 +302,7 @@ Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_w
       DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
       DIARIZATION_TIMEOUT_S: '1800',
       DIARIZATION_RETRY_LIMIT: '1',
+      DIARIZATION_RUNTIME_LABEL: ENV.fetch('DIARIZATION_RUNTIME_LABEL', ''),
       DIARIZATION_NUM_SPEAKERS: '',
       DIARIZATION_MIN_SPEAKERS: '',
       DIARIZATION_MAX_SPEAKERS: '',
