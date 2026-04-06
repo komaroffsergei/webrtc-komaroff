@@ -3,6 +3,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+service_dir = Path(__file__).resolve().parent
+load_dotenv(service_dir / ".env")
+load_dotenv(service_dir / ".env.local", override=True)
 
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_core")
 

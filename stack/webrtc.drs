@@ -46,6 +46,75 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
+WHISPER_STACK_REVISION = '2026-04-06-whisper-stack-simplified-1'
+WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
+WHISPER_FILE_JOB_VOLUME = 'whisper-file-jobs'
+
+WHISPER_FILE_JOB_ENV = {
+  NATS_URL: NATS_URL,
+  NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
+  ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
+  ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
+  ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
+  ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
+  LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
+  LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
+  LINTO_HTTP_LANGUAGE: 'ru',
+  FILE_JOB_STORAGE_DIR: WHISPER_FILE_JOB_STORAGE_DIR,
+  FILE_CHUNK_SECONDS: '300',
+  FILE_CHUNK_OVERLAP_SECONDS: '15',
+  FILE_CHUNK_RETRY_LIMIT: '2',
+  FILE_TEXT_SOFT_BREAK_S: '0.8',
+  FILE_TEXT_HARD_BREAK_S: '1.8',
+  WHISPER_STACK_REVISION: WHISPER_STACK_REVISION
+}
+
+WHISPER_WEBUI_ENV = {
+  WEBUI_ENABLED: '1',
+  WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
+  WEBUI_FILE_MAX_UPLOAD_MB: '1024',
+  WEBUI_FILE_MAX_CONCURRENCY: '1',
+  WEBUI_NATS_WS_URL: '/ws',
+  WEBUI_NATS_USER: NATS_USER,
+  WEBUI_NATS_PASS: NATS_PASS,
+  WEBUI_NATS_CLIENT_NAME: 'whisper-webui'
+}
+
+WHISPER_STREAM_ENV = {
+  ASR_IN_PREFIX: ASR_IN_PREFIX,
+  ASR_OUT_PREFIX: ASR_OUT_PREFIX,
+  LINTO_WS_URL: 'ws://192.168.28.134/streaming',
+  MIN_SPEECH_DURATION_MS: '250',
+  MIN_SILENCE_DURATION_MS: '500',
+  MAX_SPEECH_DURATION_S: '30.0',
+  SPEECH_PAD_MS: '30',
+  VAD_THRESHOLD: '0.8',
+  BUFFER_CHECK_INTERVAL_S: '1.0',
+  STREAM_BRIDGE_ENABLED: '1',
+  FILE_WORKER_ENABLED: '0'
+}
+
+WHISPER_DIARIZATION_ENV = {
+  DIARIZATION_ENABLED: '1',
+  DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
+  DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
+  DIARIZATION_TIMEOUT_S: '1800',
+  DIARIZATION_RETRY_LIMIT: '1',
+  DIARIZATION_NUM_SPEAKERS: '',
+  DIARIZATION_MIN_SPEAKERS: '',
+  DIARIZATION_MAX_SPEAKERS: '',
+  DIARIZATION_TURN_BREAK_S: '1.0',
+  DIARIZATION_SYNTAX_POSTPROCESS_DEFAULT: '0',
+  DIARIZATION_SYNTAX_SENTENCE_GAP_S: '1.2',
+  DIARIZATION_SYNTAX_DOMINANCE_THRESHOLD: '0.65'
+}
+
+WHISPER_DIARIZATION_EVENT_ENV = {
+  ASR_FILE_DIAR_EVENT_PREFIX: 'inference.whisper.file.diar.event.',
+  ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
+  ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.'
+}
+
 PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
 ]
@@ -240,144 +309,43 @@ end
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
-  env NATS_URL: NATS_URL,
-      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-      ASR_IN_PREFIX: ASR_IN_PREFIX,
-      ASR_OUT_PREFIX: ASR_OUT_PREFIX,
-      ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
-      ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
-      ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
-      ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
-      WEBUI_NATS_WS_URL: '/ws',
-      WEBUI_NATS_USER: NATS_USER,
-      WEBUI_NATS_PASS: NATS_PASS,
-      WEBUI_NATS_CLIENT_NAME: 'whisper-webui',
-      LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
-      LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
-      LINTO_HTTP_LANGUAGE: 'ru',
-      LINTO_WS_URL: 'ws://192.168.28.134/streaming',
-      DIARIZATION_ENABLED: '0',
-      MIN_SPEECH_DURATION_MS: '250',
-      MIN_SILENCE_DURATION_MS: '500',
-      MAX_SPEECH_DURATION_S: '30.0',
-      SPEECH_PAD_MS: '30',
-      VAD_THRESHOLD: '0.8',
-      BUFFER_CHECK_INTERVAL_S: '1.0',
-      FILE_JOB_STORAGE_DIR: '/tmp/whisper-file-jobs',
-      FILE_CHUNK_SECONDS: '300',
-      FILE_CHUNK_OVERLAP_SECONDS: '15',
-      FILE_CHUNK_RETRY_LIMIT: '2',
-      FILE_TEXT_SOFT_BREAK_S: '0.8',
-      FILE_TEXT_HARD_BREAK_S: '1.8',
-      STREAM_BRIDGE_ENABLED: '1',
-      FILE_WORKER_ENABLED: '0',
-      WEBUI_FILE_BACKEND: 'chunked_http_nats',
-      WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
-      WEBUI_FILE_MAX_UPLOAD_MB: '1024',
-      WEBUI_FILE_MAX_CONCURRENCY: '1',
-      WEBUI_BASE_PATH: "/whisper",
-      WEBUI_PAGE_MODE: 'transcribe_only',
-      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
-      STACK_SERVICE_NAME: 'stt_whisper_to_nats'
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(
+        DIARIZATION_ENABLED: '0',
+        WEBUI_BASE_PATH: '/whisper',
+        WEBUI_PAGE_MODE: 'transcribe_only',
+        STACK_SERVICE_NAME: 'stt_whisper_to_nats'
+      )
 
-  volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
+  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
 Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
-  env NATS_URL: NATS_URL,
-      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-      ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
-      ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
-      ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
-      ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
-      ASR_FILE_DIAR_EVENT_PREFIX: 'inference.whisper.file.diar.event.',
-      ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
-      ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.',
-      LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
-      LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
-      LINTO_HTTP_LANGUAGE: 'ru',
-      DIARIZATION_ENABLED: '1',
-      DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
-      DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
-      DIARIZATION_TIMEOUT_S: '1800',
-      DIARIZATION_RETRY_LIMIT: '1',
-      DIARIZATION_RUNTIME_LABEL: ENV.fetch('DIARIZATION_RUNTIME_LABEL', ''),
-      DIARIZATION_NUM_SPEAKERS: '',
-      DIARIZATION_MIN_SPEAKERS: '',
-      DIARIZATION_MAX_SPEAKERS: '',
-      DIARIZATION_TURN_BREAK_S: '1.0',
-      DIARIZATION_SYNTAX_POSTPROCESS_DEFAULT: '0',
-      DIARIZATION_SYNTAX_SENTENCE_GAP_S: '1.2',
-      DIARIZATION_SYNTAX_DOMINANCE_THRESHOLD: '0.65',
-      FILE_JOB_STORAGE_DIR: '/tmp/whisper-file-jobs',
-      FILE_CHUNK_SECONDS: '300',
-      FILE_CHUNK_OVERLAP_SECONDS: '15',
-      FILE_CHUNK_RETRY_LIMIT: '2',
-      FILE_TEXT_SOFT_BREAK_S: '0.8',
-      FILE_TEXT_HARD_BREAK_S: '1.8',
-      WEBUI_ENABLED: '0',
-      STREAM_BRIDGE_ENABLED: '0',
-      FILE_WORKER_ENABLED: '1',
-      WEBUI_FILE_BACKEND: 'chunked_http_nats',
-      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
-      STACK_SERVICE_NAME: 'stt_whisper_file_worker'
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        WEBUI_ENABLED: '0',
+        STREAM_BRIDGE_ENABLED: '0',
+        FILE_WORKER_ENABLED: '1',
+        DIARIZATION_RUNTIME_LABEL: ENV.fetch('DIARIZATION_RUNTIME_LABEL', ''),
+        STACK_SERVICE_NAME: 'stt_whisper_file_worker'
+      )
 
-  volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
+  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
 Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper-diarize', port: 8090
 
-  env NATS_URL: NATS_URL,
-      NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-      ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
-      ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
-      ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
-      ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
-      ASR_FILE_DIAR_EVENT_PREFIX: 'inference.whisper.file.diar.event.',
-      ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
-      ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.',
-      WEBUI_NATS_WS_URL: '/ws',
-      WEBUI_NATS_USER: NATS_USER,
-      WEBUI_NATS_PASS: NATS_PASS,
-      WEBUI_NATS_CLIENT_NAME: 'whisper-webui',
-      LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
-      LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
-      LINTO_HTTP_LANGUAGE: 'ru',
-      DIARIZATION_ENABLED: '1',
-      DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
-      DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
-      DIARIZATION_TIMEOUT_S: '1800',
-      DIARIZATION_RETRY_LIMIT: '1',
-      DIARIZATION_NUM_SPEAKERS: '',
-      DIARIZATION_MIN_SPEAKERS: '',
-      DIARIZATION_MAX_SPEAKERS: '',
-      DIARIZATION_TURN_BREAK_S: '1.0',
-      DIARIZATION_SYNTAX_POSTPROCESS_DEFAULT: '0',
-      DIARIZATION_SYNTAX_SENTENCE_GAP_S: '1.2',
-      DIARIZATION_SYNTAX_DOMINANCE_THRESHOLD: '0.65',
-      FILE_JOB_STORAGE_DIR: '/tmp/whisper-file-jobs',
-      FILE_CHUNK_SECONDS: '300',
-      FILE_CHUNK_OVERLAP_SECONDS: '15',
-      FILE_CHUNK_RETRY_LIMIT: '2',
-      FILE_TEXT_SOFT_BREAK_S: '0.8',
-      FILE_TEXT_HARD_BREAK_S: '1.8',
-      WEBUI_ENABLED: '1',
-      STREAM_BRIDGE_ENABLED: '0',
-      FILE_WORKER_ENABLED: '0',
-      WEBUI_FILE_BACKEND: 'chunked_http_nats',
-      WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
-      WEBUI_FILE_MAX_UPLOAD_MB: '1024',
-      WEBUI_FILE_MAX_CONCURRENCY: '1',
-      WEBUI_BASE_PATH: '/whisper-diarize',
-      WEBUI_PAGE_MODE: 'diarize',
-      WEBUI_HOME_LINK_PATH: '/whisper',
-      WHISPER_STACK_REVISION: '2026-04-03-whisper-split-ui-1',
-      STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        STREAM_BRIDGE_ENABLED: '0',
+        FILE_WORKER_ENABLED: '0',
+        WEBUI_BASE_PATH: '/whisper-diarize',
+        WEBUI_PAGE_MODE: 'diarize',
+        WEBUI_HOME_LINK_PATH: '/whisper',
+        STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
+      )
 
-  volume name: 'whisper-file-jobs', target: '/tmp/whisper-file-jobs'
+  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 

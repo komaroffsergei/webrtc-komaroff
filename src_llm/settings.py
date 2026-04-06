@@ -7,10 +7,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-current_dir = Path(__file__).parent.resolve()
-env_file = current_dir / '.env'
-env_local_file = current_dir / '.env.local'
-load_dotenv(env_local_file if os.path.exists(env_local_file) else env_file)
+service_dir = Path(__file__).resolve().parent
+load_dotenv(service_dir / ".env")
+load_dotenv(service_dir / ".env.local", override=True)
 
 USER_ID = os.getenv("USER_ID", "user123")
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_llm")

@@ -7,10 +7,9 @@ from dotenv import load_dotenv
 
 from src_shared.contracts.subjects import Subjects
 
-current_dir = Path(__file__).parent.resolve()
-env_file = current_dir / ".env"
-env_local_file = current_dir / ".env.local"
-load_dotenv(env_local_file if env_local_file.exists() else env_file)
+service_dir = Path(__file__).resolve().parent
+load_dotenv(service_dir / ".env")
+load_dotenv(service_dir / ".env.local", override=True)
 
 USER_ID = os.getenv("USER_ID", "user123")
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_langgraph")

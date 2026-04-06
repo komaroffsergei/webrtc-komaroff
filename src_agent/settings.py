@@ -1,11 +1,13 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 from src_shared.contracts.subjects import Subjects
 
-# Load environment variables from local .env (dev convenience).
-current_dir = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(os.path.join(current_dir, ".env"))
+service_dir = Path(__file__).resolve().parent
+load_dotenv(service_dir / ".env")
+load_dotenv(service_dir / ".env.local", override=True)
 
 USER_ID = os.getenv("USER_ID", "user123")
 
@@ -20,9 +22,7 @@ NATS_WORKFLOW_RUN_SUBJECT = os.getenv("NATS_WORKFLOW_RUN_SUBJECT", Subjects.WORK
 STACK_SERVICE_NAME = os.getenv("STACK_SERVICE_NAME", "src_agent")
 WORKFLOW_TIMEOUT_SECONDS = int(os.getenv("WORKFLOW_TIMEOUT_SECONDS", "60"))
 WORKFLOW_NO_RESPONDERS_RETRIES = int(os.getenv("WORKFLOW_NO_RESPONDERS_RETRIES", "4"))
-WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS = float(
-    os.getenv("WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS", "1.0")
-)
+WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS = float(os.getenv("WORKFLOW_NO_RESPONDERS_RETRY_DELAY_SECONDS", "1.0"))
 RUNTIME_CONFLICT_RETRIES = int(os.getenv("RUNTIME_CONFLICT_RETRIES", "3"))
 
 # Database
