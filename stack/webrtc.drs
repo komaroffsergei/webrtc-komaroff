@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-09-whisper-stack-redeploy-1'
+WHISPER_STACK_REVISION = '2026-04-09-whisper-ws-compression-off-1'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_VOLUME = 'whisper-file-jobs'
 
@@ -260,7 +260,7 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
   command ['-c', '/nats.conf']
   config target: '/nats.conf', file_content: <<~CONF
     jetstream: false
-    websocket: { listen: 0.0.0.0:9222, no_tls: true, compression: true }
+    websocket: { listen: 0.0.0.0:9222, no_tls: true, compression: false }
 
     debug: true
     trace: true
