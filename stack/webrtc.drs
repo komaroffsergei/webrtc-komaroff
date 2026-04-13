@@ -114,6 +114,8 @@ PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
 ]
 
+# Core backend for browser sessions: handles /core, WebRTC-facing orchestration,
+# and coordinates agent / ASR requests through NATS and the API gateway.
 Service :src_core, image: webrtc_registry['core']do
   ingress host: HOST, path: '/core', port: 8000
 
@@ -130,6 +132,7 @@ Service :src_core, image: webrtc_registry['core']do
       CORE_PORT: 8000
 end
 
+# Internal REST facade for domain data used by core/agent/runtime services.
 Service :src_api_gateway, image: webrtc_registry['api-gateway']do
   ingress host: HOST, path: '/api', port: 8100
 
@@ -139,6 +142,7 @@ Service :src_api_gateway, image: webrtc_registry['api-gateway']do
       NATS_TOOLS_PREFIX: NATS_TOOLS_PREFIX
 end
 
+# Main agent runtime: consumes agent requests from NATS and calls tools/workflows/LLM.
 Service :src_agent, image: webrtc_registry['agent'] do
   env STACK_SERVICE_NAME: 'src_agent',
       USER_ID: USER_ID,
@@ -160,6 +164,7 @@ Service :src_agent, image: webrtc_registry['agent'] do
       FLIGHTS_API_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/flights/status'
 end
 
+# LLM adapter service for the agent layer. In current config it points at remote Ollama.
 Service :src_llm, image: webrtc_registry['llm'] do
   env STACK_SERVICE_NAME: 'src_llm',
       USER_ID: USER_ID,
@@ -176,6 +181,7 @@ Service :src_llm, image: webrtc_registry['llm'] do
   volume name: 'LLM_MODELS', target: '/app/models/llm'
 end
 
+# Python workflow runner. Used only when WORKFLOW_RUNTIME selects the python subjects.
 Service :src_langgraph, image: webrtc_registry['langgraph'] do
   env STACK_SERVICE_NAME: 'src_langgraph',
       USER_ID: USER_ID,
@@ -188,6 +194,7 @@ Service :src_langgraph, image: webrtc_registry['langgraph'] do
       MAX_CONCURRENCY: '8'
 end
 
+# Ruby workflow runner. Used only when WORKFLOW_RUNTIME selects the ruby subjects.
 Service :src_langgraph_rb, image: webrtc_registry['langgraph-rb'] do
   env STACK_SERVICE_NAME: 'src_langgraph_rb',
       USER_ID: USER_ID,
@@ -201,6 +208,7 @@ Service :src_langgraph_rb, image: webrtc_registry['langgraph-rb'] do
   command ['bundle', 'exec', 'ruby', './lib/src_langgraph_rb/runtime/service.rb']
 end
 
+# Ruby+Node workflow runner. This is the active path when WORKFLOW_RUNTIME=ruby_node.
 Service :src_langgraph_rb_node, image: webrtc_registry['langgraph-rb-node'] do
   env STACK_SERVICE_NAME: 'src_langgraph_rb_node',
       USER_ID: USER_ID,
@@ -214,6 +222,7 @@ Service :src_langgraph_rb_node, image: webrtc_registry['langgraph-rb-node'] do
   command ['bundle', 'exec', 'ruby', './lib/src_langgraph_rb_node/runtime/service.rb']
 end
 
+# Browser frontend for the voice chat app. Serves UI and talks to core/NATS.
 Service :src_front, image: webrtc_registry['front'] do
   ingress host: HOST, port: 8000
 
@@ -227,6 +236,7 @@ Service :src_front, image: webrtc_registry['front'] do
       COM_GITLAB_CI_PIPELINE_IID: ENV['CI_PIPELINE_ID'].to_s
 end
 
+# Persistent PostgreSQL for MCP / workflow / application state.
 Service :src_postgres, image: webrtc_registry['postgres'] do
   env POSTGRES_DB: POSTGRES_DB,
       POSTGRES_USER: POSTGRES_USER,
@@ -249,6 +259,8 @@ end
 # to.inference.whisper.stream.<sid> <- chunks
 # from.inference.whisper.text.<sid> -> text
 
+# Browser-facing NATS gateway: exposes /ws and bridges local websocket clients
+# into the inference account through a leafnode.
 Service :audio_nats, image: 'nats:2.11.6-scratch' do
   ingress host: HOST, path: '/ws', path_sub: ['^/ws(.*)', '$1'], port: 9222
 
@@ -301,6 +313,8 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
 end
 
 
+# Plain transcription service. Same binary as py_faster_whisper_diarize, but this
+# deployment serves /whisper, keeps the live stream bridge on, and disables diarization.
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
 
@@ -314,6 +328,8 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
+# Combined file ASR + speaker separation service. Same binary as py_faster_whisper,
+# but this deployment serves /whisper-diarize, runs file-mode only, and enables diarization.
 Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper-diarize', port: 8090
 
@@ -330,15 +346,18 @@ end
 
 
 
+# Debug shell for manual NATS inspection inside the stack.
 Service :nats_box, image: 'natsio/nats-box' do
   env NATS_URL: NATS_URL
   entrypoint 'sh -c "sleep infinity"'
 end
 
+# Admin UI for inspecting NATS subjects/connections/messages.
 Service :nats_ui, image: registry['nats-ui/main:latest'], ports: 7000 do
   ingress host: "ns.#{HOST}", basic_auth: 'admin:admin:i7hdbc9g'
   env NATS_URL: NATS_URL
 end
 
+# Admin UI for browsing the PostgreSQL database.
 Service :pgweb_mcp, image: 'sosedoff/pgweb:0.17.0', env: { PGWEB_DATABASE_URL: DATABASE_URL },
         ingress: { host: "pgweb.#{HOST}", port: 8081, basic_auth: 'admin:admin:i7123hdbc9g' }
