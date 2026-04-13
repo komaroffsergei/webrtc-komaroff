@@ -46,17 +46,14 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-13-whisper-diar-audio-artifact-1'
+WHISPER_STACK_REVISION = '2026-04-13-whisper-inprocess-file-jobs-1'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
-WHISPER_FILE_JOB_VOLUME = 'whisper-file-jobs'
 
 WHISPER_FILE_JOB_ENV = {
   NATS_URL: NATS_URL,
   NATS_EVENTS_SUBJECT: NATS_EVENTS_SUBJECT,
-  ASR_FILE_JOB_SUBJECT: 'inference.whisper.file.job',
   ASR_FILE_EVENT_PREFIX: 'inference.whisper.file.event.',
   ASR_FILE_SESSION_EVENT_PREFIX: 'inference.whisper.file.session.',
-  ASR_FILE_CANCEL_PREFIX: 'inference.whisper.file.cancel.',
   LINTO_HTTP_URL: 'http://192.168.28.134/transcribe',
   LINTO_HTTP_HOST: 'linto_stt_whisper_http.h100.local',
   LINTO_HTTP_LANGUAGE: 'ru',
@@ -73,7 +70,6 @@ WHISPER_WEBUI_ENV = {
   WEBUI_ENABLED: '1',
   WEBUI_FILE_TRANSCRIBE_ENABLED: '1',
   WEBUI_FILE_MAX_UPLOAD_MB: '1024',
-  WEBUI_FILE_MAX_CONCURRENCY: '1',
   WEBUI_NATS_WS_URL: '/ws',
   WEBUI_NATS_USER: NATS_USER,
   WEBUI_NATS_PASS: NATS_PASS,
@@ -90,8 +86,7 @@ WHISPER_STREAM_ENV = {
   SPEECH_PAD_MS: '30',
   VAD_THRESHOLD: '0.8',
   BUFFER_CHECK_INTERVAL_S: '1.0',
-  STREAM_BRIDGE_ENABLED: '1',
-  FILE_WORKER_ENABLED: '0'
+  STREAM_BRIDGE_ENABLED: '1'
 }
 
 WHISPER_DIARIZATION_ENV = {
@@ -316,20 +311,6 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
         STACK_SERVICE_NAME: 'stt_whisper_to_nats'
       )
 
-  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
-  entrypoint 'python -m src.stt_whisper_to_nats'
-end
-
-Service :py_faster_whisper_file_worker, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
-  env WHISPER_FILE_JOB_ENV.merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
-        WEBUI_ENABLED: '0',
-        STREAM_BRIDGE_ENABLED: '0',
-        FILE_WORKER_ENABLED: '1',
-        DIARIZATION_RUNTIME_LABEL: ENV.fetch('DIARIZATION_RUNTIME_LABEL', ''),
-        STACK_SERVICE_NAME: 'stt_whisper_file_worker'
-      )
-
-  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
@@ -338,14 +319,12 @@ Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisp
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
         STREAM_BRIDGE_ENABLED: '0',
-        FILE_WORKER_ENABLED: '0',
         WEBUI_BASE_PATH: '/whisper-diarize',
         WEBUI_PAGE_MODE: 'diarize',
         WEBUI_HOME_LINK_PATH: '/whisper',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
       )
 
-  volume name: WHISPER_FILE_JOB_VOLUME, target: WHISPER_FILE_JOB_STORAGE_DIR
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
