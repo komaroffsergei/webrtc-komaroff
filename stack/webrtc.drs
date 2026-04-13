@@ -313,18 +313,32 @@ Service :audio_nats, image: 'nats:2.11.6-scratch' do
 end
 
 
-# Unified whisper service. One process now serves both /whisper and /whisper-diarize
-# from the same image/runtime, keeps the live stream bridge on, and prevents UI/backend drift
-# between plain transcription and diarization pages.
+# Plain transcription service. Same binary as py_faster_whisper_diarize, but this
+# deployment serves /whisper, keeps the live stream bridge on, and disables diarization.
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper', port: 8090
-  ingress host: HOST, path: '/whisper-diarize', port: 8090
 
-  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
-        WEBUI_SERVE_BOTH_MODES: '1',
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(
+        DIARIZATION_ENABLED: '0',
         WEBUI_BASE_PATH: '/whisper',
         WEBUI_PAGE_MODE: 'transcribe_only',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats'
+      )
+
+  entrypoint 'python -m src.stt_whisper_to_nats'
+end
+
+# Combined file ASR + speaker separation service. Same binary as py_faster_whisper,
+# but this deployment serves /whisper-diarize, runs file-mode only, and enables diarization.
+Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-diarize', port: 8090
+
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        STREAM_BRIDGE_ENABLED: '0',
+        WEBUI_BASE_PATH: '/whisper-diarize',
+        WEBUI_PAGE_MODE: 'diarize',
+        WEBUI_HOME_LINK_PATH: '/whisper',
+        STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
       )
 
   entrypoint 'python -m src.stt_whisper_to_nats'
