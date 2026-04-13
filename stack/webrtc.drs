@@ -45,10 +45,9 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
   end
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
-VOICE_CHAT_IMAGE_TAG = ENV.fetch('VOICE_CHAT_IMAGE_TAG', 'main:0.0.12')
+VOICE_CHAT_IMAGE_TAG = ENV.fetch('VOICE_CHAT_IMAGE_TAG', 'main')
 # Production whisper/pyannote runtime images are built in the separate `py_faster_whisper` repo.
-# This stack only deploys/routs them. Use an explicit docker tag here because deploy goes through
-# `docker stack deploy --resolve-image=never`, so floating `main:latest` can keep stale worker caches alive.
+# This stack only deploys/routs them, so pinning the tag here avoids stack-vs-image drift.
 voice_chat_registry = ->(img) { "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/#{VOICE_CHAT_IMAGE_TAG}" }
 
 WHISPER_STACK_REVISION = '2026-04-13-transcribe-diarize-rollout-1'
