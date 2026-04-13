@@ -2,10 +2,6 @@
 
 Локальный стек WebRTC + NATS + workflow runtime.
 
-Важно: production whisper runtime image (`voice-chat/stt_whisper_to_nats`) собирается в
-отдельном repo `py_faster_whisper`. Этот repo только деплоит его через `stack/webrtc.drs`
-и прокидывает ingress/env.
-
 ## Сервисы
 
 - `src_front` — веб UI.

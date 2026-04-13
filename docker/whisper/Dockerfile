@@ -1,8 +1,5 @@
 FROM python:3.11-slim
 
-# Legacy local Dockerfile. Current production `voice-chat/stt_whisper_to_nats` image is built
-# from the separate `py_faster_whisper` repo, not from this file.
-
 WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -26,4 +23,5 @@ WORKDIR /app/src_whisper
 RUN mkdir -p "/models/asr" "/models/vad"
 
 CMD ["python", "-m", "src_whisper.main"]
+
 
