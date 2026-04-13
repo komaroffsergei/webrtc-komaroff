@@ -103,14 +103,14 @@ docker compose up -d --build
 
 В deploy stack сейчас есть два file-маршрута:
 
-- `/transcribe` для plain transcription без diarization
+- `/whisper` для plain transcription без diarization
 - `/diarize` для combined flow: plain text + speaker separation
 
 Оба маршрута публикуют NATS file-job, worker нормализует audio в `mono 16k`, режет его на чанки и отправляет transcription в `linto_stt_whisper_http`. Только `/diarize` дополнительно ждёт `pyannote_diarization` и показывает speaker progress/result через отдельные diarization subjects.
 
 Режимы ASR в этом стэке сейчас такие:
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.* -> src_core`
-- `/transcribe` file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* -> file worker -> sequential chunked LinTO HTTP`
+- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* -> file worker -> sequential chunked LinTO HTTP`
 - `/diarize` combined file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> file worker -> LinTO HTTP + pyannote diarization`
 
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и внешние интеграции: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)

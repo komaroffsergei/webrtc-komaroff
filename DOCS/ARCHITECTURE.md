@@ -67,7 +67,7 @@ flowchart LR
     G4["src_front"]
     G5["/core/message | /core/history | /core/init_map"]
     G6["/core/offer"]
-    G7["/transcribe/api/file-transcribe"]
+    G7["/whisper/api/file-transcribe"]
     G8["src_core ingress"]
   end
 
@@ -172,7 +172,7 @@ flowchart LR
 | `src_api_gateway` | tools service | HTTP `/api/*`, `nats.tools.*` | local data-only responses | HTTP JSON, NATS req-reply |
 | `src_postgres` | session/runtime persistence | SQL from `src_agent` | none | PostgreSQL |
 | `nats` / `audio_nats` | local UI + backend message bus | NATS core, WS ingress `/ws` | pub-sub and req-reply routing | NATS core, NATS WS |
-| `py_faster_whisper` repo | кодовая база ASR bridge + WebUI `/transcribe` + `/diarize` | `inference.whisper.stream.*`, file-job subjects, `/transcribe`, `/diarize` | `inference.whisper.text.*`, file event subjects, LinTO HTTP | NATS pub-sub, HTTP multipart, HTTP |
+| `py_faster_whisper` repo | кодовая база ASR bridge + WebUI `/whisper` | `inference.whisper.stream.*`, file-job subjects, `/whisper` | `inference.whisper.text.*`, file event subjects, LinTO HTTP | NATS pub-sub, HTTP multipart, HTTP |
 | `stt_whisper_to_nats` deploy service | то же приложение из `py_faster_whisper`, но под deploy service name | live ASR, file jobs | LinTO HTTP, NATS events | NATS, HTTP |
 | `rag-stack` `inference_nats` | inference transport/buffer layer | `to.inference.*`, `from.inference.*` | leafnode to H100 | NATS core, WS, JetStream, leafnode |
 | `rag-stack` `nats2ollama` | HTTP bridge from app world to inference NATS | HTTP `/api/chat` | `to.inference.ollama.requests`, listens on `from.inference.ollama.responses.<service_id>.>` | HTTP JSON, JetStream |
@@ -190,7 +190,7 @@ flowchart LR
 | chat restore | browser / `src_front` | `/core/history` | query `session_id`, `limit` | JSON `{ ok, items, runtime_context, error? }` | [assistantApp.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/assistant/assistantApp.ts), [handle_history.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_core/handlers/handle_history.py) |
 | map bootstrap | browser / `src_front` | `/core/init_map` | empty POST | JSON status | [assistantApp.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/assistant/assistantApp.ts), [handle_init_map.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_core/handlers/handle_init_map.py) |
 | UI events stream | browser / `src_front` | `/ws` | NATS WS auth + subscribe to `nats.events.user123` | `ServerEvent` envelope | [appConfig.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/config/appConfig.ts), [natsClient.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/net/natsClient.ts) |
-| file transcription | browser | `/transcribe/api/file-transcribe` | `multipart/form-data` with `file`, `language?`, `session_id?`, `job_id?` | HTTP `202` JSON with `job_id`, `session_id`, `file_name`, `backend` | [server.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/webui/server.py) |
+| file transcription | browser | `/whisper/api/file-transcribe` | `multipart/form-data` with `file`, `language?`, `session_id?`, `job_id?` | HTTP `202` JSON with `job_id`, `session_id`, `file_name`, `backend` | [server.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/webui/server.py) |
 
 Замечание: `src_front` сейчас подписывается на жестко заданный `nats.events.user123`, поэтому `USER_ID` в backend и NATS WS subject должны совпадать с этим значением или быть согласованно перенастроены.
 
@@ -214,7 +214,7 @@ flowchart LR
 | Tool discovery | `nats.tools.discover` | callers | `src_api_gateway` | discovery request/response |
 | Live ASR input | `inference.whisper.stream.<session_id>` | `src_core` | `py_faster_whisper` / `stt_whisper_to_nats` | binary ASR packet |
 | Live ASR output | `inference.whisper.text.<session_id>` | `py_faster_whisper` / `stt_whisper_to_nats` | `src_core` | JSON pending/final/error |
-| File ASR job | `inference.whisper.file.job` | `/transcribe` WebUI handler | file worker | JSON job payload |
+| File ASR job | `inference.whisper.file.job` | `/whisper` WebUI handler | file worker | JSON job payload |
 | File ASR event | `inference.whisper.file.event.<job_id>` | file worker or upload handler | browser via NATS WS | JSON progress/result |
 | File ASR session event | `inference.whisper.file.session.<session_id>` | file worker or upload handler | browser via NATS WS | JSON progress/result for session |
 | File ASR cancel | `inference.whisper.file.cancel.<job_id>` | browser | file worker | JSON cancel request |
@@ -447,13 +447,13 @@ flowchart LR
 
 Важно: текущий код `stt_whisper_to_nats` для live phrase transcription использует `LINTO_HTTP_URL`, а не `LINTO_WS_URL`. WebSocket backend LinTO развернут в inference stack, но в текущей версии приложения не используется.
 
-### 3. `/transcribe` file flow
+### 3. `/whisper` file flow
 
 ```mermaid
 flowchart LR
   subgraph Upload["Upload + subscription setup"]
     F0["Browser file + metadata"]
-    F1["/transcribe/api/file-transcribe"]
+    F1["/whisper/api/file-transcribe"]
     F2["upload handler"]
     F3["inference.whisper.file.job"]
     F4["inference.whisper.file.event.&lt;job_id&gt; queued"]
@@ -620,7 +620,7 @@ Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-k
 Если потом переносить это в отдельную схему/диаграмму, сохранять именно эти уровни:
 
 1. Browser edge:
-   `/core/offer`, `/core/message`, `/core/history`, `/core/init_map`, `/ws`, `/transcribe`, `/diarize`
+   `/core/offer`, `/core/message`, `/core/history`, `/core/init_map`, `/ws`, `/whisper`
 2. Core bus layer:
    `nats.agent.*`, `nats.agent.history.*`, `nats.events.*`, `inference.whisper.stream.*`, `inference.whisper.text.*`
 3. Runtime layer:
