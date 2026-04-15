@@ -114,6 +114,40 @@ class AgentServer:
         if self.nats_logger:
             await self.nats_logger.info(f"Subscribed to {self.agent_subject} and {self.agent_history_subject}")
 
+    @staticmethod
+    def _agent_exception_response(exc: Exception) -> AgentInboundResponse:
+        return AgentInboundResponse(
+            trace_id=uuid4(),
+            correlation_id=None,
+            request_id=uuid4(),
+            session_id=None,
+            ts_ms=now_ts_ms(),
+            ok=False,
+            status="FAILED",
+            result="",
+            client_handler={},
+            client_events=[],
+            errors=[ErrorInfo(code="agent_exception", message=str(exc))],
+        )
+
+    @staticmethod
+    def _history_exception_response(exc: Exception) -> HistoryGetResponse:
+        return HistoryGetResponse(
+            trace_id=uuid4(),
+            correlation_id=None,
+            request_id=uuid4(),
+            session_id=None,
+            ts_ms=now_ts_ms(),
+            ok=False,
+            items=[],
+            runtime_context=None,
+            error=ErrorInfo(code="history_exception", message=str(exc)),
+        )
+
+    @staticmethod
+    def _response_bytes(payload: AgentInboundResponse | HistoryGetResponse) -> bytes:
+        return payload.model_dump_json().encode("utf-8")
+
     async def handle_request(self, msg: Msg) -> None:
         try:
             raw = json.loads(msg.data.decode("utf-8"))
@@ -141,25 +175,13 @@ class AgentServer:
                 client_events=rr.workflow.client_events,
                 errors=rr.workflow.errors,
             )
-            await msg.respond(resp.model_dump_json().encode("utf-8"))
+            await msg.respond(self._response_bytes(resp))
 
         except Exception as exc:
             logger.exception("Error processing request")
-            fallback = AgentInboundResponse(
-                trace_id=uuid4(),
-                correlation_id=None,
-                request_id=uuid4(),
-                session_id=None,
-                ts_ms=now_ts_ms(),
-                ok=False,
-                status="FAILED",
-                result="",
-                client_handler={},
-                client_events=[],
-                errors=[ErrorInfo(code="agent_exception", message=str(exc))],
-            )
+            fallback = self._agent_exception_response(exc)
             try:
-                await msg.respond(fallback.model_dump_json().encode("utf-8"))
+                await msg.respond(self._response_bytes(fallback))
             except Exception:
                 logger.exception("Failed to respond with error")
             if self.nats_logger:
@@ -194,22 +216,12 @@ class AgentServer:
                 runtime_context=runtime_context,
                 error=None,
             )
-            await msg.respond(resp.model_dump_json().encode("utf-8"))
+            await msg.respond(self._response_bytes(resp))
         except Exception as exc:
             logger.exception("Error processing history request")
-            fallback = HistoryGetResponse(
-                trace_id=uuid4(),
-                correlation_id=None,
-                request_id=uuid4(),
-                session_id=None,
-                ts_ms=now_ts_ms(),
-                ok=False,
-                items=[],
-                runtime_context=None,
-                error=ErrorInfo(code="history_exception", message=str(exc)),
-            )
+            fallback = self._history_exception_response(exc)
             try:
-                await msg.respond(fallback.model_dump_json().encode("utf-8"))
+                await msg.respond(self._response_bytes(fallback))
             except Exception:
                 logger.exception("Failed to respond with history error")
 

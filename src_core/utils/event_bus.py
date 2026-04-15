@@ -9,6 +9,7 @@ from src_core.utils.nats_logger import NatsLogger
 
 logger = logging.getLogger("event_bus")
 
+
 class EventBus:
     def __init__(self) -> None:
         self._subject: str | None = None
@@ -36,14 +37,9 @@ class EventBus:
             raise RuntimeError("Event bus is not configured")
         return await self._logger.log(type, kind, data, name=name, service=service)
 
-
-_DEFAULT_BUS: EventBus | None = None
-
-
 def register_event_bus(
     app: Application, *, nats_client, subject: str, service_name: str
-) -> None:
-    global _DEFAULT_BUS
+) -> EventBus:
     bus = EventBus()
     bus.configure(
         nats_client=nats_client,
@@ -51,17 +47,16 @@ def register_event_bus(
         service_name=service_name,
     )
     app["event_bus"] = bus
-    _DEFAULT_BUS = bus
+    return bus
 
 
-def get_event_bus(app: Application | None = None) -> EventBus:
-    if app is not None:
-        bus = app.get("event_bus")
-        if bus:
-            return bus
-    if _DEFAULT_BUS is None:
+def get_event_bus(app: Application) -> EventBus:
+    bus = app.get("event_bus")
+    if bus:
+        return bus
+    if "event_bus" not in app:
         raise RuntimeError("Event bus is not initialized")
-    return _DEFAULT_BUS
+    raise RuntimeError("Event bus is configured with an invalid value")
 
 
 async def event_log(
@@ -70,7 +65,7 @@ async def event_log(
     data: dict[str, Any],
     *,
     name="",
-    app: Application | None = None,
+    app: Application,
     service: str | None = None,
 ) -> str:
     bus = get_event_bus(app)

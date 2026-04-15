@@ -32,6 +32,17 @@ from src_shared.contracts import (
 
 logger = logging.getLogger(STACK_SERVICE_NAME)
 
+
+SUPPORTED_ROUTING_WORKFLOW_IDS = frozenset(
+    {
+        "where_my_flight@2.0.0",
+        "find_nearest_airport@2.0.0",
+        "free_speech@2.0.0",
+        "echo@2.0.0",
+    }
+)
+
+
 class LLMService(BaseService):
     def __init__(
         self,
@@ -269,7 +280,12 @@ class LLMService(BaseService):
         data = self._infer_json(req.model_copy(update={"input": inp}), RoutingDecisionData)
         text = str(inp.get("text") or "").lower()
         allow_raw = inp.get("allowlist_workflows")
-        allowlist = [str(x) for x in allow_raw] if isinstance(allow_raw, list) else []
+        allowlist: list[str] = []
+        if isinstance(allow_raw, list):
+            for item in allow_raw:
+                workflow_id = str(item).strip()
+                if workflow_id in SUPPORTED_ROUTING_WORKFLOW_IDS:
+                    allowlist.append(workflow_id)
         allowset = set(allowlist)
 
         def _fallback() -> RoutingDecisionData:
@@ -304,28 +320,10 @@ class LLMService(BaseService):
                     reason="Резервная маршрутизация по ключевым словам: аэропорт/маршрут",
                     confidence=0.72,
                 )
-            if (
-                ("зовут" in text or "name" in text)
-                and "collect_name@1.0.0" in allowset
-            ):
+            if "free_speech@2.0.0" in allowset and text.strip():
                 return RoutingDecisionData(
-                    workflow_id="collect_name@1.0.0",
-                    reason="Резервная маршрутизация по ключевому слову: имя",
-                    confidence=0.6,
-                )
-            if (
-                any(k in text for k in ["аэропорт", "airport", "погода", "weather"])
-                and "airports_and_weather@1.0.0" in allowset
-            ):
-                return RoutingDecisionData(
-                    workflow_id="airports_and_weather@1.0.0",
-                    reason="Резервная маршрутизация по ключевым словам: аэропорт/погода",
-                    confidence=0.6,
-                )
-            if "no_found_command@2.0.0" in allowset and text.strip():
-                return RoutingDecisionData(
-                    workflow_id="no_found_command@2.0.0",
-                    reason="Резервная маршрутизация: неизвестная команда",
+                    workflow_id="free_speech@2.0.0",
+                    reason="Резервная маршрутизация: свободный диалог",
                     confidence=0.35,
                 )
             if "echo@2.0.0" in allowset:
@@ -333,12 +331,6 @@ class LLMService(BaseService):
                     workflow_id="echo@2.0.0",
                     reason="Резервная маршрутизация: echo",
                     confidence=0.3,
-                )
-            if "echo@1.0.0" in allowset:
-                return RoutingDecisionData(
-                    workflow_id="echo@1.0.0",
-                    reason="Резервная маршрутизация: echo",
-                    confidence=0.4,
                 )
             if allowlist:
                 return RoutingDecisionData(
@@ -377,6 +369,8 @@ class LLMService(BaseService):
         if normalized_id and normalized_id != parsed.workflow_id:
             parsed = parsed.model_copy(update={"workflow_id": normalized_id})
 
+        if parsed.workflow_id not in SUPPORTED_ROUTING_WORKFLOW_IDS:
+            return _fallback()
         if allowset and parsed.workflow_id not in allowset:
             return _fallback()
         return parsed
@@ -404,12 +398,10 @@ class LLMService(BaseService):
             "findnearestairport": "find_nearest_airport@2.0.0",
             "nearestairportroute": "find_nearest_airport@2.0.0",
             "nearestairport": "find_nearest_airport@2.0.0",
+            "freespeech200": "free_speech@2.0.0",
+            "freespeech": "free_speech@2.0.0",
             "echo200": "echo@2.0.0",
             "echo": "echo@2.0.0",
-            "nofoundcommand200": "no_found_command@2.0.0",
-            "nofoundcommand": "no_found_command@2.0.0",
-            "unknowncommand": "no_found_command@2.0.0",
-            "unknown": "no_found_command@2.0.0",
         }
         mapped = alias_map.get(key)
         if not mapped:

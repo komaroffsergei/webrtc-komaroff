@@ -10,7 +10,7 @@
 - `src_langgraph` — runtime сценариев на LangGraph.
 - `src_langgraph_rb` — Ruby workflow runtime for migrated сценариев (`free_speech`, `where_my_flight`, `find_nearest_airport`) plus DSL/catalog.
 - `src_langgraph_rb_node` — Ruby workflow runtime на `AsyncGraph` с native graph authoring и direct-start сценариев.
-- `src_llm` — gateway к модели (Ollama/remote).
+- `src_llm` — gateway к модели (Ollama/remote); routing normalization держит только текущие workflow IDs: `where_my_flight@2.0.0`, `find_nearest_airport@2.0.0`, `free_speech@2.0.0`, `echo@2.0.0`.
 - `src_api_gateway` — tools (`nats.tools.*`) для сценариев.
 - `src_postgres` — БД runtime.
 - `nats` — шина сообщений.

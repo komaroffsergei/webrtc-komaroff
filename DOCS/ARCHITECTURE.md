@@ -582,6 +582,9 @@ Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-k
   - `nats.llm.<user_id>`
 - outbound:
   - HTTP `POST {OLLAMA_URL}/api/chat`
+- routing normalization:
+  - поддерживаются только `where_my_flight@2.0.0`, `find_nearest_airport@2.0.0`, `free_speech@2.0.0`, `echo@2.0.0`
+  - legacy IDs не прокидываются дальше в runtime selection; invalid router output деградирует в текущий supported fallback
 - typical deploy target:
   - `https://nats2ollama.gis-master.ru`
 

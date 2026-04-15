@@ -1,13 +1,14 @@
 import asyncio
 from fractions import Fraction
-from typing import List
 
 import av
 import numpy as np
 from av import AudioFrame
 
+from .base import FanOutNode
 
-class TrackSourceNode:
+
+class TrackSourceNode(FanOutNode):
     """
     Audio source node wrapping an aiortc MediaStreamTrack and normalizing audio:
     - Fixed frame duration (frame_duration_ms)
@@ -38,6 +39,7 @@ class TrackSourceNode:
             target_output_format: PyAV audio format string; default 's16p' (planar int16).
             target_channels: output channel count (1=mono, 2=stereo).
         """
+        super().__init__()
         self.track = track
         self.frame_duration_ms = frame_duration_ms
         self.target_rate = target_rate
@@ -52,7 +54,6 @@ class TrackSourceNode:
             rate=self.target_rate,
         )
 
-        self.queues: List[asyncio.Queue] = []
         self.running = False
 
         self._time_base = Fraction(1, self.target_rate)
@@ -68,23 +69,6 @@ class TrackSourceNode:
         """
         return self._samples_per_frame
 
-    def subscribe(self) -> asyncio.Queue:
-        """Subscribe to normalized frames stream.
-
-        Returns a new asyncio.Queue which will receive AudioFrame items and
-        a terminal None (EOF) when the source stops.
-        """
-        q = asyncio.Queue()
-        self.queues.append(q)
-        return q
-
-    def unsubscribe(self, q: asyncio.Queue) -> None:
-        """Unsubscribe a previously returned queue to allow GC of buffered frames."""
-        try:
-            self.queues.remove(q)
-        except ValueError:
-            pass
-
     async def start(self) -> None:
         """Run producer loop and fan-out normalized frames to subscribers.
 
@@ -98,27 +82,11 @@ class TrackSourceNode:
 
         try:
             async for frame in self._normalized_chunk_stream():
-                for q in list(self.queues):
-                    try:
-                        q.put_nowait(frame)
-                    except asyncio.QueueFull:
-                        # drop-oldest policy until we can enqueue
-                        while True:
-                            try:
-                                _ = q.get_nowait()
-                            except asyncio.QueueEmpty:
-                                break
-                            try:
-                                q.put_nowait(frame)
-                                break
-                            except asyncio.QueueFull:
-                                continue
+                await self.fan_out(frame)
         except asyncio.CancelledError:
             raise
         finally:
-            for q in list(self.queues):
-                q.put_nowait(None)
-                self.unsubscribe(q)
+            await self.close_downstreams()
             self.running = False
 
     def _normalize_pcm_shape(self, pcm: np.ndarray, rf: AudioFrame) -> np.ndarray:
@@ -200,4 +168,3 @@ class TrackSourceNode:
                     next_pts += spf
                     yield out
                     i += take
-

@@ -53,6 +53,31 @@ class AgentRunner:
         workflow = await self._run_with_optimistic_lock(req=req, session_id=session_id, runtime=runtime)
         return RunnerResult(session_id=session_id, workflow=workflow)
 
+    @staticmethod
+    def _failed_workflow_response(
+        *,
+        trace_id,
+        correlation_id,
+        request_id,
+        session_id,
+        ts_ms: int,
+        code: str,
+        message: str,
+        next_runtime: WorkflowRuntimeState,
+        details: dict[str, Any] | None = None,
+    ) -> WorkflowRunResponse:
+        return WorkflowRunResponse(
+            trace_id=trace_id,
+            correlation_id=correlation_id,
+            request_id=request_id,
+            session_id=session_id,
+            ts_ms=ts_ms,
+            status="FAILED",
+            result="",
+            errors=[ErrorInfo(code=code, message=message, details=details)],
+            next_runtime=next_runtime,
+        )
+
     async def _run_with_optimistic_lock(
         self,
         *,
@@ -69,15 +94,14 @@ class AgentRunner:
                 turn_id=edit_turn_id,
             )
             if not exists:
-                return WorkflowRunResponse(
+                return self._failed_workflow_response(
                     trace_id=req.trace_id,
                     correlation_id=correlation_id,
                     request_id=req.request_id,
                     session_id=session_id,
                     ts_ms=req.ts_ms,
-                    status="FAILED",
-                    result="",
-                    errors=[ErrorInfo(code="edit_turn_not_found", message="Edited turn was not found in session history.")],
+                    code="edit_turn_not_found",
+                    message="Edited turn was not found in session history.",
                     next_runtime=runtime,
                 )
             # Edits rebuild the branch from the edited user turn, so pending workflow lock must be reset.
@@ -131,15 +155,14 @@ class AgentRunner:
                 return self._inject_turn_ids(workflow_resp, user_turn_id=user_turn_id, assistant_turn_id=assistant_turn_id)
             except ValueError as exc:
                 if str(exc) == "edit_turn_not_found":
-                    return WorkflowRunResponse(
+                    return self._failed_workflow_response(
                         trace_id=req.trace_id,
                         correlation_id=correlation_id,
                         request_id=req.request_id,
                         session_id=session_id,
                         ts_ms=req.ts_ms,
-                        status="FAILED",
-                        result="",
-                        errors=[ErrorInfo(code="edit_turn_not_found", message="Edited turn was not found in session history.")],
+                        code="edit_turn_not_found",
+                        message="Edited turn was not found in session history.",
                         next_runtime=runtime,
                     )
                 last_error = exc
@@ -153,21 +176,15 @@ class AgentRunner:
                 runtime = await load_runtime_state(self.db, session_id=session_id)
 
         logger.exception("runtime_state update failed after retries. session_id=%s", str(session_id))
-        return WorkflowRunResponse(
+        return self._failed_workflow_response(
             trace_id=req.trace_id,
             correlation_id=correlation_id,
             request_id=req.request_id,
             session_id=session_id,
             ts_ms=req.ts_ms,
-            status="FAILED",
-            result="",
-            errors=[
-                ErrorInfo(
-                    code="runtime_state_conflict",
-                    message="Failed to update runtime state due to concurrent updates.",
-                    details={"error": str(last_error)} if last_error else None,
-                )
-            ],
+            code="runtime_state_conflict",
+            message="Failed to update runtime state due to concurrent updates.",
+            details={"error": str(last_error)} if last_error else None,
             next_runtime=runtime,
         )
 
@@ -207,27 +224,18 @@ class AgentRunner:
                     str(req.request_id),
                     str(req.session_id) if req.session_id else "<none>",
                 )
-                return WorkflowRunResponse(
+                return self._failed_workflow_response(
                     trace_id=req.trace_id,
                     correlation_id=req.correlation_id,
                     request_id=req.request_id,
                     session_id=req.session_id,
                     ts_ms=now_ts_ms(),
-                    status="FAILED",
-                    result="",
-                    errors=[
-                        ErrorInfo(
-                            code="workflow_timeout",
-                            message=(
-                                "Сервис сценариев не успел ответить вовремя. "
-                                "Попробуйте повторить запрос."
-                            ),
-                            details={
-                                "subject": self.workflow_subject,
-                                "timeout_s": self.workflow_timeout_s,
-                            },
-                        )
-                    ],
+                    code="workflow_timeout",
+                    message="Сервис сценариев не успел ответить вовремя. Попробуйте повторить запрос.",
+                    details={
+                        "subject": self.workflow_subject,
+                        "timeout_s": self.workflow_timeout_s,
+                    },
                     next_runtime=req.runtime,
                 )
             except NoRespondersError as exc:
@@ -245,28 +253,22 @@ class AgentRunner:
                 await asyncio.sleep(self.workflow_no_responders_retry_delay_s)
 
         waited_s = self.workflow_no_responders_retries * self.workflow_no_responders_retry_delay_s
-        return WorkflowRunResponse(
+        return self._failed_workflow_response(
             trace_id=req.trace_id,
             correlation_id=req.correlation_id,
             request_id=req.request_id,
             session_id=req.session_id,
             ts_ms=now_ts_ms(),
-            status="FAILED",
-            result="",
-            errors=[
-                ErrorInfo(
-                    code="workflow_unavailable",
-                    message=(
-                        "Сервис сценариев временно недоступен "
-                        f"(нет responder для NATS subject `{self.workflow_subject}` ~{waited_s:.0f}с). "
-                        "Повторите запрос через несколько секунд."
-                    ),
-                    details={
-                        "subject": self.workflow_subject,
-                        "error": str(last_exc) if last_exc else None,
-                    },
-                )
-            ],
+            code="workflow_unavailable",
+            message=(
+                "Сервис сценариев временно недоступен "
+                f"(нет responder для NATS subject `{self.workflow_subject}` ~{waited_s:.0f}с). "
+                "Повторите запрос через несколько секунд."
+            ),
+            details={
+                "subject": self.workflow_subject,
+                "error": str(last_exc) if last_exc else None,
+            },
             next_runtime=req.runtime,
         )
 
