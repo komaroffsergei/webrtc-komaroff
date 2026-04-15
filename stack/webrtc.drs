@@ -347,6 +347,23 @@ Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisp
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
+# Staged file ASR + speaker separation analysis service. Same binary as the other
+# py_faster_whisper deployments, but this deployment serves /whisper-staged and
+# exposes isolated Transcribe / Diarize / Combine steps on cached artifacts.
+Service :py_faster_whisper_staged, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-staged', port: 8090
+
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        STREAM_BRIDGE_ENABLED: '0',
+        WEBUI_BASE_PATH: '/whisper-staged',
+        WEBUI_PAGE_MODE: 'staged',
+        WEBUI_HOME_LINK_PATH: '/whisper-diarize',
+        STACK_SERVICE_NAME: 'stt_whisper_to_nats_staged'
+      )
+
+  entrypoint 'python -m src.stt_whisper_to_nats'
+end
+
 
 
 # Debug shell for manual NATS inspection inside the stack.
