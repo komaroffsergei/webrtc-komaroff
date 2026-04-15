@@ -102,12 +102,14 @@ docker compose up -d --build
 - `/whisper` для plain transcription без diarization
 - `/whisper-diarize` для combined flow: plain text + speaker separation
 
-Оба маршрута публикуют NATS file-job, worker нормализует audio в `mono 16k`, режет его на чанки и отправляет transcription в `linto_stt_whisper_http`. Только `/whisper-diarize` дополнительно ждёт `pyannote_diarization` и показывает speaker progress/result через отдельные diarization subjects.
+Оба маршрута стартуют file job локально внутри `py_faster_whisper` WebUI runtime. Дальше in-process runner нормализует audio в `mono 16k`, режет его на чанки и отправляет transcription в `linto_stt_whisper_http`, а NATS остаётся каналом progress/result updates для browser.
+
+`/whisper-diarize` дополнительно делает submit-time probe в `pyannote_diarization /healthz`. Если backend жив, запускается combined flow со speaker progress/result через отдельные diarization subjects. Если backend недоступен, upload остаётся на `/whisper-diarize`, но продолжается как transcript-only с явной fallback reason вместо сырого `404 page not found`.
 
 Режимы ASR в этом стэке сейчас такие:
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.* -> src_core`
-- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* -> file worker -> sequential chunked LinTO HTTP`
-- `/whisper-diarize` combined file mode: `Browser -> HTTP upload + direct NATS WS -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> file worker -> LinTO HTTP + pyannote diarization`
+- `/whisper` file mode: `Browser -> HTTP upload + direct NATS WS -> local file runner -> inference.whisper.file.* -> sequential chunked LinTO HTTP`
+- `/whisper-diarize` combined file mode: `Browser -> HTTP upload + healthz probe + direct NATS WS -> local file runner -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> LinTO HTTP + optional pyannote diarization`
 
 Подробная архитектура, схемы сервисов, протоколы, payload-ы и внешние интеграции: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 Ruby runtime code map: [`src_langgraph_rb/CODEMAP.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_langgraph_rb/CODEMAP.md)

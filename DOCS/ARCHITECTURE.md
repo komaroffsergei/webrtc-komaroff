@@ -71,7 +71,7 @@ flowchart LR
     G8["src_core ingress"]
   end
 
-  subgraph LocalBus["Local buses / subjects"]
+  subgraph LocalBus["Local buses / file-control"]
     G9["nats.agent.&lt;user_id&gt;"]
     G10["nats.agent.history.&lt;user_id&gt;"]
     G12["nats.workflow.run.python"]
@@ -81,10 +81,11 @@ flowchart LR
     G15["nats.tools.&lt;tool_name&gt;"]
     G16["inference.whisper.stream.&lt;session_id&gt;"]
     G17["inference.whisper.text.&lt;session_id&gt;"]
-    G18["inference.whisper.file.job"]
+    G18["start_job(...) in-process"]
     G19["inference.whisper.file.event.&lt;job_id&gt;"]
     G20["inference.whisper.file.session.&lt;session_id&gt;"]
-    G21["inference.whisper.file.cancel.&lt;job_id&gt;"]
+    G21["POST /whisper/api/reset-session"]
+    G22["inference.whisper.file.diar_text.session.&lt;session_id&gt;"]
   end
 
   subgraph Workflow["Workflow backend"]
@@ -100,7 +101,7 @@ flowchart LR
 
   subgraph Asr["ASR bridge"]
     G30["stt_whisper_to_nats / py_faster_whisper live path"]
-    G31["file worker"]
+    G31["in-process file runner"]
     G32["src_core ASR receive + event publish"]
     G33["linto_stt_whisper_http"]
   end
@@ -130,6 +131,7 @@ flowchart LR
   G2 --> G7 --> G18
   G2 --> G7 --> G19
   G2 --> G7 --> G20
+  G2 --> G7 --> G22
   G3 --> G21 --> G31
 
   G8 -->|"AgentInboundRequest"| G9 --> G23
@@ -138,6 +140,7 @@ flowchart LR
   G18 --> G31 -->|"normalize -> chunk loop -> HTTP /transcribe"| G33
   G31 -->|"progress/result JSON"| G19 --> G44
   G31 -->|"progress/result JSON"| G20 --> G44
+  G31 -->|"speaker progress/result JSON"| G22 --> G44
 
   G23 -->|"runtime state read/write"| G28
   G23 -->|"WorkflowRunRequest"| G12 --> G24
@@ -214,10 +217,11 @@ flowchart LR
 | Tool discovery | `nats.tools.discover` | callers | `src_api_gateway` | discovery request/response |
 | Live ASR input | `inference.whisper.stream.<session_id>` | `src_core` | `py_faster_whisper` / `stt_whisper_to_nats` | binary ASR packet |
 | Live ASR output | `inference.whisper.text.<session_id>` | `py_faster_whisper` / `stt_whisper_to_nats` | `src_core` | JSON pending/final/error |
-| File ASR job | `inference.whisper.file.job` | `/whisper` WebUI handler | file worker | JSON job payload |
-| File ASR event | `inference.whisper.file.event.<job_id>` | file worker or upload handler | browser via NATS WS | JSON progress/result |
-| File ASR session event | `inference.whisper.file.session.<session_id>` | file worker or upload handler | browser via NATS WS | JSON progress/result for session |
-| File ASR cancel | `inference.whisper.file.cancel.<job_id>` | browser | file worker | JSON cancel request |
+| File ASR start | `POST /whisper/api/file-transcribe` | browser upload handler | in-process file runner | multipart upload + local job payload |
+| File ASR event | `inference.whisper.file.event.<job_id>` | file runner or upload handler | browser via NATS WS | JSON progress/result |
+| File ASR session event | `inference.whisper.file.session.<session_id>` | file runner or upload handler | browser via NATS WS | JSON progress/result for session |
+| File diarization session event | `inference.whisper.file.diar_text.session.<session_id>` | file runner / pyannote sidecar | browser via NATS WS | speaker progress/result for `/whisper-diarize` |
+| File ASR reset | `POST /whisper/api/reset-session` | browser | in-process file runner | JSON or form payload with `session_id` |
 
 ### `rag-stack` and H100 inference subjects
 
@@ -455,13 +459,13 @@ flowchart LR
     F0["Browser file + metadata"]
     F1["/whisper/api/file-transcribe"]
     F2["upload handler"]
-    F3["inference.whisper.file.job"]
+    F3["start_job(...) in-process"]
     F4["inference.whisper.file.event.&lt;job_id&gt; queued"]
     F5["inference.whisper.file.session.&lt;session_id&gt; queued"]
   end
 
   subgraph Worker["File worker pipeline"]
-    F6["file worker"]
+    F6["in-process file runner"]
     F7["normalize audio -> mono 16k"]
     F8["chunk loop"]
     F9["LinTO HTTP /transcribe"]
@@ -473,7 +477,7 @@ flowchart LR
   subgraph BrowserResult["Browser result path"]
     F13["Browser /ws subscriptions"]
     F14["Browser progress UI"]
-    F15["inference.whisper.file.cancel.&lt;job_id&gt;"]
+    F15["/whisper/api/reset-session"]
     F16["Browser cancel action"]
   end
 
