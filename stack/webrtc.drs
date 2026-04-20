@@ -100,6 +100,7 @@ WHISPER_DIARIZATION_ENV = {
   DIARIZATION_RETRY_LIMIT: '0',
   DIARIZATION_AUDIO_FORMAT: 'auto',
   DIARIZATION_WAV_MAX_UPLOAD_MB: '64',
+  DIARIZATION_AUDIO_MAX_UPLOAD_MB: '64',
   DIARIZATION_NUM_SPEAKERS: '',
   DIARIZATION_MIN_SPEAKERS: '',
   DIARIZATION_MAX_SPEAKERS: '',
@@ -115,7 +116,7 @@ WHISPER_DIARIZATION_EVENT_ENV = {
   ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.'
 }
 
-WHISPER_BENCH_CONFIGS_JSON = '[{"id":"pyannote_aac_transcode_shared_mig","label":"pyannote AAC transcode shared MIG","engine":"pyannote","audio_format":"aac","runtime_label":"H100 MIG-750 shared","notes":"Legacy baseline: normalized WAV re-encoded to compact AAC before pyannote."},{"id":"pyannote_auto_audio_shared_mig","label":"pyannote auto audio shared MIG","engine":"pyannote","audio_format":"auto","runtime_label":"H100 MIG-750 shared","notes":"Copies source AAC audio when possible; falls back to compact AAC transcode."},{"id":"pyannote_auto_audio_hints_2_8_shared_mig","label":"pyannote auto audio hints 2-8 shared MIG","engine":"pyannote","audio_format":"auto","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"Auto compact audio with broad speaker-count hints for Russian long files."}]'
+WHISPER_BENCH_CONFIGS_JSON = '[{"id":"pyannote_aac_transcode_shared_mig","label":"pyannote AAC transcode shared MIG","engine":"pyannote","audio_format":"aac","runtime_label":"H100 MIG-750 shared","notes":"Legacy baseline: normalized WAV re-encoded to compact AAC before pyannote."},{"id":"pyannote_auto_audio_shared_mig","label":"pyannote auto audio shared MIG","engine":"pyannote","audio_format":"auto","runtime_label":"H100 MIG-750 shared","notes":"Copies source AAC only under the upload guard; falls back to compact AAC transcode."},{"id":"pyannote_auto_audio_hints_2_8_shared_mig","label":"pyannote auto audio hints 2-8 shared MIG","engine":"pyannote","audio_format":"auto","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"Auto compact audio with broad speaker-count hints for Russian long files."}]'
 
 PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
