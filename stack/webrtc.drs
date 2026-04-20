@@ -382,6 +382,7 @@ Service :py_faster_whisper_bench, image: webrtc_registry['voice-chat/stt_whisper
         STACK_SERVICE_NAME: 'stt_whisper_to_nats_bench'
       )
 
+  volume name: 'whisper_bench_jobs', target: '/tmp/whisper-bench-jobs'
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
