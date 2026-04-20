@@ -98,7 +98,8 @@ WHISPER_DIARIZATION_ENV = {
   DIARIZATION_HEALTH_TIMEOUT_S: '5',
   DIARIZATION_TIMEOUT_S: '1800',
   DIARIZATION_RETRY_LIMIT: '0',
-  DIARIZATION_AUDIO_FORMAT: 'aac',
+  DIARIZATION_AUDIO_FORMAT: 'auto',
+  DIARIZATION_WAV_MAX_UPLOAD_MB: '64',
   DIARIZATION_NUM_SPEAKERS: '',
   DIARIZATION_MIN_SPEAKERS: '',
   DIARIZATION_MAX_SPEAKERS: '',
@@ -114,7 +115,7 @@ WHISPER_DIARIZATION_EVENT_ENV = {
   ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.'
 }
 
-WHISPER_BENCH_CONFIGS_JSON = '[{"id":"pyannote_aac_shared_mig","label":"pyannote AAC shared MIG","engine":"pyannote","audio_format":"aac","runtime_label":"H100 MIG-750 shared","notes":"Current baseline: AAC artifact plus existing pyannote endpoint."},{"id":"pyannote_aac_hints_2_8_shared_mig","label":"pyannote AAC hints 2-8 shared MIG","engine":"pyannote","audio_format":"aac","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"Compact AAC upload with broad speaker-count hints for long Russian files."},{"id":"pyannote_wav_shared_mig","label":"pyannote WAV shared MIG","engine":"pyannote","audio_format":"wav","runtime_label":"H100 MIG-750 shared","notes":"Skips AAC artifact creation and uploads normalized.wav."},{"id":"pyannote_wav_hints_2_8_shared_mig","label":"pyannote WAV hints 2-8 shared MIG","engine":"pyannote","audio_format":"wav","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"WAV path with broad speaker-count hints for Russian interviews, stories, and calls."}]'
+WHISPER_BENCH_CONFIGS_JSON = '[{"id":"pyannote_aac_transcode_shared_mig","label":"pyannote AAC transcode shared MIG","engine":"pyannote","audio_format":"aac","runtime_label":"H100 MIG-750 shared","notes":"Legacy baseline: normalized WAV re-encoded to compact AAC before pyannote."},{"id":"pyannote_auto_audio_shared_mig","label":"pyannote auto audio shared MIG","engine":"pyannote","audio_format":"auto","runtime_label":"H100 MIG-750 shared","notes":"Copies source AAC audio when possible; falls back to compact AAC transcode."},{"id":"pyannote_auto_audio_hints_2_8_shared_mig","label":"pyannote auto audio hints 2-8 shared MIG","engine":"pyannote","audio_format":"auto","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"Auto compact audio with broad speaker-count hints for Russian long files."}]'
 
 PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }

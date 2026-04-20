@@ -30,7 +30,7 @@ docker compose up -d --build
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.*`
 - `/whisper` file mode: `Browser -> HTTP upload + NATS WS -> inference.whisper.file.* -> chunked LinTO HTTP`
 - `/whisper-diarize` combined mode: `Browser -> HTTP upload + NATS WS -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> chunked LinTO HTTP + pyannote diarization`
-- `/whisper-staged` and `/whisper-bench`: `Browser -> HTTP upload + reusable normalized.wav -> separate LinTO HTTP and pyannote runs -> cached combine`
+- `/whisper-staged` and `/whisper-bench`: `Browser -> HTTP upload + reusable normalized.wav + compact diarization audio artifact -> separate LinTO HTTP and pyannote runs -> cached combine`
 
 Подробная архитектура, схемы сервисов, payload-ы и `rag-stack` integration: [`ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 
