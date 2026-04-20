@@ -19,15 +19,18 @@ docker compose up -d --build
 - API: `http://127.0.0.1:8101/api`
 - NATS WS: `ws://127.0.0.1:9222`
 
-Для deploy-стека `webrtc.drs` есть два file WebUI route:
+Для deploy-стека `webrtc.drs` есть четыре file WebUI route:
 - `/whisper` принимает `wav`, `mp3`, `m4a`, `mp4`, создаёт async file-job через NATS и отдаёт только plain text transcription
 - `/whisper-diarize` использует тот же file-job pipeline, но дополнительно показывает live speaker-separation progress и финальный speaker transcript
+- `/whisper-staged` разделяет file-job на Prepare, Transcribe, Diarize и Combine, чтобы смотреть isolated timings
+- `/whisper-bench` запускает staged flow по сохранённым benchmark-конфигурациям и хранит результаты с RTF, speaker count и quality proxy
 - live voice ASR path `inference.whisper.*` не меняется
 
 Текущие режимы ASR:
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> LinTO HTTP -> inference.whisper.text.*`
 - `/whisper` file mode: `Browser -> HTTP upload + NATS WS -> inference.whisper.file.* -> chunked LinTO HTTP`
 - `/whisper-diarize` combined mode: `Browser -> HTTP upload + NATS WS -> inference.whisper.file.* + inference.whisper.file.diar_text.* -> chunked LinTO HTTP + pyannote diarization`
+- `/whisper-staged` and `/whisper-bench`: `Browser -> HTTP upload + reusable normalized.wav -> separate LinTO HTTP and pyannote runs -> cached combine`
 
 Подробная архитектура, схемы сервисов, payload-ы и `rag-stack` integration: [`ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 

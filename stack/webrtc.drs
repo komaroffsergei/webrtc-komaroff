@@ -98,6 +98,7 @@ WHISPER_DIARIZATION_ENV = {
   DIARIZATION_HEALTH_TIMEOUT_S: '5',
   DIARIZATION_TIMEOUT_S: '1800',
   DIARIZATION_RETRY_LIMIT: '0',
+  DIARIZATION_AUDIO_FORMAT: 'aac',
   DIARIZATION_NUM_SPEAKERS: '',
   DIARIZATION_MIN_SPEAKERS: '',
   DIARIZATION_MAX_SPEAKERS: '',
@@ -112,6 +113,8 @@ WHISPER_DIARIZATION_EVENT_ENV = {
   ASR_FILE_DIAR_TEXT_EVENT_PREFIX: 'inference.whisper.file.diar_text.event.',
   ASR_FILE_DIAR_TEXT_SESSION_EVENT_PREFIX: 'inference.whisper.file.diar_text.session.'
 }
+
+WHISPER_BENCH_CONFIGS_JSON = '[{"id":"pyannote_aac_shared_mig","label":"pyannote AAC shared MIG","engine":"pyannote","audio_format":"aac","runtime_label":"H100 MIG-750 shared","notes":"Current baseline: AAC artifact plus existing pyannote endpoint."},{"id":"pyannote_wav_shared_mig","label":"pyannote WAV shared MIG","engine":"pyannote","audio_format":"wav","runtime_label":"H100 MIG-750 shared","notes":"Skips AAC artifact creation and uploads normalized.wav."},{"id":"pyannote_wav_hints_2_8_shared_mig","label":"pyannote WAV hints 2-8 shared MIG","engine":"pyannote","audio_format":"wav","min_speakers":2,"max_speakers":8,"runtime_label":"H100 MIG-750 shared","notes":"WAV path with broad speaker-count hints for Russian interviews, stories, and calls."}]'
 
 PublishPorts core: [
   { target: 19303, published: 19303, protocol: 'udp', mode: 'host' }
@@ -359,6 +362,24 @@ Service :py_faster_whisper_staged, image: webrtc_registry['voice-chat/stt_whispe
         WEBUI_PAGE_MODE: 'staged',
         WEBUI_HOME_LINK_PATH: '/whisper-diarize',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats_staged'
+      )
+
+  entrypoint 'python -m src.stt_whisper_to_nats'
+end
+
+# Benchmark UI for non-streaming transcription + diarization experiments. It
+# keeps results separate from /whisper-staged while using the same deployed image.
+Service :py_faster_whisper_bench, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-bench', port: 8090
+
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        STREAM_BRIDGE_ENABLED: '0',
+        WEBUI_BASE_PATH: '/whisper-bench',
+        WEBUI_PAGE_MODE: 'bench',
+        WEBUI_HOME_LINK_PATH: '/whisper-staged',
+        FILE_JOB_STORAGE_DIR: '/tmp/whisper-bench-jobs',
+        BENCH_CONFIGS_JSON: WHISPER_BENCH_CONFIGS_JSON,
+        STACK_SERVICE_NAME: 'stt_whisper_to_nats_bench'
       )
 
   entrypoint 'python -m src.stt_whisper_to_nats'
