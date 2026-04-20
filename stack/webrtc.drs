@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-20-whisper-summary-lock-4'
+WHISPER_STACK_REVISION = '2026-04-20-whisper-summary-lock-5'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_LOCK_URL = 'http://web-rtc-komaroff_whisper_file_job_lock:8091'
 
@@ -101,7 +101,7 @@ WHISPER_DIARIZATION_ENV = {
   DIARIZATION_HEALTH_HOST: 'pyannote_diarization.h100.local',
   DIARIZATION_HEALTH_TIMEOUT_S: '5',
   DIARIZATION_TIMEOUT_S: '1800',
-  DIARIZATION_RETRY_LIMIT: '0',
+  DIARIZATION_RETRY_LIMIT: '1',
   DIARIZATION_AUDIO_FORMAT: 'auto',
   DIARIZATION_WAV_MAX_UPLOAD_MB: '64',
   DIARIZATION_AUDIO_MAX_UPLOAD_MB: '64',
