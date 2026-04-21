@@ -10,6 +10,4 @@ ADD . .
 
 CMD ["sh", "-c", "\
     cat webrtc.drs  | dry-stack swarm_deploy --tls-domain=gis-master.ru -x ssh://gis-master.ru -- --prune \n\
-    docker --context dry-ssh__gis-master_ru service ps --no-trunc web-rtc-komaroff_py_faster_whisper_summary || true \n\
-    docker --context dry-ssh__gis-master_ru service logs --tail 200 web-rtc-komaroff_py_faster_whisper_summary || true \n\
 "]
