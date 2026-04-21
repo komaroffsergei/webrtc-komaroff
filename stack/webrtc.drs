@@ -164,7 +164,7 @@ WHISPER_BENCH_CONFIGS_JSON = <<~JSON
     "diarization_http_host": "sortformer-diarization.h100.local",
     "diarization_health_url": "http://192.168.28.134/healthz",
     "diarization_health_host": "sortformer-diarization.h100.local",
-    "runtime_label": "H100 NeMo sidecar",
+    "runtime_label": "H100 3g.47GB MIG shared with vLLM",
     "sortformer_profile": "very_high_latency",
     "batch_size": 1,
     "num_workers": 0,
