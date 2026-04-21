@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-21-whisper-diarization-cases-3'
+WHISPER_STACK_REVISION = '2026-04-21-whisper-diarization-cases-4'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_LOCK_URL = 'http://web-rtc-komaroff_whisper_file_job_lock:8091'
 
@@ -406,6 +406,7 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(
         DIARIZATION_ENABLED: '0',
         WEBUI_BASE_PATH: '/whisper-trasncription',
+        WEBUI_BASE_PATH_ALIASES: '/whisper-trascripton,/whisper-transcription,/whisper',
         WEBUI_PAGE_MODE: 'transcribe_only',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats'
       )
