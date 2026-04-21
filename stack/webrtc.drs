@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-20-whisper-summary-lock-5'
+WHISPER_STACK_REVISION = '2026-04-21-whisper-diarization-cases-1'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_LOCK_URL = 'http://web-rtc-komaroff_whisper_file_job_lock:8091'
 
@@ -96,9 +96,9 @@ WHISPER_STREAM_ENV = {
 WHISPER_DIARIZATION_ENV = {
   DIARIZATION_ENABLED: '1',
   DIARIZATION_HTTP_URL: 'http://192.168.28.134/diarize',
-  DIARIZATION_HTTP_HOST: 'pyannote_diarization.h100.local',
+  DIARIZATION_HTTP_HOST: 'pyannote_diarization_isolated.h100.local',
   DIARIZATION_HEALTH_URL: 'http://192.168.28.134/healthz',
-  DIARIZATION_HEALTH_HOST: 'pyannote_diarization.h100.local',
+  DIARIZATION_HEALTH_HOST: 'pyannote_diarization_isolated.h100.local',
   DIARIZATION_HEALTH_TIMEOUT_S: '5',
   DIARIZATION_TIMEOUT_S: '1800',
   DIARIZATION_RETRY_LIMIT: '1',
@@ -106,8 +106,9 @@ WHISPER_DIARIZATION_ENV = {
   DIARIZATION_WAV_MAX_UPLOAD_MB: '64',
   DIARIZATION_AUDIO_MAX_UPLOAD_MB: '64',
   DIARIZATION_NUM_SPEAKERS: '',
-  DIARIZATION_MIN_SPEAKERS: '',
-  DIARIZATION_MAX_SPEAKERS: '',
+  DIARIZATION_MIN_SPEAKERS: '2',
+  DIARIZATION_MAX_SPEAKERS: '8',
+  DIARIZATION_EXTRA_FIELDS_JSON: '{"runtime":"isolated","segmentation_batch_size":"4","embedding_batch_size":"4"}',
   DIARIZATION_TURN_BREAK_S: '1.0',
   DIARIZATION_SYNTAX_POSTPROCESS_DEFAULT: '0',
   DIARIZATION_SYNTAX_SENTENCE_GAP_S: '1.2',
@@ -123,97 +124,57 @@ WHISPER_DIARIZATION_EVENT_ENV = {
 WHISPER_BENCH_CONFIGS_JSON = <<~JSON
 [
   {
-    "id": "pyannote_aac_transcode_shared_mig",
-    "label": "pyannote AAC transcode shared MIG",
-    "engine": "pyannote",
-    "audio_format": "aac",
-    "runtime_label": "H100 MIG-750 shared",
-    "notes": "Legacy baseline: normalized WAV re-encoded to compact AAC before pyannote."
-  },
-  {
-    "id": "pyannote_auto_audio_shared_mig",
-    "label": "pyannote auto audio shared MIG",
-    "engine": "pyannote",
-    "audio_format": "auto",
-    "runtime_label": "H100 MIG-750 shared",
-    "notes": "Copies source AAC only under the upload guard; falls back to compact AAC transcode."
-  },
-  {
-    "id": "pyannote_auto_audio_hints_2_8_shared_mig",
-    "label": "pyannote auto audio hints 2-8 shared MIG",
-    "engine": "pyannote",
-    "audio_format": "auto",
-    "min_speakers": 2,
-    "max_speakers": 8,
-    "runtime_label": "H100 MIG-750 shared",
-    "notes": "Auto compact audio with broad speaker-count hints for Russian long files."
-  },
-  {
-    "id": "pyannote_isolated_mig_batch_2",
-    "label": "pyannote isolated MIG batch 2",
+    "id": "pyannote_selected_isolated_b4_auto",
+    "case_id": "pyannote_diarization",
+    "label": "pyannote selected isolated batch 4",
     "engine": "pyannote",
     "audio_format": "auto",
     "min_speakers": 2,
     "max_speakers": 8,
     "diarization_http_url": "http://192.168.28.134/diarize",
-    "diarization_http_host": "pyannote_diarization_b2.h100.local",
+    "diarization_http_host": "pyannote_diarization_isolated.h100.local",
     "diarization_health_url": "http://192.168.28.134/healthz",
-    "diarization_health_host": "pyannote_diarization_b2.h100.local",
+    "diarization_health_host": "pyannote_diarization_isolated.h100.local",
     "runtime_label": "H100 MIG-49 separate from LinTO",
-    "notes": "Auto compact audio, speaker hints 2-8, pyannote segmentation/embedding batch size 2 on a MIG slice separate from ASR."
+    "segmentation_batch_size": 4,
+    "embedding_batch_size": 4,
+    "notes": "Default selected path: isolated pyannote service, request-level batch 4, auto compact audio, Russian long-file speaker hints 2-8."
   },
   {
-    "id": "pyannote_isolated_mig_batch_4",
-    "label": "pyannote isolated MIG batch 4",
-    "engine": "pyannote",
-    "audio_format": "auto",
-    "min_speakers": 2,
-    "max_speakers": 8,
-    "diarization_http_url": "http://192.168.28.134/diarize",
-    "diarization_http_host": "pyannote_diarization_b4.h100.local",
-    "diarization_health_url": "http://192.168.28.134/healthz",
-    "diarization_health_host": "pyannote_diarization_b4.h100.local",
-    "runtime_label": "H100 MIG-49 separate from LinTO",
-    "notes": "Auto compact audio, speaker hints 2-8, pyannote segmentation/embedding batch size 4 on a MIG slice separate from ASR."
-  },
-  {
-    "id": "pyannote_isolated_mig_batch_8",
-    "label": "pyannote isolated MIG batch 8",
-    "engine": "pyannote",
-    "audio_format": "auto",
-    "min_speakers": 2,
-    "max_speakers": 8,
-    "diarization_http_url": "http://192.168.28.134/diarize",
-    "diarization_http_host": "pyannote_diarization_b8.h100.local",
-    "diarization_health_url": "http://192.168.28.134/healthz",
-    "diarization_health_host": "pyannote_diarization_b8.h100.local",
-    "runtime_label": "H100 MIG-49 separate from LinTO",
-    "notes": "Auto compact audio, speaker hints 2-8, pyannote segmentation/embedding batch size 8 on a MIG slice separate from ASR."
-  },
-  {
-    "id": "nvidia_sortformer_v21_4spk_ru_check",
-    "label": "NVIDIA Sortformer v2.1 4spk Russian check",
-    "engine": "nemo_sortformer",
-    "audio_format": "auto",
-    "diarization_http_url": "http://192.168.28.134/diarize",
-    "diarization_http_host": "sortformer_diarization.h100.local",
-    "diarization_health_url": "http://192.168.28.134/healthz",
-    "diarization_health_host": "sortformer_diarization.h100.local",
-    "runtime_label": "H100 experimental sidecar",
-    "max_speakers": 4,
-    "notes": "Benchmark-only candidate for speed; expected to need Russian accuracy validation and max 4 speakers."
-  },
-  {
-    "id": "sherpa_onnx_diarization_ru_check",
-    "label": "sherpa-onnx diarization Russian check",
+    "id": "sherpa_onnx_default_ru_check",
+    "case_id": "sherpa_onnx_diarization",
+    "label": "sherpa-onnx default Russian check",
     "engine": "sherpa_onnx",
     "audio_format": "auto",
     "diarization_http_url": "http://192.168.28.134/diarize",
     "diarization_http_host": "sherpa_onnx_diarization.h100.local",
     "diarization_health_url": "http://192.168.28.134/healthz",
     "diarization_health_host": "sherpa_onnx_diarization.h100.local",
-    "runtime_label": "ONNX experimental sidecar",
-    "notes": "Benchmark-only lightweight fallback candidate; model paths must be mounted/configured before real runs."
+    "runtime_label": "ONNX sidecar",
+    "cluster_threshold": "0.5",
+    "notes": "Real sherpa-onnx sidecar; used to validate CPU/ONNX throughput and speaker stability on Russian samples."
+  },
+  {
+    "id": "sortformer_high_latency_b1_ru_check",
+    "case_id": "sortformer_diarization",
+    "label": "Sortformer high-latency batch 1 Russian check",
+    "engine": "nemo_sortformer",
+    "audio_format": "auto",
+    "diarization_http_url": "http://192.168.28.134/diarize",
+    "diarization_http_host": "sortformer_diarization.h100.local",
+    "diarization_health_url": "http://192.168.28.134/healthz",
+    "diarization_health_host": "sortformer_diarization.h100.local",
+    "runtime_label": "H100 NeMo sidecar",
+    "sortformer_profile": "high_latency",
+    "batch_size": 1,
+    "num_workers": 0,
+    "chunk_len": 340,
+    "chunk_right_context": 40,
+    "fifo_len": 40,
+    "spkcache_update_period": 300,
+    "spkcache_len": 188,
+    "max_speakers": 4,
+    "notes": "Real NeMo Sortformer candidate for speed; max four speakers and Russian quality must be checked locally."
   }
 ]
 JSON
@@ -433,13 +394,16 @@ Service :whisper_file_job_lock, image: webrtc_registry['voice-chat/stt_whisper_t
 end
 
 # Plain transcription service. Same binary as py_faster_whisper_diarize, but this
-# deployment serves /whisper, keeps the live stream bridge on, and disables diarization.
+# deployment serves /whisper-trasncription, keeps the live stream bridge on, and disables diarization.
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-trasncription', port: 8090
+  ingress host: HOST, path: '/whisper-trascripton', port: 8090
+  ingress host: HOST, path: '/whisper-transcription', port: 8090
   ingress host: HOST, path: '/whisper', port: 8090
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(
         DIARIZATION_ENABLED: '0',
-        WEBUI_BASE_PATH: '/whisper',
+        WEBUI_BASE_PATH: '/whisper-trasncription',
         WEBUI_PAGE_MODE: 'transcribe_only',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats'
       )
@@ -448,15 +412,16 @@ Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_na
 end
 
 # Combined file ASR + speaker separation service. Same binary as py_faster_whisper,
-# but this deployment serves /whisper-diarize, runs file-mode only, and enables diarization.
+# but this deployment serves /whisper-diarization, runs file-mode only, and enables diarization.
 Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/whisper-diarization', port: 8090
   ingress host: HOST, path: '/whisper-diarize', port: 8090
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
         STREAM_BRIDGE_ENABLED: '0',
-        WEBUI_BASE_PATH: '/whisper-diarize',
+        WEBUI_BASE_PATH: '/whisper-diarization',
         WEBUI_PAGE_MODE: 'diarize',
-        WEBUI_HOME_LINK_PATH: '/whisper',
+        WEBUI_HOME_LINK_PATH: '/whisper-trasncription',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats_diarize'
       )
 
@@ -473,7 +438,7 @@ Service :py_faster_whisper_staged, image: webrtc_registry['voice-chat/stt_whispe
         STREAM_BRIDGE_ENABLED: '0',
         WEBUI_BASE_PATH: '/whisper-staged',
         WEBUI_PAGE_MODE: 'staged',
-        WEBUI_HOME_LINK_PATH: '/whisper-diarize',
+        WEBUI_HOME_LINK_PATH: '/whisper-diarization',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats_staged'
       )
 
@@ -500,7 +465,7 @@ Service :py_faster_whisper_bench, image: webrtc_registry['voice-chat/stt_whisper
 end
 
 # Main page for all tried non-streaming transcription + diarization approaches.
-# The solution pages under /whisper-summary/solutions/<config-id> reuse the same
+# The case pages under /whisper-summary/cases/<case-id> reuse the same
 # runner and result store as /whisper-bench, so measured stats stay comparable.
 Service :py_faster_whisper_summary, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper-summary', port: 8090
