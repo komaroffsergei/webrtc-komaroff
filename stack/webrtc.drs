@@ -155,9 +155,9 @@ WHISPER_BENCH_CONFIGS_JSON = <<~JSON
     "notes": "Real sherpa-onnx sidecar; used to validate CPU/ONNX throughput and speaker stability on Russian samples."
   },
   {
-    "id": "sortformer_high_latency_b1_ru_check",
+    "id": "sortformer_very_high_latency_b1_ru_check",
     "case_id": "sortformer_diarization",
-    "label": "Sortformer high-latency batch 1 Russian check",
+    "label": "Sortformer very-high-latency batch 1 Russian check",
     "engine": "nemo_sortformer",
     "audio_format": "auto",
     "diarization_http_url": "http://192.168.28.134/diarize",
@@ -165,7 +165,7 @@ WHISPER_BENCH_CONFIGS_JSON = <<~JSON
     "diarization_health_url": "http://192.168.28.134/healthz",
     "diarization_health_host": "sortformer-diarization.h100.local",
     "runtime_label": "H100 NeMo sidecar",
-    "sortformer_profile": "high_latency",
+    "sortformer_profile": "very_high_latency",
     "batch_size": 1,
     "num_workers": 0,
     "chunk_len": 340,
@@ -174,7 +174,7 @@ WHISPER_BENCH_CONFIGS_JSON = <<~JSON
     "spkcache_update_period": 300,
     "spkcache_len": 188,
     "max_speakers": 4,
-    "notes": "Real NeMo Sortformer candidate for speed; max four speakers and Russian quality must be checked locally."
+    "notes": "Real NeMo Sortformer candidate for speed; very-high-latency profile from NVIDIA model card, max four speakers, Russian quality must be checked locally."
   }
 ]
 JSON
