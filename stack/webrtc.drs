@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-22-whisper-video-containers-4'
+WHISPER_STACK_REVISION = '2026-04-22-whisper-video-containers-5'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_LOCK_URL = 'http://web-rtc-komaroff_whisper_file_job_lock:8091'
 
