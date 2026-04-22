@@ -46,7 +46,7 @@ NATS_WORKFLOW_HEALTH_SUBJECT =
 webrtc_registry = ->(img){ "builder-registry.builder.giscloud.ru/gis/webrtc-komaroff/#{img}/main" }
 registry =->(image) { "builder-registry.builder.giscloud.ru/#{image}" }
 
-WHISPER_STACK_REVISION = '2026-04-22-whisper-video-containers-9'
+WHISPER_STACK_REVISION = '2026-04-22-whisper-sidecars-simplified-1'
 WHISPER_FILE_JOB_STORAGE_DIR = '/tmp/whisper-file-jobs'
 WHISPER_FILE_JOB_LOCK_URL = 'http://web-rtc-komaroff_whisper_file_job_lock:8091'
 
@@ -399,14 +399,10 @@ end
 # deployment serves /whisper-trasncription, keeps the live stream bridge on, and disables diarization.
 Service :py_faster_whisper, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper-trasncription', port: 8090
-  ingress host: HOST, path: '/whisper-trascripton', port: 8090
-  ingress host: HOST, path: '/whisper-transcription', port: 8090
-  ingress host: HOST, path: '/whisper', port: 8090
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_STREAM_ENV).merge(
         DIARIZATION_ENABLED: '0',
         WEBUI_BASE_PATH: '/whisper-trasncription',
-        WEBUI_BASE_PATH_ALIASES: '/whisper-trascripton,/whisper-transcription,/whisper',
         WEBUI_PAGE_MODE: 'transcribe_only',
         STACK_SERVICE_NAME: 'stt_whisper_to_nats'
       )
@@ -418,7 +414,6 @@ end
 # but this deployment serves /whisper-diarization, runs file-mode only, and enables diarization.
 Service :py_faster_whisper_diarize, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/whisper-diarization', port: 8090
-  ingress host: HOST, path: '/whisper-diarize', port: 8090
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_EVENT_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
         STREAM_BRIDGE_ENABLED: '0',

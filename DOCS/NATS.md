@@ -29,13 +29,13 @@
 - `inference.whisper.file.session.<session_id>` — progress/result для browser session.
 - `inference.whisper.file.diar.event.<job_id>` — structured diarization payload и coarse diarization stage events.
 - `inference.whisper.file.diar_text.event.<job_id>` — speaker transcript payload и terminal diarization text events.
-- `inference.whisper.file.diar_text.session.<session_id>` — speaker progress/result stream для `/whisper-diarize`.
+- `inference.whisper.file.diar_text.session.<session_id>` — speaker progress/result stream для `/whisper-diarization`.
 - `to.inference.ollama.requests` / `from.inference.ollama.responses.<service_id>.>` — `rag-stack` bridge subjects.
 
 Важно:
 
-- отдельного `inference.whisper.file.job` больше нет: file jobs стартуют локально из `POST /whisper/api/file-transcribe`
-- отдельного `inference.whisper.file.cancel.<job_id>` тоже больше нет: reset/cancel file mode делает HTTP `POST /whisper/api/reset-session`
+- отдельного `inference.whisper.file.job` больше нет: file jobs стартуют локально из `POST <whisper-page>/api/file-transcribe`
+- отдельного `inference.whisper.file.cancel.<job_id>` тоже больше нет: reset/cancel file mode делает HTTP `POST <whisper-page>/api/reset-session`
 
 ## Стандарт envelope полей
 

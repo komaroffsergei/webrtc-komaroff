@@ -20,7 +20,7 @@ docker compose up -d --build
 
 - text turn: `src_front -> /core/message -> nats.agent.* -> runtime -> nats.llm.* / nats.tools.* -> nats.events.*`
 - live voice: `WebRTC -> src_core -> inference.whisper.stream.* -> stt_whisper_to_nats -> inference.whisper.text.* -> src_core -> nats.agent.*`
-- file transcription: `Browser -> /whisper/api/file-transcribe -> inference.whisper.file.* -> file worker -> NATS WS progress/result`
+- file transcription: `Browser -> <whisper-page>/api/file-transcribe -> inference.whisper.file.* -> file worker -> NATS WS progress/result`
 - LLM inference идет через `src_llm` и внешний `rag-stack` / `llm-models`.
 
 Полная карта сервисов, subject-ов, payload-ов и `rag-stack` integration: [`ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
