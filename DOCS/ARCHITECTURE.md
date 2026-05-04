@@ -26,6 +26,9 @@
 - Внешний inference stack:
   - [rag-stack/stack/rag-stack.drs](/home/komaroff/dev/rag-stack/stack/rag-stack.drs)
   - [rag-stack/stack/llm-models.drs](/home/komaroff/dev/rag-stack/stack/llm-models.drs)
+- Diagnostics:
+  - [DOCS/DIAGNOSTICS.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md)
+  - [py_faster_whisper/src/webui/diagnostics.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/webui/diagnostics.py)
 
 Важно: `src_shared/contracts/subjects.py` покрывает только часть Python subjects. Ruby subjects, file-ASR subjects и `rag-stack` bridge subjects берутся не из него, а из stack/env конфигурации.
 
@@ -194,6 +197,7 @@ flowchart LR
 | map bootstrap | browser / `src_front` | `/core/init_map` | empty POST | JSON status | [assistantApp.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/assistant/assistantApp.ts), [handle_init_map.py](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_core/handlers/handle_init_map.py) |
 | UI events stream | browser / `src_front` | `/ws` | NATS WS auth + subscribe to `nats.events.user123` | `ServerEvent` envelope | [appConfig.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/config/appConfig.ts), [natsClient.ts](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/src_front/src/net/natsClient.ts) |
 | file transcription | browser | `<whisper-page>/api/file-transcribe` | `multipart/form-data` with `file`, `language?`, `session_id?`, `job_id?` | HTTP `202` JSON with `job_id`, `session_id`, `file_name`, `backend` | [server.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/webui/server.py) |
+| diagnostics | browser | `/health/`, `/health/api/diagnostics` | HTML page / JSON health request, optional `smoke=1` | grouped `ok/degraded/fail` checks | [diagnostics.py](/home/komaroff/dev/monitorsoft/voice-chat/py_faster_whisper/src/webui/diagnostics.py), [DIAGNOSTICS.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md) |
 
 Замечание: `src_front` сейчас подписывается на жестко заданный `nats.events.user123`, поэтому `USER_ID` в backend и NATS WS subject должны совпадать с этим значением или быть согласованно перенастроены.
 
@@ -215,6 +219,9 @@ flowchart LR
 | LLM call | `nats.llm.<user_id>` | `src_langgraph`, `src_langgraph_rb`, `src_langgraph_rb_node` | `src_llm` | `LlmRequest` |
 | Tool call | `nats.tools.<tool_name>` | `src_langgraph`, `src_langgraph_rb`, `src_langgraph_rb_node` | `src_api_gateway` | `ToolCallRequest` |
 | Tool discovery | `nats.tools.discover` | callers | `src_api_gateway` | discovery request/response |
+| Diagnostics workflow health | `nats.workflow.health.<active>` | `/health` diagnostics | active runtime | `ServiceHealthRequest` |
+| Diagnostics history DB check | `nats.agent.history.<user_id>` | `/health` diagnostics | `src_agent` | `HistoryGetRequest` with `limit=1` |
+| Diagnostics LLM smoke | `nats.llm.<user_id>` | `/health?smoke=1` diagnostics | `src_llm` | short `LlmRequest` routing decision |
 | Live ASR input | `inference.whisper.stream.<session_id>` | `src_core` | `py_faster_whisper` / `stt_whisper_to_nats` | binary ASR packet |
 | Live ASR output | `inference.whisper.text.<session_id>` | `py_faster_whisper` / `stt_whisper_to_nats` | `src_core` | JSON pending/final/error |
 | File ASR start | `POST <whisper-page>/api/file-transcribe` | browser upload handler | in-process file runner | multipart upload + local job payload |
@@ -529,6 +536,29 @@ flowchart LR
   L12 -->|"model response"| L11 --> L10 --> L13 --> L7 -->|"import back into local account"| L8 --> L14 --> L15 --> L16 --> L17
 ```
 
+### 5. `/health/` diagnostics flow
+
+```mermaid
+flowchart LR
+  B["Browser /health/"]
+  H["py_faster_whisper_health"]
+  W["webrtc services\nfront/core/api/job-lock"]
+  P["py_faster_whisper pages\ntranscribe/diarize/summary"]
+  N["audio_nats"]
+  A["agent/workflow/tools/LLM"]
+  R["rag-stack/H100\nLinTO + diarization"]
+
+  B -->|"GET /health/"| H
+  B -->|"browser NATS WS check /ws"| N
+  H -->|"HTTP health"| W
+  H -->|"HTTP health"| P
+  H -->|"NATS req-reply"| N
+  N -->|"workflow health, tools discover,\nhistory DB, optional LLM smoke"| A
+  H -->|"Host-header HTTP\n/healthcheck /healthz /transcribe smoke"| R
+```
+
+Детальная breakdown-схема, state diagram, payload shape и NATS-схема: [DIAGNOSTICS.md](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md).
+
 ## Кто куда реально вызывает
 
 ### `src_core`
@@ -627,7 +657,7 @@ Ruby code: [src_langgraph_rb](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-k
 Если потом переносить это в отдельную схему/диаграмму, сохранять именно эти уровни:
 
 1. Browser edge:
-   `/core/offer`, `/core/message`, `/core/history`, `/core/init_map`, `/ws`, `/whisper-trasncription`, `/whisper-diarization`, `/whisper-summary`
+   `/core/offer`, `/core/message`, `/core/history`, `/core/init_map`, `/ws`, `/whisper-trasncription`, `/whisper-diarization`, `/whisper-summary`, `/health`
 2. Core bus layer:
    `nats.agent.*`, `nats.agent.history.*`, `nats.events.*`, `inference.whisper.stream.*`, `inference.whisper.text.*`
 3. Runtime layer:

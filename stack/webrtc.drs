@@ -482,6 +482,47 @@ Service :py_faster_whisper_summary, image: webrtc_registry['voice-chat/stt_whisp
   entrypoint 'python -m src.stt_whisper_to_nats'
 end
 
+# Fast browser page for checking that the voice-chat runtime and its rag-stack
+# dependencies are alive enough for the real user flows.
+Service :py_faster_whisper_health, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/health', port: 8090
+
+  env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
+        STREAM_BRIDGE_ENABLED: '0',
+        WEBUI_FILE_TRANSCRIBE_ENABLED: '0',
+        WEBUI_BASE_PATH: '/health',
+        WEBUI_PAGE_MODE: 'diagnostics',
+        WEBUI_HOME_LINK_PATH: '/health',
+        WEBUI_NATS_CLIENT_NAME: 'voice-chat-diagnostics',
+        STACK_SERVICE_NAME: 'voice_chat_health',
+        DIAGNOSTICS_NATS_CLIENT_NAME: 'voice-chat-diagnostics',
+        NATS_AGENT_HISTORY_SUBJECT: NATS_AGENT_HISTORY_SUBJECT,
+        NATS_WORKFLOW_HEALTH_SUBJECT: NATS_WORKFLOW_HEALTH_SUBJECT,
+        NATS_LLM_SUBJECT: NATS_LLM_SUBJECT,
+        DIAGNOSTICS_TIMEOUT_S: '5',
+        DIAGNOSTICS_SMOKE_TIMEOUT_S: '20',
+        DIAGNOSTICS_FRONT_URL: 'http://web-rtc-komaroff_src_front:8000/',
+        DIAGNOSTICS_CORE_URL: 'http://web-rtc-komaroff_src_core:8000/core',
+        DIAGNOSTICS_API_GATEWAY_URL: 'http://web-rtc-komaroff_src_api_gateway:8100/api/pilot/location',
+        DIAGNOSTICS_FILE_JOB_LOCK_URL: 'http://web-rtc-komaroff_whisper_file_job_lock:8091/health',
+        DIAGNOSTICS_WHISPER_TRANSCRIBE_URL: 'http://web-rtc-komaroff_py_faster_whisper:8090/whisper-trasncription/health',
+        DIAGNOSTICS_WHISPER_DIARIZE_URL: 'http://web-rtc-komaroff_py_faster_whisper_diarize:8090/whisper-diarization/health',
+        DIAGNOSTICS_WHISPER_STAGED_URL: 'http://web-rtc-komaroff_py_faster_whisper_staged:8090/whisper-staged/health',
+        DIAGNOSTICS_WHISPER_BENCH_URL: 'http://web-rtc-komaroff_py_faster_whisper_bench:8090/whisper-bench/health',
+        DIAGNOSTICS_WHISPER_SUMMARY_URL: 'http://web-rtc-komaroff_py_faster_whisper_summary:8090/whisper-summary/health',
+        DIAGNOSTICS_PYANNOTE_SHARED_HEALTH_URL: 'http://192.168.28.134/healthz',
+        DIAGNOSTICS_PYANNOTE_SHARED_HEALTH_HOST: 'pyannote-diarization-shared.h100.local',
+        DIAGNOSTICS_PYANNOTE_ISOLATED_HEALTH_URL: 'http://192.168.28.134/healthz',
+        DIAGNOSTICS_PYANNOTE_ISOLATED_HEALTH_HOST: 'pyannote-diarization-isolated.h100.local',
+        DIAGNOSTICS_SHERPA_ONNX_HEALTH_URL: 'http://192.168.28.134/healthz',
+        DIAGNOSTICS_SHERPA_ONNX_HEALTH_HOST: 'sherpa-onnx-diarization.h100.local',
+        DIAGNOSTICS_SORTFORMER_HEALTH_URL: 'http://192.168.28.134/healthz',
+        DIAGNOSTICS_SORTFORMER_HEALTH_HOST: 'sortformer-diarization.h100.local'
+      )
+
+  entrypoint 'python -m src.stt_whisper_to_nats'
+end
+
 
 
 # Debug shell for manual NATS inspection inside the stack.

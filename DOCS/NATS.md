@@ -23,6 +23,7 @@
 - `nats.workflow.health.ruby.node` — health AsyncGraph Ruby runtime (req-reply).
 - `nats.llm.<user_id>` — вызовы LLM (req-reply).
 - `nats.tools.<tool_name>` — вызовы инструментов (req-reply).
+- `nats.tools.discover` — discovery schema инструментов (req-reply).
 - `inference.whisper.stream.<session_id>` — live ASR input packets (pub-sub).
 - `inference.whisper.text.<session_id>` — live ASR output JSON (pub-sub).
 - `inference.whisper.file.event.<job_id>` — progress/result для конкретного file-job.
@@ -36,6 +37,37 @@
 
 - отдельного `inference.whisper.file.job` больше нет: file jobs стартуют локально из `POST <whisper-page>/api/file-transcribe`
 - отдельного `inference.whisper.file.cancel.<job_id>` тоже больше нет: reset/cancel file mode делает HTTP `POST <whisper-page>/api/reset-session`
+
+## Diagnostics subjects
+
+Страница `/health/` использует NATS как backend-probe, а не только как browser transport:
+
+```mermaid
+flowchart LR
+    H["/health diagnostics"] --> N["audio_nats"]
+    H --> W["browser /ws check"]
+
+    N --> Js["JS.INF.API.INFO"]
+    N --> Wh["nats.workflow.health.<active>"]
+    N --> Td["nats.tools.discover"]
+    N --> Hist["nats.agent.history.<user_id>"]
+    N --> Llm["nats.llm.<user_id> smoke"]
+    H --> AsrIn["inference.whisper.stream.<diagnostics>"]
+    AsrOut["inference.whisper.text.<diagnostics>"] --> H
+```
+
+Обязательные проверки:
+
+- connect к `audio_nats`
+- `JS.INF.API.INFO`
+- active `nats.workflow.health.*`
+- `nats.tools.discover`
+- `nats.agent.history.<user_id>` как легкий DB boundary check
+
+Только при `smoke=1`:
+
+- `nats.llm.<user_id>` короткий routing request
+- controlled invalid-packet test через `inference.whisper.stream.<diagnostics>` -> `inference.whisper.text.<diagnostics>`
 
 ## Стандарт envelope полей
 

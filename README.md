@@ -17,6 +17,8 @@
 
 Каноническая карта сервисов, проектов, протоколов, subject-ов, payload-ов и внешнего `rag-stack`: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 
+Быстрая диагностика production path доступна на `/health/`. Что именно проверяется и как читать статусы: [`DOCS/DIAGNOSTICS.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md)
+
 ## NATS subjects
 
 Краткая сводка:
@@ -221,6 +223,7 @@ npm run dev
 - `DOCS/LANGGRAPH.md`
 - `DOCS/API_GATEWAY.md`
 - `DOCS/NATS.md`
+- `DOCS/DIAGNOSTICS.md`
 - `DOCS/POSTGRES.md`
 - `src_langgraph/README.md`
 - `src_langgraph_rb/README.md`
