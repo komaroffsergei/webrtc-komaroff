@@ -12,7 +12,7 @@
 - LinTO HTTP на GPU
 - diarization sidecar-ы `pyannote`, `sherpa-onnx`, `sortformer`
 
-Обычный `Refresh` делает быстрые health/request-reply проверки. `Run smoke` дополнительно запускает безопасные smoke-тесты: короткий LinTO `/transcribe`, diarization `/diarize` smoke для sidecar-ов, live ASR bridge controlled-error test и LLM routing request.
+Обычный `Refresh` делает быстрые health/request-reply проверки. `Run smoke` дополнительно запускает безопасные smoke-тесты для transcription/diarization path: короткий LinTO `/transcribe`, diarization `/diarize` smoke для sidecar-ов и live ASR bridge controlled-error test. LLM routing smoke можно включить отдельно через `DIAGNOSTICS_LLM_SMOKE_ENABLED=1`.
 
 LinTO HTTP smoke отправляет `Accept: application/json`. Это важно: текущий LinTO `/transcribe` отвергает default `Accept: */*` и возвращает `400 Not accepted header`, хотя GPU backend при этом может быть жив.
 

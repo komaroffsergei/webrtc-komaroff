@@ -488,6 +488,8 @@ end
 Service :py_faster_whisper_status, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
   ingress host: HOST, path: '/status', port: 8090
   ingress host: HOST, path: '/health', path_sub: ['^/health(.*)', '/status$1'], port: 8090
+  deploy_label 'traefik.http.routers.web-rtc-komaroff_py_faster_whisper_status-0.priority=1000'
+  deploy_label 'traefik.http.routers.web-rtc-komaroff_py_faster_whisper_status-1.priority=1000'
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
         STREAM_BRIDGE_ENABLED: '0',
