@@ -10,15 +10,24 @@ ADD . .
 
 CMD ["sh", "-c", "\
     DEPLOY_CONTEXT_ENDPOINT=\"${DEPLOY_CONTEXT_ENDPOINT:-ssh://gis-master.ru}\"; \
-    if [ -z \"${SSH_AUTH_SOCK:-}\" ]; then \
+    DEPLOY_KEY=\"${GIS_MASTER_SSH_PRIVATE_KEY:-${DEPLOY_SSH_PRIVATE_KEY:-${SSH_PRIVATE_KEY:-${CI_SSH_PRIVATE_KEY:-}}}}\"; \
+    if [ -n \"${DEPLOY_KEY}\" ]; then \
+      echo '[deploy] loading SSH key from GitLab CI variable'; \
+      eval \"$(ssh-agent -s)\"; \
+      printf '%s\n' \"${DEPLOY_KEY}\" | tr -d '\r' > /tmp/deploy_ssh_key; \
+      chmod 600 /tmp/deploy_ssh_key; \
+      ssh-add /tmp/deploy_ssh_key; \
+      rm -f /tmp/deploy_ssh_key; \
+    elif [ -z \"${SSH_AUTH_SOCK:-}\" ]; then \
       SSH_AUTH_SOCK=$(find /run/ssh-agent -type s 2>/dev/null | head -n 1 || true); \
       export SSH_AUTH_SOCK; \
     fi; \
     if [ -n \"${SSH_AUTH_SOCK:-}\" ]; then \
       echo \"[deploy] using SSH_AUTH_SOCK=${SSH_AUTH_SOCK}\"; \
-      ssh-add -l || true; \
+      ssh-add -l; \
     else \
       echo '[deploy] SSH_AUTH_SOCK not found under /run/ssh-agent'; \
+      exit 1; \
     fi; \
     echo \"[deploy] dry-stack endpoint ${DEPLOY_CONTEXT_ENDPOINT}\"; \
     cat webrtc.drs  | dry-stack swarm_deploy --tls-domain=gis-master.ru -x \"${DEPLOY_CONTEXT_ENDPOINT}\" -- --prune \n\
