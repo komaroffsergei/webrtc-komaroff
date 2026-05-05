@@ -9,15 +9,7 @@ RUN printf 'Host *\n\tControlPersist yes\n\tControlMaster auto\n\tControlPath  /
 ADD . .
 
 CMD ["sh", "-c", "\
-    if [ -z \"${SSH_AUTH_SOCK:-}\" ]; then \
-      SSH_AUTH_SOCK=$(find /run/ssh-agent -type s 2>/dev/null | head -n 1 || true); \
-      export SSH_AUTH_SOCK; \
-    fi; \
-    if [ -n \"${SSH_AUTH_SOCK:-}\" ]; then \
-      echo \"[deploy] using SSH_AUTH_SOCK=${SSH_AUTH_SOCK}\"; \
-      ssh-add -l || true; \
-    else \
-      echo '[deploy] SSH_AUTH_SOCK not found under /run/ssh-agent'; \
-    fi; \
-    cat webrtc.drs  | dry-stack swarm_deploy --tls-domain=gis-master.ru -x ssh://gis-master.ru -- --prune \n\
+    DEPLOY_CONTEXT_ENDPOINT=\"${DEPLOY_CONTEXT_ENDPOINT:-unix:///var/run/docker.sock}\"; \
+    echo \"[deploy] dry-stack endpoint ${DEPLOY_CONTEXT_ENDPOINT}\"; \
+    cat webrtc.drs  | dry-stack swarm_deploy --tls-domain=gis-master.ru -x \"${DEPLOY_CONTEXT_ENDPOINT}\" -- --prune \n\
 "]
