@@ -14,6 +14,16 @@
 
 Обычный `Refresh` делает быстрые health/request-reply проверки. `Run smoke` дополнительно запускает безопасные smoke-тесты: короткий LinTO `/transcribe`, live ASR bridge controlled-error test и LLM routing request.
 
+LinTO HTTP smoke отправляет `Accept: application/json`. Это важно: текущий LinTO `/transcribe` отвергает default `Accept: */*` и возвращает `400 Not accepted header`, хотя GPU backend при этом может быть жив.
+
+## Проверка После Деплоя
+
+1. В Insight stack `web-rtc-komaroff` должен появиться сервис `web-rtc-komaroff_py_faster_whisper_health`.
+2. `GET https://webrtc-komaroff.gis-master.ru/health/` должен открыть страницу `Voice Chat Health`.
+3. `GET https://webrtc-komaroff.gis-master.ru/health/api/diagnostics` должен вернуть `Content-Type: application/json` и payload со статусами групп.
+
+Если `/health/` открывает старый `Voice Assistant`, а `/health/api/diagnostics` возвращает HTML, значит новый route не попал в Docker stack/Traefik, даже если image `py_faster_whisper` уже обновился.
+
 ## Статусы
 
 - `OK` - все обязательные и optional проверки зеленые.
