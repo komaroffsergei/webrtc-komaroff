@@ -24,6 +24,30 @@ LinTO HTTP smoke отправляет `Accept: application/json`. Это важ�
 
 Если `/health/` открывает старый `Voice Assistant`, а `/health/api/diagnostics` возвращает HTML, значит новый route не попал в Docker stack/Traefik, даже если image `py_faster_whisper` уже обновился.
 
+## GitLab Deploy Access
+
+`/health/` появляется только после успешного deploy job в GitLab для `webrtc-komaroff`, потому что именно этот job добавляет route и service `py_faster_whisper_health` в stack `web-rtc-komaroff`.
+
+Deploy не должен чиниться ручными командами на `gis-master`. Доступ для `dry-stack` должен прийти в GitLab runner одним из двух способов:
+
+1. восстановить identities в runner volume `ssh-agent-socket`;
+2. добавить GitLab CI/CD variable `GIS_MASTER_SSH_PRIVATE_KEY_B64`.
+
+Рекомендуемый вариант для проекта или группы `voice-chat`:
+
+```bash
+base64 -w0 ~/.ssh/<deploy-key>
+```
+
+Результат кладется в protected CI/CD variable `GIS_MASTER_SSH_PRIVATE_KEY_B64`. Ключ должен быть уже разрешен для `root@gis-master.ru`, потому что Docker SSH context внутри deploy container идет как root. После этого надо rerun pipeline `webrtc-komaroff` на `main`. В trace должно появиться:
+
+```text
+[deploy] loading SSH key from GitLab CI base64 variable GIS_MASTER_SSH_PRIVATE_KEY_B64
+[deploy] dry-stack endpoint ssh://gis-master.ru
+```
+
+Если вместо этого видно `The agent has no identities` или `no SSH identity is available for dry-stack`, GitLab runner всё еще не получил deploy identity.
+
 ## Статусы
 
 - `OK` - все обязательные и optional проверки зеленые.
