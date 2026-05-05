@@ -17,7 +17,7 @@
 
 Каноническая карта сервисов, проектов, протоколов, subject-ов, payload-ов и внешнего `rag-stack`: [`DOCS/ARCHITECTURE.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/ARCHITECTURE.md)
 
-Быстрая диагностика production path доступна на `/health/`. Что именно проверяется и как читать статусы: [`DOCS/DIAGNOSTICS.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md)
+Быстрая диагностика production path доступна на `/status/` (`/health/` остаётся compatibility alias). Что именно проверяется и как читать статусы: [`DOCS/DIAGNOSTICS.md`](/home/komaroff/dev/monitorsoft/voice-chat/webrtc-komaroff/DOCS/DIAGNOSTICS.md)
 
 ## NATS subjects
 

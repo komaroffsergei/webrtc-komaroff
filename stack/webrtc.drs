@@ -484,18 +484,19 @@ Service :py_faster_whisper_summary, image: webrtc_registry['voice-chat/stt_whisp
 end
 
 # Fast browser page for checking that the voice-chat runtime and its rag-stack
-# dependencies are alive enough for the real user flows.
-Service :py_faster_whisper_health, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
-  ingress host: HOST, path: '/health', port: 8090
+# dependencies are alive enough for the real transcription/diarization flows.
+Service :py_faster_whisper_status, image: webrtc_registry['voice-chat/stt_whisper_to_nats'] do
+  ingress host: HOST, path: '/status', port: 8090
+  ingress host: HOST, path: '/health', path_sub: ['^/health(.*)', '/status$1'], port: 8090
 
   env WHISPER_FILE_JOB_ENV.merge(WHISPER_WEBUI_ENV).merge(WHISPER_DIARIZATION_ENV).merge(
         STREAM_BRIDGE_ENABLED: '0',
         WEBUI_FILE_TRANSCRIBE_ENABLED: '0',
-        WEBUI_BASE_PATH: '/health',
+        WEBUI_BASE_PATH: '/status',
         WEBUI_PAGE_MODE: 'diagnostics',
-        WEBUI_HOME_LINK_PATH: '/health',
+        WEBUI_HOME_LINK_PATH: '/status',
         WEBUI_NATS_CLIENT_NAME: 'voice-chat-diagnostics',
-        STACK_SERVICE_NAME: 'voice_chat_health',
+        STACK_SERVICE_NAME: 'voice_chat_status',
         DIAGNOSTICS_NATS_CLIENT_NAME: 'voice-chat-diagnostics',
         NATS_AGENT_HISTORY_SUBJECT: NATS_AGENT_HISTORY_SUBJECT,
         NATS_WORKFLOW_HEALTH_SUBJECT: NATS_WORKFLOW_HEALTH_SUBJECT,
@@ -513,12 +514,20 @@ Service :py_faster_whisper_health, image: webrtc_registry['voice-chat/stt_whispe
         DIAGNOSTICS_WHISPER_SUMMARY_URL: 'http://web-rtc-komaroff_py_faster_whisper_summary:8090/whisper-summary/health',
         DIAGNOSTICS_PYANNOTE_SHARED_HEALTH_URL: 'http://192.168.28.134/healthz',
         DIAGNOSTICS_PYANNOTE_SHARED_HEALTH_HOST: 'pyannote-diarization-shared.h100.local',
+        DIAGNOSTICS_PYANNOTE_SHARED_DIARIZE_URL: 'http://192.168.28.134/diarize',
+        DIAGNOSTICS_PYANNOTE_SHARED_DIARIZE_HOST: 'pyannote-diarization-shared.h100.local',
         DIAGNOSTICS_PYANNOTE_ISOLATED_HEALTH_URL: 'http://192.168.28.134/healthz',
         DIAGNOSTICS_PYANNOTE_ISOLATED_HEALTH_HOST: 'pyannote-diarization-isolated.h100.local',
+        DIAGNOSTICS_PYANNOTE_ISOLATED_DIARIZE_URL: 'http://192.168.28.134/diarize',
+        DIAGNOSTICS_PYANNOTE_ISOLATED_DIARIZE_HOST: 'pyannote-diarization-isolated.h100.local',
         DIAGNOSTICS_SHERPA_ONNX_HEALTH_URL: 'http://192.168.28.134/healthz',
         DIAGNOSTICS_SHERPA_ONNX_HEALTH_HOST: 'sherpa-onnx-diarization.h100.local',
+        DIAGNOSTICS_SHERPA_ONNX_DIARIZE_URL: 'http://192.168.28.134/diarize',
+        DIAGNOSTICS_SHERPA_ONNX_DIARIZE_HOST: 'sherpa-onnx-diarization.h100.local',
         DIAGNOSTICS_SORTFORMER_HEALTH_URL: 'http://192.168.28.134/healthz',
-        DIAGNOSTICS_SORTFORMER_HEALTH_HOST: 'sortformer-diarization.h100.local'
+        DIAGNOSTICS_SORTFORMER_HEALTH_HOST: 'sortformer-diarization.h100.local',
+        DIAGNOSTICS_SORTFORMER_DIARIZE_URL: 'http://192.168.28.134/diarize',
+        DIAGNOSTICS_SORTFORMER_DIARIZE_HOST: 'sortformer-diarization.h100.local'
       )
 
   entrypoint 'python -m src.stt_whisper_to_nats'

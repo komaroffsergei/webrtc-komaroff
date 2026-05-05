@@ -40,11 +40,11 @@
 
 ## Diagnostics subjects
 
-Страница `/health/` использует NATS как backend-probe, а не только как browser transport:
+Страница `/status/` использует NATS как backend-probe, а не только как browser transport:
 
 ```mermaid
 flowchart LR
-    H["/health diagnostics"] --> N["audio_nats"]
+    H["/status diagnostics"] --> N["audio_nats"]
     H --> W["browser /ws check"]
 
     N --> Js["JS.INF.API.INFO"]

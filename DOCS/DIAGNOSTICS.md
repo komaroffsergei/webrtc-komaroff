@@ -1,6 +1,6 @@
 # Voice Chat Diagnostics
 
-Страница быстрой диагностики живет на `/health/` основного host-а `webrtc-komaroff`.
+Страница быстрой диагностики живет на `/status/` основного host-а `webrtc-komaroff`. `/health/` оставлен как compatibility alias.
 
 Она проверяет не только сам WebUI-контейнер, а рабочие границы voice-chat:
 
@@ -12,21 +12,22 @@
 - LinTO HTTP на GPU
 - diarization sidecar-ы `pyannote`, `sherpa-onnx`, `sortformer`
 
-Обычный `Refresh` делает быстрые health/request-reply проверки. `Run smoke` дополнительно запускает безопасные smoke-тесты: короткий LinTO `/transcribe`, live ASR bridge controlled-error test и LLM routing request.
+Обычный `Refresh` делает быстрые health/request-reply проверки. `Run smoke` дополнительно запускает безопасные smoke-тесты: короткий LinTO `/transcribe`, diarization `/diarize` smoke для sidecar-ов, live ASR bridge controlled-error test и LLM routing request.
 
 LinTO HTTP smoke отправляет `Accept: application/json`. Это важно: текущий LinTO `/transcribe` отвергает default `Accept: */*` и возвращает `400 Not accepted header`, хотя GPU backend при этом может быть жив.
 
 ## Проверка После Деплоя
 
-1. В Insight stack `web-rtc-komaroff` должен появиться сервис `web-rtc-komaroff_py_faster_whisper_health`.
-2. `GET https://webrtc-komaroff.gis-master.ru/health/` должен открыть страницу `Voice Chat Health`.
-3. `GET https://webrtc-komaroff.gis-master.ru/health/api/diagnostics` должен вернуть `Content-Type: application/json` и payload со статусами групп.
+1. В Insight stack `web-rtc-komaroff` должен появиться сервис `web-rtc-komaroff_py_faster_whisper_status`.
+2. `GET https://webrtc-komaroff.gis-master.ru/status/` должен открыть страницу `Voice Chat Status`.
+3. `GET https://webrtc-komaroff.gis-master.ru/status/api/diagnostics` должен вернуть `Content-Type: application/json` и payload со статусами групп.
+4. `GET https://webrtc-komaroff.gis-master.ru/health/` должен открыть тот же diagnostics WebUI через compatibility rewrite.
 
-Если `/health/` открывает старый `Voice Assistant`, а `/health/api/diagnostics` возвращает HTML, значит новый route не попал в Docker stack/Traefik, даже если image `py_faster_whisper` уже обновился.
+Если `/status/` открывает старый `Voice Assistant`, а `/status/api/diagnostics` возвращает HTML, значит новый route не попал в Docker stack/Traefik, даже если image `py_faster_whisper` уже обновился.
 
 ## GitLab Deploy Access
 
-`/health/` появляется только после успешного deploy job в GitLab для `webrtc-komaroff`, потому что именно этот job добавляет route и service `py_faster_whisper_health` в stack `web-rtc-komaroff`.
+`/status/` появляется только после успешного deploy job в GitLab для `webrtc-komaroff`, потому что именно этот job добавляет route и service `py_faster_whisper_status` в stack `web-rtc-komaroff`.
 
 Deploy не должен чиниться ручными командами на `gis-master`. Доступ для `dry-stack` должен прийти в GitLab runner одним из двух способов:
 
@@ -60,7 +61,7 @@ Optional сервисы не валят всю страницу в `FAIL`: `pyan
 
 ```mermaid
 flowchart LR
-    Browser["Browser /health/"] --> HealthWeb["py_faster_whisper_health WebUI"]
+    Browser["Browser /status/"] --> HealthWeb["py_faster_whisper_status WebUI"]
     Browser --> BrowserWs["browser NATS WS check /ws"]
 
     HealthWeb --> Front["src_front /"]
@@ -76,7 +77,7 @@ flowchart LR
 
     HealthWeb --> WhisperPages["/whisper-* WebUI services"]
     HealthWeb --> Linto["LinTO HTTP GPU /healthcheck, /transcribe"]
-    HealthWeb --> Diar["Diarization sidecars /healthz"]
+    HealthWeb --> Diar["Diarization sidecars /healthz, /diarize smoke"]
 
     LocalNats -. leafnode .-> InferenceNats["rag-stack inference_nats"]
     Linto --> H100["H100 MIG GPU"]
@@ -88,18 +89,19 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant B as Browser
-    participant H as /health WebUI
+    participant H as /status WebUI
     participant N as audio_nats
     participant R as rag-stack/H100
     participant A as agent/workflow
 
-    B->>H: GET /health/
+    B->>H: GET /status/
     H-->>B: diagnostics page
-    B->>H: GET /health/api/diagnostics
+    B->>H: GET /status/api/diagnostics
     par HTTP health
         H->>H: check src_front/core/api/job-lock/whisper pages
         H->>R: GET LinTO /healthcheck with Host
         H->>R: GET pyannote/sherpa/sortformer /healthz with Host
+        H->>R: POST pyannote/sherpa/sortformer /diarize smoke with Host
     and NATS health
         H->>N: connect NATS
         H->>N: request JS.INF.API.INFO
@@ -164,7 +166,7 @@ classDiagram
 
 ```mermaid
 flowchart LR
-    Health["py_faster_whisper_health"] --> AudioNats["audio_nats local account"]
+    Health["py_faster_whisper_status"] --> AudioNats["audio_nats local account"]
 
     AudioNats --> Js["JS.INF.API.INFO"]
     AudioNats --> Workflow["nats.workflow.health.ruby.node"]
