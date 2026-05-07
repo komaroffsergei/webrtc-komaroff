@@ -81,6 +81,8 @@ LinTO HTTP smoke отправляет `Accept: application/json`. Это важ�
 
 ## Detailed Collection UML
 
+![PNG: Detailed Collection UML](diagrams/diagnostics/diagnostics-01-detailed-collection-uml.png)
+
 ```mermaid
 sequenceDiagram
     autonumber
@@ -118,6 +120,8 @@ sequenceDiagram
 ```
 
 ## Smoke Test UML
+
+![PNG: Smoke Test UML](diagrams/diagnostics/diagnostics-02-smoke-test-uml.png)
 
 ```mermaid
 flowchart TB
@@ -185,6 +189,8 @@ Optional сервисы не валят всю страницу в `FAIL`: `pyan
 
 ## Общая Схема
 
+![PNG: Общая схема status diagnostics](diagrams/diagnostics/diagnostics-03-overview.png)
+
 ```mermaid
 flowchart LR
     Browser["Browser /status/"] --> HealthWeb["py_faster_whisper_status WebUI"]
@@ -211,6 +217,8 @@ flowchart LR
 ```
 
 ## Sequence Diagram
+
+![PNG: Sequence Diagram status diagnostics](diagrams/diagnostics/diagnostics-04-sequence.png)
 
 ```mermaid
 sequenceDiagram
@@ -246,6 +254,8 @@ sequenceDiagram
 
 ## UML State Diagram
 
+![PNG: UML State Diagram status diagnostics](diagrams/diagnostics/diagnostics-05-state.png)
+
 ```mermaid
 stateDiagram-v2
     [*] --> Running
@@ -258,6 +268,8 @@ stateDiagram-v2
 ```
 
 ## Data Shape
+
+![PNG: Data Shape diagnostics payload](diagrams/diagnostics/diagnostics-06-data-shape.png)
 
 ```mermaid
 classDiagram
@@ -293,6 +305,8 @@ classDiagram
 ```
 
 ## NATS Связи
+
+![PNG: NATS связи status diagnostics](diagrams/diagnostics/diagnostics-07-nats-links.png)
 
 ```mermaid
 flowchart LR

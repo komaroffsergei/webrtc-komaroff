@@ -37,6 +37,8 @@ Python `src_langgraph` остается отдельным runtime на свои
 
 ## Как теперь идет запрос
 
+![PNG: src_langgraph_rb request flow](diagrams/readme/src-langgraph-rb-01-request-flow.png)
+
 ```mermaid
 flowchart LR
   A["WorkflowRunRequest"] --> B["Runtime::Service"]

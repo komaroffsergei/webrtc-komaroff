@@ -75,6 +75,8 @@ I/O слой для вызовов LLM и tools:
 
 ## 3) Полный цикл запроса (по шагам)
 
+![PNG: src_langgraph полный цикл запроса](diagrams/readme/src-langgraph-01-request-cycle.png)
+
 ```mermaid
 sequenceDiagram
     participant A as src_agent
@@ -102,6 +104,8 @@ sequenceDiagram
 ---
 
 ## 4) Как устроен граф
+
+![PNG: src_langgraph graph dispatch](diagrams/readme/src-langgraph-02-graph.png)
 
 ```mermaid
 flowchart TD

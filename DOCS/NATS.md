@@ -42,6 +42,8 @@
 
 Страница `/status/` использует NATS как backend-probe, а не только как browser transport:
 
+![PNG: NATS diagnostics subjects](diagrams/nats/nats-01-diagnostics-subjects.png)
+
 ```mermaid
 flowchart LR
     H["/status diagnostics"] --> N["audio_nats"]

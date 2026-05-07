@@ -57,6 +57,8 @@
 
 ## Общая карта сервисов и проектов
 
+![PNG: Architecture service map](diagrams/architecture/architecture-01-service-map.png)
+
 ```mermaid
 flowchart LR
   subgraph Sources["Data sources"]
@@ -381,6 +383,8 @@ Upload handler публикует:
 
 ### 1. Текстовый пользовательский запрос
 
+![PNG: Architecture text request flow](diagrams/architecture/architecture-02-text-request.png)
+
 ```mermaid
 flowchart LR
   subgraph Input["Input path"]
@@ -419,6 +423,8 @@ flowchart LR
 ```
 
 ### 2. Live `/chat` voice flow
+
+![PNG: Architecture live chat voice flow](diagrams/architecture/architecture-03-live-chat-voice.png)
 
 ```mermaid
 flowchart LR
@@ -460,6 +466,8 @@ flowchart LR
 
 ### 3. Whisper file flow
 
+![PNG: Architecture whisper file flow](diagrams/architecture/architecture-04-whisper-file-flow.png)
+
 ```mermaid
 flowchart LR
   subgraph Upload["Upload + subscription setup"]
@@ -499,6 +507,8 @@ flowchart LR
 
 ### 4. `src_llm` и `rag-stack`
 
+![PNG: Architecture src_llm and rag-stack flow](diagrams/architecture/architecture-05-llm-rag-stack.png)
+
 ```mermaid
 flowchart LR
   subgraph AppSide["Application side"]
@@ -537,6 +547,8 @@ flowchart LR
 ```
 
 ### 5. `/status/` diagnostics flow
+
+![PNG: Architecture status diagnostics flow](diagrams/architecture/architecture-06-status-diagnostics.png)
 
 ```mermaid
 flowchart LR
