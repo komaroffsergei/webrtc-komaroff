@@ -65,6 +65,7 @@ LinTO HTTP smoke отправляет `Accept: application/json`. Это важ�
 | `whisper` | `whisper_staged_webui` | no | `/whisper-staged/health` | staged profiler жив |
 | `whisper` | `whisper_bench_webui` | no | `/whisper-bench/health` | benchmark UI жив |
 | `whisper` | `live_asr_bridge_smoke` | yes | NATS `inference.whisper.stream.<diagnostics>` | live ASR bridge отвечает controlled `invalid_packet` |
+| `rag_stack` | `h100_ingress_http` | no | `http://192.168.28.134/` | H100 ingress IP/TCP reachable; bare host may legitimately return `404` |
 | `rag_stack` | `linto_http_health` | yes | H100 LinTO `/healthcheck` | transcription GPU backend доступен |
 | `rag_stack` | `linto_transcribe_smoke` | yes | H100 LinTO `/transcribe` | short WAV реально проходит ASR HTTP boundary |
 | `rag_stack` | `pyannote_shared_health` | yes | H100 pyannote shared `/healthz` | основной diarization backend доступен |
@@ -328,6 +329,8 @@ flowchart LR
 
 ## Что Смотреть При Поломке
 
+- H100 `404 page not found` при успешном `ping 192.168.28.134`: это не сетевой down. IP/ingress отвечает, но route по `Host` не найден. Частые причины: service task не стартовал, Docker task падает на GPU/CDI, Traefik еще не зарегистрировал route.
+- H100 GPU сервисы после reboot: смотреть `details.service_hint` на `/status`, затем Insight `inspect/logs` по указанным ссылкам. Если в task error есть `unresolvable CDI devices`, проверить MIG selector (`LINTO_GPU_DEVICE`, `PYANNOTE_SHARED_GPU_DEVICE`, `DIARIZATION_ISOLATED_GPU_DEVICE`, `SORTFORMER_GPU_DEVICE`) и обновить CDI spec на H100.
 - LinTO `502`: если `/healthcheck` красный, но контейнер `running`, смотреть startup/model-load path и порт `80` внутри LinTO.
 - NATS `NoResponders`: смотреть subject из `target`, активный `WORKFLOW_RUNTIME` и подписку соответствующего runtime.
 - `agent history / Postgres` красный: NATS дошел до `src_agent`, но DB/history boundary не отвечает.
