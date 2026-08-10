@@ -1,5 +1,9 @@
 # webrtc-komaroff
 
+## Кратко о проекте
+
+Платформа голосового AI-ассистента: браузерный WebRTC-клиент, потоковое и файловое распознавание речи, NATS-события, workflow-runtime и хранение диалога в PostgreSQL. Структура: UI в `src_front/`, media ingress в `src_core/`, оркестрация в `src_agent/`, сценарии в `src_langgraph*`, SQL в `src_postgres/`. Интересна сквозной real-time архитектурой, трассировкой запросов и сменяемыми Python/Ruby runtime.
+
 Локальный стек WebRTC + NATS + workflow runtime.
 
 ## Сервисы
