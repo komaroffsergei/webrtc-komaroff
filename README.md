@@ -234,3 +234,14 @@ npm run dev
 - `src_langgraph_rb/CODEMAP.md`
 - `src_langgraph_rb_node/README.md`
 - `src_langgraph_rb_node/CODEMAP.md`
+
+<img width="1253" height="698" alt="image" src="https://github.com/user-attachments/assets/3092eace-7c01-45e0-b7ec-9543383231cd" />
+
+<img width="1280" height="469" alt="image" src="https://github.com/user-attachments/assets/a76e997c-1b18-4729-b719-ff59129fc132" />
+
+<img width="1280" height="469" alt="image" src="https://github.com/user-attachments/assets/fbe53318-082a-4f4a-9f40-c8a35fda67de" />
+
+<img width="1280" height="973" alt="image" src="https://github.com/user-attachments/assets/eb3d15a7-6357-451b-96db-a79c1a0e803d" />
+
+<img width="1039" height="603" alt="image" src="https://github.com/user-attachments/assets/fea3116f-eea5-4f30-9aa2-2d5c99286e5c" />
+
