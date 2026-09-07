@@ -1,0 +1,6 @@
+aiohttp
+aiortc
+langgraph
+pydantic
+python-dotenv
+nats-py

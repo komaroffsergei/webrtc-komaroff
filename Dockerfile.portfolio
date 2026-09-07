@@ -1,0 +1,13 @@
+FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
+WORKDIR /app
+COPY portfolio/requirements.lock ./requirements.lock
+RUN pip install -r requirements.lock && pip freeze > /app/installed-requirements.txt
+COPY src_shared ./src_shared
+COPY src_langgraph ./src_langgraph
+COPY src_core/__init__.py ./src_core/__init__.py
+COPY src_core/utils/validate.py ./src_core/utils/validate.py
+COPY portfolio ./portfolio
+RUN useradd --uid 10001 --create-home demo
+USER demo
+CMD ["python","-m","portfolio.server"]
