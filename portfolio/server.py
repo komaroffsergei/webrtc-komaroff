@@ -128,7 +128,7 @@ def public_candidates(sdp):
 
 
 async def config(request):
-    username=str(int(time.time())+120)+':'+request['owner'][:16]
+    username=str(int(time.time())+120)+':'+request['owner'][:16]+':'+secrets.token_hex(4)
     credential=base64.b64encode(hmac.new(TURN_SECRET.encode(),username.encode(),'sha1').digest()).decode()
     return web.json_response({'iceServers':[{'urls':[f'turn:{PUBLIC_IP}:3478?transport=udp',f'turn:{PUBLIC_IP}:3478?transport=tcp'],'username':username,'credential':credential}],'iceTransportPolicy':'relay','sessionSeconds':90,'maxSessions':2})
 
@@ -161,7 +161,7 @@ async def offer(request):
             session['tasks'].append(asyncio.create_task(handle_message(owner,message)))
     @pc.on('connectionstatechange')
     async def state_change():
-        if pc.connectionState in {'failed','closed'} and owner in sessions:await close(owner)
+        if pc.connectionState in {'failed','closed'} and sessions.get(owner) is session:await close(owner)
     try:
         await pc.setRemoteDescription(RTCSessionDescription(sdp=public_candidates(payload['sdp']),type='offer'))
         await pc.setLocalDescription(await pc.createAnswer())
