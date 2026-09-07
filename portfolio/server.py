@@ -130,7 +130,7 @@ def public_candidates(sdp):
 async def config(request):
     username=str(int(time.time())+120)+':'+request['owner'][:16]
     credential=base64.b64encode(hmac.new(TURN_SECRET.encode(),username.encode(),'sha1').digest()).decode()
-    return web.json_response({'iceServers':[{'urls':['turn:voice.komaroff-dev.ru:3478?transport=udp','turn:voice.komaroff-dev.ru:3478?transport=tcp'],'username':username,'credential':credential}],'iceTransportPolicy':'relay','sessionSeconds':90,'maxSessions':2})
+    return web.json_response({'iceServers':[{'urls':[f'turn:{PUBLIC_IP}:3478?transport=udp',f'turn:{PUBLIC_IP}:3478?transport=tcp'],'username':username,'credential':credential}],'iceTransportPolicy':'relay','sessionSeconds':90,'maxSessions':2})
 
 
 async def offer(request):
